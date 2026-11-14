@@ -26,7 +26,7 @@ export class SiegeSystem {
     return new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(p, 3));
   }
 
-  maxDeployed() { return this.game.production.level('workshop') * 2; }
+  maxDeployed() { return this.game.production.level('workshop') * 2 + this.game.production.level('depot'); }
   deployedCount() { return this.weapons.filter(w => w.alive).length; }
 
   // ---------- placement ----------

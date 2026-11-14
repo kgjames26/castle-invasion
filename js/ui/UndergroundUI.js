@@ -76,7 +76,7 @@ export class UndergroundUI {
   render(force) {
     const g = this.game, P = g.production, R = g.resources;
     $('ug-res').innerHTML = RESOURCES.map(r => `<span>${RES_INFO[r].icon} ${Math.floor(R.stock[r])}</span>`).join('')
-      + `<span>👥 ${P.pop()}/${P.popCap()}</span><span data-tip="Chaque ouvrier accélère production et améliorations">👷 ${P.workers} (+${Math.round((P.speedMul() - 1) * 100)} %)</span>`;
+      + `<span data-tip="Population civile">👥 ${P.civPop()}/${P.popCap()}</span><span data-tip="Armée / logement militaire">⚔️ ${P.armyPop()}/${P.armyCap()}</span><span data-tip="Chaque ouvrier accélère production et améliorations">👷 ${P.workers} (+${Math.round((P.speedMul() - 1) * 100)} %)</span>`;
     const W = g.waves, wv = $('ug-wave');
     if (W.state === 'prep') { wv.textContent = `Vague ${W.wave} dans ${fmtTime(W.timer)}`; wv.classList.remove('alert'); }
     else { const rem = W.remaining(); wv.textContent = `⚠ Vague ${W.wave} en cours — ${rem} zombie${rem > 1 ? 's' : ''} · 🏰 ${Math.round(g.castle.hp / g.castle.maxHp * 100)} %`; wv.classList.add('alert'); }
@@ -141,8 +141,16 @@ export class UndergroundUI {
       const sites = g.resources.sites.length;
       if (sites) h += `<div class="desc">📍 ${sites} zone(s) constructible(s) libérée(s) par des gisements épuisés.</div>`;
     } else if (id === 'barracks') {
-      if (built) h += `<div class="sect">Entraînement</div><div class="prod">${this.unitBtn('soldier')}${this.unitBtn('archer')}</div>${this.queueHTML('barracks')}`;
+      if (built) h += `<div class="sect">Entraînement</div><div class="prod">${this.unitBtn('soldier')}</div>${this.queueHTML('barracks')}`;
+      h += `<div class="desc">Logement : +8 par niveau. Armée : ${P.armyPop()}/${P.armyCap()}</div>`;
       h += `<div class="sect">Formations</div><div class="desc">${Object.entries(FORMATIONS).map(([fid, f]) => `${formationLock(g, fid) ? '🔒' : '✅'} ${f.name}`).join(' · ')}</div>`;
+    } else if (id === 'range') {
+      if (built) h += `<div class="sect">Entraînement</div><div class="prod">${this.unitBtn('archer')}</div>${this.queueHTML('range')}<div class="desc">Entraînement ×${(1 + 0.1 * (st.level - 1)).toFixed(1)} · Logement : +6 par niveau. Armée : ${P.armyPop()}/${P.armyCap()}</div>`;
+    } else if (id === 'depot') {
+      if (built) {
+        const cnt = {}; for (const u of g.units) if (u.alive && !P.isCivil(u.type)) cnt[u.type] = (cnt[u.type] || 0) + 1;
+        h += `<div class="sect">Armée</div><div class="desc">${Object.entries(cnt).map(([t, n]) => `${UNITS[t].icon} ${n} ${UNITS[t].name}`).join(' · ') || 'Aucune troupe.'}<br>Logement militaire : ${P.armyPop()}/${P.armyCap()} · Armes de siège déployables : ${g.siege.maxDeployed()}</div>`;
+      }
     } else if (id === 'stable') {
       if (built) h += `<div class="sect">Entraînement</div><div class="prod">${this.unitBtn('cavalry')}</div>${this.queueHTML('stable')}`;
     } else if (id === 'workshop') {

@@ -13,8 +13,9 @@ export class HUD {
     this.t = 0;
     this.res = $('res');
     this.res.innerHTML = RESOURCES.map(r => `<div class="res-item" id="r-${r}" data-tip="${RES_INFO[r].name}"><span class="ic">${RES_INFO[r].icon}</span><span class="v">0</span></div>`).join('')
-      + `<div class="res-item" id="r-pop" data-tip="Population (cultivateurs, ouvriers, troupes) / maximum"><span class="ic">👥</span><span class="v">0</span></div>`;
-    this.resEls = Object.fromEntries([...RESOURCES, 'pop'].map(r => [r, $('r-' + r).querySelector('.v')]));
+      + `<div class="res-item" id="r-pop" data-tip="Population (cultivateurs, ouvriers, troupes) / maximum"><span class="ic">👥</span><span class="v">0</span></div>`
+      + `<div class="res-item" id="r-army" data-tip="Armée / logement militaire (Casernes, Champ de tir, Écuries, Dépôt)"><span class="ic">⚔️</span><span class="v">0</span></div>`;
+    this.resEls = Object.fromEntries([...RESOURCES, 'pop', 'army'].map(r => [r, $('r-' + r).querySelector('.v')]));
     this.wall = $('wall-bar');
     this.wall.innerHTML = Array.from({ length: MAP.SEG_COUNT }, (_, i) => `<i class="${i === MAP.GATE_SEG ? 'gate' : ''}"></i>`).join('');
     this.wallEls = [...this.wall.children];
@@ -62,6 +63,9 @@ export class HUD {
     const pop = g.production.pop(), cap = g.production.popCap();
     this.resEls.pop.textContent = `${pop}/${cap}`;
     this.resEls.pop.parentElement.classList.toggle('low', pop >= cap);
+    const ap = g.production.armyPop(), ac = g.production.armyCap();
+    this.resEls.army.textContent = `${ap}/${ac}`;
+    this.resEls.army.parentElement.classList.toggle('low', ap >= ac);
 
     // vague
     const W = g.waves;

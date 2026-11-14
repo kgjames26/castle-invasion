@@ -7,7 +7,7 @@ export class ProductionSystem {
     this.game = game;
     this.buildings = {};
     for (const [id, b] of Object.entries(BUILDINGS)) this.buildings[id] = { level: b.start, upgrade: null };
-    this.queues = { quarters: [], barracks: [], stable: [], workshop: [], forge: [] };
+    this.queues = { quarters: [], barracks: [], range: [], stable: [], workshop: [], forge: [] };
     this.techs = new Set();
     this.research = null;
     this.reserve = [];
@@ -18,13 +18,24 @@ export class ProductionSystem {
   hasTech(id) { return this.techs.has(id); }
   speedMul() { return Worker.speedBonus(this.workers); }
 
+  // population civile (cultivateurs, ouvriers) : limitée par les Quartiers
   popCap() { return 12 + 6 * this.level('quarters'); }
-  pop() {
+  // logement militaire : Casernes, Champ de tir, Écuries et Dépôt
+  armyCap() { return 6 + 8 * this.level('barracks') + 6 * this.level('range') + 5 * this.level('stable') + 10 * this.level('depot'); }
+  isCivil(id) { return UNITS[id].building === 'quarters'; }
+  civPop() {
     let p = this.workers;
-    for (const u of this.game.units) if (u.alive) p += u.def.pop || 1;
-    for (const q of Object.values(this.queues)) for (const it of q) if (it.kind === 'unit') p += UNITS[it.id].pop;
+    for (const u of this.game.units) if (u.alive && this.isCivil(u.type)) p += u.def.pop || 1;
+    for (const q of Object.values(this.queues)) for (const it of q) if (it.kind === 'unit' && this.isCivil(it.id)) p += UNITS[it.id].pop;
     return p;
   }
+  armyPop() {
+    let p = 0;
+    for (const u of this.game.units) if (u.alive && !this.isCivil(u.type)) p += u.def.pop || 1;
+    for (const q of Object.values(this.queues)) for (const it of q) if (it.kind === 'unit' && !this.isCivil(it.id)) p += UNITS[it.id].pop;
+    return p;
+  }
+  pop() { return this.civPop(); }
 
   // ---------- unités ----------
   unitLock(id) {
@@ -35,7 +46,8 @@ export class ProductionSystem {
   canTrain(id) {
     const d = UNITS[id];
     if (this.unitLock(id)) return this.unitLock(id);
-    if (this.pop() + d.pop > this.popCap()) return 'Population maximale (améliore les Quartiers)';
+    if (this.isCivil(id)) { if (this.civPop() + d.pop > this.popCap()) return 'Population maximale (améliore les Quartiers)'; }
+    else if (this.armyPop() + d.pop > this.armyCap()) return 'Logement militaire plein (Caserne, Champ de tir, Écurie, Dépôt)';
     if (this.queues[d.building].length >= 6) return 'File pleine';
     if (!this.game.resources.canAfford(d.cost)) return 'Manque ' + this.game.resources.missing(d.cost);
     return null;
@@ -167,7 +179,7 @@ export class ProductionSystem {
     for (const [bid, q] of Object.entries(this.queues)) {
       if (!q.length) continue;
       const it = q[0];
-      const lv = Math.max(1, this.level(bid === 'forge' ? 'forge' : bid));
+      const lv = Math.max(1, this.level(bid));
       it.t += dt * sp * (1 + 0.1 * (lv - 1));
       if (it.t >= it.total) { q.shift(); this.complete(it); }
     }

@@ -6,21 +6,21 @@ import { rng } from '../utils/MathUtils.js';
 // Chaque bâtiment est visible dans le décor ; toucher un bâtiment (ou son étiquette) ouvre son menu.
 const SLOTS = {
   landscape: {
-    lab: [-30, -26], barracks: [0, -26], stable: [30, -26],
-    workshop: [-30, 2], forge: [0, 2], defenses: [30, 2],
+    lab: [-45, -26], barracks: [-15, -26], range: [15, -26], stable: [45, -26],
+    workshop: [-45, 2], forge: [-15, 2], depot: [15, 2], defenses: [45, 2],
     quarters: [-22, 36], market: [22, 36],
   },
   portrait: {
-    lab: [-17, -38], barracks: [17, -38], stable: [-17, -13],
-    workshop: [17, -13], forge: [-17, 12], defenses: [17, 12],
+    lab: [-17, -58], barracks: [17, -58], range: [-17, -36], stable: [17, -36],
+    workshop: [-17, -14], forge: [17, -14], depot: [-17, 8], defenses: [17, 8],
     quarters: [-17, 46], market: [17, 46],
   },
 };
 // zones de la ville : l'Armée (au nord) et le Village (au sud)
-export const ZONE_OF = { lab: 'army', barracks: 'army', stable: 'army', workshop: 'army', forge: 'army', defenses: 'army', quarters: 'village', market: 'village' };
+export const ZONE_OF = { lab: 'army', barracks: 'army', range: 'army', depot: 'army', stable: 'army', workshop: 'army', forge: 'army', defenses: 'army', quarters: 'village', market: 'village' };
 const ZONE_VIEW = {
-  landscape: { army: { z: -20, dist: 92 }, village: { z: 36, dist: 62 } },
-  portrait: { army: { z: -22, dist: 160 }, village: { z: 46, dist: 110 } },
+  landscape: { army: { z: -22, dist: 124 }, village: { z: 36, dist: 62 } },
+  portrait: { army: { z: -40, dist: 165 }, village: { z: 46, dist: 110 } },
 };
 // modèles du pack médiéval composant chaque bâtiment [nom, dx, dz, rotY, échelle]
 const PARTS = {
@@ -29,6 +29,8 @@ const PARTS = {
   stable: [['house3', 0, 0, Math.PI, 1.55], ['fence', 0, 9, Math.PI / 2, 2.2], ['sack', 6, 8, 0, 2.4], ['logs', -6, 8, 0.4, 3]],
   workshop: [['house5', 0, 0, 0, 1.5], ['cart', 9, 5, 0.7, 2.6], ['logs', -8, 6, 0.3, 3], ['crate', -4, 9, 0.2, 2.4]],
   lab: [['church', 0, 0, 0, 1.45]],
+  range: [['tower3', 0, 0, 0, 1.2], ['fence', -8, 8, 0, 2.2], ['fence', 8, 8, 0, 2.2], ['barrel', 5, 11, 0, 2.4], ['crate', -5, 11, 0.4, 2.4]],
+  depot: [['house5', 0, 0, Math.PI, 1.5], ['crate', 8, 5, 0.3, 2.6], ['crate2', 11, 8, 0, 2.6], ['sack', -8, 6, 0, 2.6], ['cart', -9, 9, 0.5, 2.6]],
   forge: [['house4', 0, 0, 0, 1.45], ['cauldron', 8, 5, 0, 2.6], ['campfire', -7, 6, 0, 3.2], ['barrel', 5, 9, 0, 2.4], ['crate2', -3, 9, 0.3, 2.4]],
   market: [['stall', 0, 0, Math.PI, 2.0], ['stall', 9, 2, Math.PI, 2.0], ['stall', -9, 2, Math.PI, 2.0], ['barrel', 5, 7, 0, 2.4], ['crate', -5, 7, 0.5, 2.4], ['sack', 0, 8, 0, 2.4]],
   defenses: [['tower3', 0, 0, 0, 1.5], ['wall', 8, 2, Math.PI / 2, 0.9], ['wall', -8, 2, Math.PI / 2, 0.9]],
@@ -43,7 +45,7 @@ export class City {
     this.b = {};          // id → { x, z, group, site, label }
     this.selected = null;
     const P = MAP.orient === 'portrait';
-    this.bounds = P ? { minX: -26, maxX: 26, minZ: -50, maxZ: 62 } : { minX: -52, maxX: 52, minZ: -36, maxZ: 52 };
+    this.bounds = P ? { minX: -26, maxX: 26, minZ: -72, maxZ: 62 } : { minX: -64, maxX: 64, minZ: -36, maxZ: 52 };
     this.zone = 'army';
   }
 
@@ -147,7 +149,7 @@ export class City {
     }
     const back = document.createElement('button');
     back.className = 'clabel back';
-    back.innerHTML = '<span class="ci">⬆</span><span class="cn">Carte</span>';
+    back.innerHTML = '<span class="ci">⬆</span><span class="cn">Combat</span>';
     back.onclick = e => { e.stopPropagation(); this.game.ui.underground.close(); };
     box.appendChild(back);
     this.backLabel = back;
