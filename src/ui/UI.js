@@ -210,7 +210,7 @@ export class UI {
       case 'upg': sim.buyUpgrade(x); break;
       case 'smith': if (!sim.eco.buySmith(x, y)) this.toast('Pas assez de ressources'); else this.buzz(10); break;
       case 'prio': sim.setRepairPriority(+x); break;
-      case 'ua': sim.assignArchers(s, +y); break;
+      case 'ua': { const was = sim.army.autoArchers; sim.assignArchers(s, +y); if (was) this.toast('🏹 Placement manuel : l\'IA ne déplace plus les archers (réactivable dans Armée › Escouades)', 'info'); break; }
       case 'wall': sim.upgrade(s); break;
       case 'sseg': this.siegeSec = +x; break;
       case 'sbuild': sim.buildSiege(x, this.siegeSec); break;
@@ -222,6 +222,8 @@ export class UI {
       case 'nav': this.nav[x] = y || null; if (y && y.startsWith('sq.')) this.pickSquad(+y.slice(3)); this.html.sheet = ''; break;
       case 'sqgo': { const q = sim.squad(this.selSq); if (!q) break; this.startOrder(q.id, x); break; }
       case 'ordercancel': this.endOrder(); break;
+      case 'sqauto': { sim.squadAuto(this.selSq); this.toast('🤖 L\'escouade se débrouille seule', 'info'); break; }
+      case 'autoarch': { sim.setAutoArchers(!sim.army.autoArchers); this.toast(sim.army.autoArchers ? '🏹 Les archers se placent seuls sur les remparts' : '🏹 Placement manuel des archers (touche un secteur)', 'info'); break; }
       case 'sqorders': { const id = this.selSq; this.openSheet('army'); this.nav.army = 'sq.' + id; this.pickSquad(id); break; }
       case 'sqsee': { const q = sim.squad(this.selSq); if (q) { this.closeSheet(); this.cam.focusOn(q.x, q.z); this.openSquad(q.id); } break; }
       case 'sq': this.pickSquad(+x); break;
@@ -463,7 +465,7 @@ export class UI {
       <div class="hpline"><div class="bar big"><i style="width:${hp / mx * 100}%"></i></div><span>${Math.round(hp)} / ${Math.round(mx)}${br ? ` · 💥${br}` : ''}</span></div>
       <div class="row">${this.btn('⬆ Renforcer', uc ? `Niv. ${w.level[s] + 1} · ${this.cost(uc)}` : 'niveau max', 'wall', !uc || !E.afford(uc))}</div>
       <div class="hint small">🗼 ${towers} tour${towers > 1 ? 's' : ''} couvrent ce secteur — touche une tour pour l'améliorer.</div>
-      <div class="row step"><span class="lab">🏹 Archers<small class="sub">réserve ${army.reserve.archer}</small></span>${this.btn('−', '', 'ua:archer:-1', an <= 0, 'sq')}<b class="val">${an}<small>/${ARCHER_SLOTS}</small></b>${this.btn('+', '', 'ua:archer:1', army.reserve.archer <= 0 || an >= ARCHER_SLOTS, 'sq')}${this.btn('+5', '', 'ua:archer:5', army.reserve.archer <= 0 || an >= ARCHER_SLOTS, 'sq wide')}</div>
+      <div class="row step"><span class="lab">🏹 Archers<small class="sub">réserve ${army.reserve.archer} · ${army.autoArchers ? '🤖 placés par l\'IA' : '✋ placement manuel'}</small></span>${this.btn('−', '', 'ua:archer:-1', an <= 0, 'sq')}<b class="val">${an}<small>/${ARCHER_SLOTS}</small></b>${this.btn('+', '', 'ua:archer:1', army.reserve.archer <= 0 || an >= ARCHER_SLOTS, 'sq')}${this.btn('+5', '', 'ua:archer:5', army.reserve.archer <= 0 || an >= ARCHER_SLOTS, 'sq wide')}</div>
       ${squadsHere.map(q => sqRow(q, false)).join('')}${others.length ? `<div class="hint small">Envoyer ici :</div>${others.map(q => sqRow(q, true)).join('')}` : ''}
       ${sim.siege.weapons.some(x => x.sector === s) ? `<div class="hint small">🛠 Siège : ${sim.siege.weapons.filter(x => x.sector === s).map(x => SIEGE[x.type].ico).join(' ')}</div>` : ''}
       <div class="hint small">🔧 ${crew ? `${crew} villageois réparent la muraille` : 'Aucun réparateur'} (menu 👥).</div>`;
@@ -560,9 +562,11 @@ export class UI {
     if (!army.squads.length) h += '<div class="hint">Aucune escouade. Recrute des soldats (🪖 Recruter), puis forme une escouade avec ta réserve.</div>';
     h += '<div class="blist">' + army.squads.map(q => {
       const U = UNITS[q.type], st = q.mode === 'field' ? (q.fight > 0 ? '⚔ au combat' : q.way.length ? '🚶 en route vers le front' : '⚔ sur le champ de bataille') : (q.way.length ? '🚶 en route' : `🛡 garde ${SECTOR_NAMES[q.sector] || SECTOR_SHORT[q.sector]}`), r = army.hpRatio(q);
-      return `<button class="brow sqrow${r < 0.4 ? ' hurt' : ''}" data-a="nav:army:sq.${q.id}"><span class="ci">${U.ico}</span><div class="bt"><b>${U.name} ×${q.n}</b> <span class="lvl">${st}</span><div class="bar"><i style="width:${Math.round(r * 100)}%"></i></div></div><span class="go">›</span></button>`;
+      return `<button class="brow sqrow${r < 0.4 ? ' hurt' : ''}" data-a="nav:army:sq.${q.id}"><span class="ci">${U.ico}</span><div class="bt"><b>${U.name} ×${q.n}</b> <span class="lvl">${st}</span> <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '🤖 IA' : '✋ ordres'}</span><div class="bar"><i style="width:${Math.round(r * 100)}%"></i></div></div><span class="go">›</span></button>`;
     }).join('') + '</div>';
-    h += `<div class="row">${this.btn('➕ Nouvelle escouade', 'depuis la réserve', 'nav:army:newsq', army.squads.length >= SQUAD.maxSquads, 'act')}</div>` + this.rallyLine();
+    h += `<div class="row">${this.btn('➕ Nouvelle escouade', 'depuis la réserve', 'nav:army:newsq', army.squads.length >= SQUAD.maxSquads, 'act')}</div>`;
+    h += `<div class="hint small">🤖 Sans ordre de ta part, chaque escouade se débrouille : elle garde le secteur le plus menacé, court colmater les brèches, et les cavaliers, chevaliers et lourds en forme font de courtes sorties. Dès que tu donnes un ordre, elle t'obéit (✋).</div>`;
+    h += `<div class="row">${this.btn(`${army.autoArchers ? '✅' : '⬜'} 🏹 Archers placés par l'IA`, army.autoArchers ? 'ils montent seuls et vont où ça presse' : 'placement manuel (touche un secteur)', 'autoarch', false, 'act' + (army.autoArchers ? '' : ' sec'))}</div>` + this.rallyLine();
     return h;
   }
   newSquadHtml() {
@@ -578,6 +582,8 @@ export class UI {
     let h = `<div class="ptitle">${U.ico} ${U.name} ×${q.n}<span class="lvl">⭐ ${rk.name}</span></div>
       <div class="hpline"><div class="bar big"><i style="width:${Math.min(100, army.hpRatio(q) * 100)}%"></i></div><span>${Math.round(q.hp)} PV · ${q.n}/${mx}</span></div>
       <div class="hint small">${field ? '⚔ Sur le champ de bataille' : `🛡 Garde ${SECTOR_NAMES[q.sector] || SECTOR_SHORT[q.sector]}`}${q.way.length ? ' · en marche' : ''}</div>`;
+    h += q.auto ? '<div class="aibox">🤖 <b>L\'IA la commande</b> : elle choisit seule son poste, ses sorties, sa formation. Donne un ordre ci-dessous pour reprendre la main.</div>'
+      : `<div class="aibox man">✋ <b>Elle suit tes ordres.</b> ${this.btn('🤖 Rendre la main à l\'IA', 'elle se débrouillera seule', 'sqauto', false, 'act slim')}</div>`;
     h += `<div class="tgrp">1 · Où l'envoyer ?</div><div class="bigacts">${this.bigAct('⚔', 'Combattre dehors', 'puis touche le champ de bataille', 'sqgo:sortie', false)}${field ? this.bigAct('↩', 'Rentrer', 'retour derrière la muraille', 'gar:' + q.sector) : ''}${this.bigAct('📍', 'Placer à la main', 'puis touche la carte', 'sqgo:move')}</div>`;
     h += `<div class="hint small">ou <b>garder un secteur</b> de la muraille :</div><div class="wallpick">${SECTOR_SHORT.map((x, i) => `<button class="${!field && q.sector === i && !q.custom ? 'on' : ''}" data-a="gar:${i}"><b>${x}</b><small>${(SECTOR_NAMES[i] || '').replace(/^Secteur /, '')}</small></button>`).join('')}</div>`;
     h += `<div class="tgrp">2 · Comment combattre ?</div><div class="fgrid">${Object.keys(FORMATIONS).map(f => `<button class="fbtn ${q.form === f ? 'on' : ''}" data-a="form:${f}"><b>${FORMATIONS[f].ico}</b>${FORMATIONS[f].name}</button>`).join('')}</div><div class="hint small">${F.info}</div>
@@ -589,7 +595,7 @@ export class UI {
   squadCard(q) {
     const army = this.sim.army, U = UNITS[q.type], mx = army.maxN(q.type), field = q.mode === 'field';
     const where = field ? '⚔ Sur le champ de bataille' : q.custom ? '🛡 Poste libre ' + SECTOR_SHORT[q.sector] : '🛡 Garde ' + SECTOR_SHORT[q.sector];
-    return `<div class="ptitle">${U.ico} ${U.name} ×${q.n}<span class="lvl">${where}${q.way.length ? ' · en marche' : ''}</span></div>
+    return `<div class="ptitle">${U.ico} ${U.name} ×${q.n} <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '🤖' : '✋'}</span><span class="lvl">${where}${q.way.length ? ' · en marche' : ''}</span></div>
       <div class="hpline"><div class="bar big"><i style="width:${Math.min(100, army.hpRatio(q) * 100)}%"></i></div><span>${q.n}/${mx}</span></div>
       <div class="bigacts">${this.bigAct('⚔', 'Combattre', 'touche ensuite le champ', 'sqgo:sortie')}${field ? this.bigAct('↩', 'Rentrer', 'à son poste', 'gar:' + q.sector) : this.bigAct('📍', 'Déplacer', 'touche ensuite la carte', 'sqgo:move')}${this.bigAct('⚙', 'Ordres', 'secteur, formation…', 'sqorders')}</div>`;
   }

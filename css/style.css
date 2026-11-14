@@ -200,3 +200,7 @@ h2,h3,.ptitle,.wave b,.tile b,.dk span { font-family:var(--serif); }
   padding:10px 12px 10px 16px; border-radius:16px; background:linear-gradient(180deg,#fff3d0,#f0d27a); border:2px solid #8a6420; box-shadow:0 8px 24px #0007; font-size:15px; color:var(--ink); }
 .orderbar.on { opacity:1; transform:translate(-50%,0); pointer-events:auto; } .orderbar .x { position:static; flex:none; min-width:40px; min-height:40px; border-radius:12px; background:#a8321f; color:#fff; font-weight:900; }
 #card .bigacts { grid-template-columns:repeat(3,1fr); } #card .bigact { min-height:74px; padding:6px 4px; }
+.tag { display:inline-block; font-size:11px; font-weight:800; border-radius:8px; padding:1px 6px; vertical-align:middle; font-family:system-ui,sans-serif; }
+.tag.ai { background:#d8ecf8; color:#1f4f72; border:1px solid #7aa8c8; } .tag.man { background:#f3e2c0; color:#6e4a12; border:1px solid #c8a060; }
+.aibox { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 10px; border-radius:12px; background:#d8ecf8aa; border:1px solid #7aa8c8; color:#1f3f5a; font-size:13px; margin:6px 0; }
+.aibox.man { background:#f3e2c0aa; border-color:#c8a060; color:#5a3a10; } .aibox .act { flex:none; }

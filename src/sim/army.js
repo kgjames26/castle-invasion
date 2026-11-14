@@ -48,7 +48,7 @@ export class Army {
     this.reserve = { archer: 0, soldier: 0, heavy: 0, knight: 0, cavalry: 0 };
     this.archers = Array.from({ length: SECTORS }, () => ({ n: 0, cd: new Float32Array(ARCHER_SLOTS), prog: new Float32Array(ARCHER_SLOTS).fill(1e9) }));
     this.rally = { x: PLAZA.x, z: PLAZA.z }; this.walkers = []; this.gate = GATE_XS.map(() => 0); this.gateT = GATE_XS.map(() => 0); this.gateReq = GATE_XS.map(() => 0);
-    this.squads = []; this.nextId = 1; this.outside = [];
+    this.squads = []; this.nextId = 1; this.outside = []; this.autoArchers = true;   // IA : archers placés d'eux-mêmes sur les remparts
     this.queues = { barracks: [], stable: [], range: [] };
   }
   // ——— population ———
@@ -129,7 +129,7 @@ export class Army {
     const U = UNITS[type]; if (!U.squad || this.squads.length >= SQUAD.maxSquads) return null;
     const n = Math.min(size, U.squad, this.reserve[type]); if (n <= 0) return null;
     this.reserve[type] -= n;
-    const q = { id: this.nextId++, type, n, hp: n * U.hp, form: U.form, mode: 'garrison', sector, x: 0, z: 0, px: 0, pz: 0, postX: 0, postZ: 0, tx: 0, tz: 0, way: [], stance: 'hold', atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: true, rad: 3 };
+    const q = { id: this.nextId++, type, n, hp: n * U.hp, form: U.form, mode: 'garrison', sector, x: 0, z: 0, px: 0, pz: 0, postX: 0, postZ: 0, tx: 0, tz: 0, way: [], stance: 'hold', auto: true, atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: true, rad: 3 };
     this.squads.push(q); this.layoutPosts(); return q;
   }
   reinforce(q) { const k = Math.min(this.maxN(q.type) - q.n, this.reserve[q.type]); if (k <= 0) return 0; this.reserve[q.type] -= k; q.n += k; q.hp += k * this.unitHp(q.type); return k; }
@@ -261,12 +261,12 @@ export class Army {
   serialize() {
     return {
       reserve: { ...this.reserve }, archers: this.archers.map(a => a.n), nextId: this.nextId, rally: { ...this.rally },
-      squads: this.squads.map(q => ({ id: q.id, type: q.type, n: q.n, hp: Math.round(q.hp), form: q.form, mode: q.mode, sector: q.sector, x: +q.x.toFixed(2), z: +q.z.toFixed(2), tx: q.tx, tz: q.tz, stance: q.stance, custom: q.custom || null })),
+      squads: this.squads.map(q => ({ id: q.id, type: q.type, n: q.n, hp: Math.round(q.hp), form: q.form, mode: q.mode, sector: q.sector, x: +q.x.toFixed(2), z: +q.z.toFixed(2), tx: q.tx, tz: q.tz, stance: q.stance, custom: q.custom || null, auto: q.auto })), autoArchers: this.autoArchers,
       queues: Object.fromEntries(TRAIN_BUILDINGS.map(b => [b, this.queues[b].map(i => ({ type: i.type, t: +i.t.toFixed(2), full: i.full }))])),
     };
   }
   restore(st) {
-    Object.assign(this.reserve, { knight: 0 }, st.reserve); this.nextId = st.nextId || 1;
+    Object.assign(this.reserve, { knight: 0 }, st.reserve); this.nextId = st.nextId || 1; this.autoArchers = st.autoArchers !== false;
     for (let s = 0; s < SECTORS; s++) { this.archers[s].n = st.archers[s]; this.archers[s].cd.fill(0.3); this.archers[s].prog.fill(1e9); }
     if (st.rally) { this.rally.x = st.rally.x; this.rally.z = st.rally.z; } this.walkers = [];
     this.squads = [];
@@ -275,5 +275,5 @@ export class Army {
     for (const q of this.squads) { const o = st.squads.find(s => s.id === q.id); q.x = q.px = o.x; q.z = q.pz = o.z; q.fresh = false; if (o.mode === 'field') this.route(q, o.tx, o.tz); else this.route(q, q.postX, q.postZ); }
     for (const b of TRAIN_BUILDINGS) this.queues[b] = (st.queues?.[b] || []).map(i => ({ ...i }));
   }
-  formSquadRaw(o) { return { id: o.id, type: o.type, n: o.n, hp: o.hp, form: o.form, mode: o.mode, sector: o.sector, x: o.x, z: o.z, px: o.x, pz: o.z, postX: 0, postZ: 0, tx: o.tx, tz: o.tz, custom: o.custom || null, way: [], stance: o.stance || 'hold', atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: false, rad: 3 }; }
+  formSquadRaw(o) { return { id: o.id, type: o.type, n: o.n, hp: o.hp, form: o.form, mode: o.mode, sector: o.sector, x: o.x, z: o.z, px: o.x, pz: o.z, postX: 0, postZ: 0, tx: o.tx, tz: o.tz, custom: o.custom || null, auto: o.auto !== false, way: [], stance: o.stance || 'hold', atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: false, rad: 3 }; }
 }

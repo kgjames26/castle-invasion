@@ -223,3 +223,8 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
   - 📜 Savoir : Améliorations du village · Où améliorer quoi ?
 - **Escouades** : liste (état, santé) → fiche d'une escouade, ordres groupés par intention : 1 · Où l'envoyer (Combattre dehors, Rentrer, Placer à la main, ou garder un secteur sur un plan de la muraille) · 2 · Comment combattre (formation, Tenir / Charger) · 3 · Effectif.
 - **Ordres explicites** : toucher la carte ne déplace plus une escouade par surprise. On choisit l'action (bulle sur la carte : Combattre / Déplacer / Ordres), un bandeau en haut indique quoi toucher, annulable.
+
+## Phase 26 — IA de l'armée
+- **Archers** (src/sim/armyai.js) : les archers en réserve montent d'eux-mêmes sur les remparts et se répartissent selon la menace ; pendant l'assaut, l'IA en déplace un à la fois vers le secteur le plus pressé. Un placement manuel (fiche d'un secteur) coupe l'IA des archers ; réactivable dans Armée › Escouades.
+- **Escouades sans ordre (🤖)** : gardent le secteur qui en a le plus besoin (menace, brèche, intrus, muraille abîmée), avec de l'inertie pour ne pas courir partout ; restent à leur poste si elles sont très blessées ; cavaliers, chevaliers et lourds en forme font de **courtes sorties** contre un petit groupe au pied du mur (jamais contre un géant), puis rentrent blessés ou quand le danger est passé ; formation et posture choisies selon la situation.
+- **Un ordre du joueur rend l'escouade manuelle (✋)** ; « Rendre la main à l'IA » la remet en automatique. Badges 🤖 / ✋ dans la liste et la bulle.

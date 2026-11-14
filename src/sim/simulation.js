@@ -12,6 +12,7 @@ import { START, UNITS, TIMING, waveSpec, giantsFor, golemsFor, GOLEM, PACK, FIRE
 import { Mages } from './mage.js';
 import { Priest } from './priest.js';
 import { Infection } from './infection.js';
+import { ArmyAI } from './armyai.js';
 import { Frontier } from './frontier.js';
 import { Roads } from './roads.js';
 import { Night } from './night.js';
@@ -38,7 +39,7 @@ export class Simulation {
   newGame() {
     this.rng = makeRng(this.seed);
     this.wall.reset(); this.zombies.clear(); this.zombies.kills = 0;
-    this.army = new Army(); this.siege = new Siege(); this.mages = new Mages(); this.priest = new Priest(); this.infection = new Infection(); this.blasts = []; this.blastId = 0; this.fires = []; this.fallers = [];
+    this.army = new Army(); this.siege = new Siege(); this.mages = new Mages(); this.priest = new Priest(); this.infection = new Infection(); this.armyAI = new ArmyAI(); this.blasts = []; this.blastId = 0; this.fires = []; this.fallers = [];
     this.frontier = new Frontier(); this.roads = new Roads(); this.night = new Night();
     this.eco.reset(); this.build.reset();
     this.army.reserve = { ...START.reserve };
@@ -55,14 +56,16 @@ export class Simulation {
   // ——— armée ———
   train(type, n = 1) { return this.army.enqueue(this, type, n); }
   cancelTrain(b) { return this.army.cancel(this, b); }
-  assignArchers(s, delta) { return this.army.assignArchers(s, delta); }
+  assignArchers(s, delta) { this.army.autoArchers = false; return this.army.assignArchers(s, delta); }   // placement manuel : l'IA laisse faire le joueur
+  setAutoArchers(on) { this.army.autoArchers = !!on; }
+  squadAuto(id) { const q = this.squad(id); if (q) q.auto = true; }
   squad(id) { return this.army.squads.find(q => q.id === id) || null; }
   formSquad(type, size, sector) { return this.army.formSquad(type, size, sector); }
-  squadForm(id, f) { const q = this.squad(id); if (q) this.army.setForm(q, f); }
-  squadStance(id, st) { const q = this.squad(id); if (q) this.army.setStance(q, st); }
-  squadGarrison(id, s) { const q = this.squad(id); if (q) this.army.garrison(q, s); }
-  squadSortie(id, x, z) { const q = this.squad(id); if (q) this.army.sortie(q, x, z); }
-  squadMove(id, x, z) { const q = this.squad(id); if (q) this.army.moveTo(q, x, z); }
+  squadForm(id, f) { const q = this.squad(id); if (q) { q.auto = false; this.army.setForm(q, f); } }
+  squadStance(id, st) { const q = this.squad(id); if (q) { q.auto = false; this.army.setStance(q, st); } }
+  squadGarrison(id, s) { const q = this.squad(id); if (q) { q.auto = false; this.army.garrison(q, s); } }
+  squadSortie(id, x, z) { const q = this.squad(id); if (q) { q.auto = false; this.army.sortie(q, x, z); } }
+  squadMove(id, x, z) { const q = this.squad(id); if (q) { q.auto = false; this.army.moveTo(q, x, z); } }
   squadReinforce(id) { const q = this.squad(id); return q ? this.army.reinforce(q) : 0; }
   squadDisband(id) { const q = this.squad(id); if (q) this.army.disband(q); }
   buildSiege(type, s) { return this.siege.build(this, type, s); }
@@ -204,7 +207,7 @@ export class Simulation {
     this.time += dt;
     this.updateWaves(dt);
     this.zombies.update(dt, this); this.infection.update(dt, this);
-    this.army.update(dt, this);
+    this.armyAI.update(dt, this); this.army.update(dt, this);
     this.siege.update(dt, this);
     this.mages.update(dt, this); this.priest.update(dt, this);
     this.night.update(dt, this); this.roads.update(dt, this);
