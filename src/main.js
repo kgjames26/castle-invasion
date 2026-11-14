@@ -4,6 +4,7 @@ import { SQUAD } from './content/medieval.js';
 import { save, load, clearSave } from './sim/save.js';
 import { Renderer } from './render/Renderer.js';
 import { loadKit } from './render/Kit.js';
+import { loadCharacters } from './render/Characters.js';
 import { CameraController } from './camera/CameraController.js';
 import { UI } from './ui/UI.js';
 
@@ -15,6 +16,7 @@ const sim = new Simulation();
 const resumed = load(sim);
 const view = document.getElementById('view');
 const rd = new Renderer(view, sim);
+loadCharacters().then(c => rd.useCharacters(c)).catch(e => console.warn('Personnages indisponibles, géométrie provisoire conservée', e));
 loadKit().then(k => rd.useKit(k)).catch(e => console.warn('Décor du kit indisponible, géométrie provisoire conservée', e));
 let ui;
 const cam = new CameraController(rd.camera, rd.renderer.domElement, (x, z) => {

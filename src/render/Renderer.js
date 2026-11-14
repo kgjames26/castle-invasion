@@ -5,6 +5,8 @@ import { T } from '../sim/terrain.js';
 import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/medieval.js';
 import { archerPos, formationLayout } from '../sim/army.js';
 import { applyNorthFog } from './fog.js';
+const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4]];      // variantes de modèle par type de zombie
+const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
 
 const lam = (color, opts = {}) => applyNorthFog(new THREE.MeshLambertMaterial({ color, flatShading: true, ...opts }));
 const ZSCALE = 2.2, USCALE = 2.6;   // exagération volontaire pour la lisibilité sur petit écran
@@ -28,16 +30,24 @@ export class Renderer {
 
   buildGround() {
     const k = 3, cv = document.createElement('canvas'); cv.width = W * k; cv.height = D * k; const g = cv.getContext('2d');
+    let seed = 99; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     const band = (z0, z1, c) => { g.fillStyle = c; g.fillRect(0, z0 * k, W * k, (z1 - z0) * k); };
-    band(0, 30, '#3b4a34'); band(30, 90, '#5b7a45'); band(90, WALL_Z0, '#86975a');      // spawn, approche, champ de bataille
-    band(WALL_Z0, WALL_Z1, '#6a645c');
-    band(WALL_Z1, 200, '#6e7a60'); band(200, 270, '#6f9a4e'); band(270, D, '#7e8a6a');  // militaire, village, château
-    const type = this.sim.terrain.type, pal = { [T.FOREST]: '#2f5a33', [T.HILL]: '#a2a763', [T.ROCK]: '#6b6e72', [T.ROAD]: '#b49a6c' };
+    // neige : bleutée et sombre au nord (terres des zombies), plus claire vers le champ de bataille, terre battue dans la cour et au village
+    band(0, 30, '#7d8a98'); band(30, 90, '#c9d5de'); band(90, WALL_Z0, '#dde6ec');
+    band(WALL_Z0, WALL_Z1, '#8b8a86');
+    band(WALL_Z1, 200, '#a69d8e'); band(200, 270, '#d6dde1'); band(270, D, '#b7b1a5');
+    const type = this.sim.terrain.type, pal = { [T.FOREST]: '#9db3a6', [T.HILL]: '#f1f5f8', [T.ROCK]: '#9ea3a8', [T.ROAD]: '#b3a58f' };
     for (let gz = 0; gz < GD; gz++) for (let gx = 0; gx < GW; gx++) { const t = type[gz * GW + gx]; if (t && pal[t]) { g.fillStyle = pal[t]; g.fillRect(gx * CELL * k, gz * CELL * k, CELL * k + 1, CELL * k + 1); } }
-    // repères de secteurs sur le glacis et la zone militaire
-    g.strokeStyle = 'rgba(255,255,255,.28)'; g.lineWidth = 1.5; g.setLineDash([8, 8]);
+    // congères et plaques de glace (bruit déterministe)
+    for (let i = 0; i < 900; i++) { const x = r() * W, z = r() * D, w = 1.5 + r() * 5, h = 1 + r() * 3; g.fillStyle = r() < 0.75 ? 'rgba(255,255,255,0.2)' : 'rgba(120,150,175,0.08)'; g.beginPath(); g.ellipse(x * k, z * k, w * k, h * k, 0, 0, 7); g.fill(); }
+    // chemins de terre battue : de la porte au château, vers les gisements et le long de la muraille (côté ville)
+    const path = (pts, w) => { g.strokeStyle = 'rgba(120,98,70,0.5)'; g.lineWidth = w * k; g.lineCap = g.lineJoin = 'round'; g.beginPath(); pts.forEach(([x, z], i) => i ? g.lineTo(x * k, z * k) : g.moveTo(x * k, z * k)); g.stroke(); g.strokeStyle = 'rgba(160,138,108,0.5)'; g.lineWidth = w * 0.45 * k; g.stroke(); };
+    path([[100, 150], [100, 200], [100, 284]], 9); path([[100, 238], [40, 255]], 5); path([[100, 238], [160, 255]], 5); path([[100, 262], [182, 243]], 4.5); path([[100, 262], [18, 238]], 4.5);
+    path([[8, 156], [192, 156]], 5);
+    // repères de secteurs sur le champ de bataille et la zone militaire
+    g.strokeStyle = 'rgba(40,60,90,.35)'; g.lineWidth = 1.5; g.setLineDash([8, 8]);
     for (let s = 1; s < SECTORS; s++) { g.beginPath(); g.moveTo(s * SECTOR_W * k, 90 * k); g.lineTo(s * SECTOR_W * k, 200 * k); g.stroke(); }
-    g.setLineDash([]); g.fillStyle = 'rgba(255,255,255,.35)'; g.font = `bold ${7 * k}px sans-serif`; g.textAlign = 'center';
+    g.setLineDash([]); g.fillStyle = 'rgba(40,60,90,.4)'; g.font = `bold ${7 * k}px sans-serif`; g.textAlign = 'center';
     for (let s = 0; s < SECTORS; s++) g.fillText(SECTOR_SHORT[s], (s + .5) * SECTOR_W * k, 126 * k);
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, D), applyNorthFog(new THREE.MeshLambertMaterial({ map: tex })));
@@ -56,8 +66,9 @@ export class Renderer {
       list.forEach(([x, z, s], i) => { this.dummy.position.set(x, s * yOff, z); this.dummy.scale.set(s, s, s); this.dummy.rotation.y = i; this.dummy.updateMatrix(); im.setMatrixAt(i, this.dummy.matrix); });
       im.instanceMatrix.needsUpdate = true; this.scene.add(im); return im;
     };
-    mk(new THREE.DodecahedronGeometry(1, 0), lam(0x808488), rock, 0.55);
-    mk(new THREE.ConeGeometry(0.9, 2.4, 5), lam(0x2c6a34), tree, 0.5);
+    mk(new THREE.DodecahedronGeometry(1, 0), lam(0x8a8f94), rock, 0.55);
+    mk(new THREE.ConeGeometry(0.9, 2.4, 5), lam(0x2f5d3c), tree, 0.5);
+    mk(new THREE.ConeGeometry(0.62, 1.1, 5), lam(0xf2f6fa), tree, 1.2);      // neige sur la cime
   }
   buildWall() {
     this.wallMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(SEG_W - 0.25, 4, 8), lam(0xffffff), SEGS);
@@ -118,10 +129,17 @@ export class Renderer {
     const vs = E.villagers, VS = 2.8; this.vMesh.count = vs.length; let nc = 0;
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], x = v.px + (v.x - v.px) * alpha, z = v.pz + (v.z - v.pz) * alpha;
+      if (this.chars) {                                    // villageois humanoïde : cap selon le déplacement, balancement à la marche
+        const dx = v.x - v.px, dz = v.z - v.pz, mv = dx * dx + dz * dz > 1e-6; let rot = this.vRot.get(v) ?? 0; if (mv) { rot = Math.atan2(dx, dz); this.vRot.set(v, rot); }
+        const bob = mv ? 1 + 0.05 * Math.sin(this.clock * 11 + i) : 1;
+        d.position.set(x, 0, z); d.scale.set(1.9, 1.9 * bob, 1.9); d.rotation.set(0, rot, mv ? 0.06 * Math.sin(this.clock * 11 + i) : 0); d.updateMatrix(); this.vMesh.setMatrixAt(i, d.matrix);
+        this.vMesh.setColorAt(i, this.tmpColor.setHex(VTINT[v.task] || 0xffffff));
+      } else {
       d.position.set(x, 0, z); d.scale.set(VS * 0.8, VS, VS * 0.8); d.rotation.set(0, 0, 0); d.updateMatrix(); this.vMesh.setMatrixAt(i, d.matrix);
       this.vMesh.setColorAt(i, v.task === 'repair' ? this.vCol.repair : this.vCol.idle);
+      }
       if (v.carry > 0) {                                  // charge portée : cube coloré selon la ressource
-        d.position.set(x, 4.6, z); d.scale.set(1.8, 1.8, 1.8); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
+        d.position.set(x, this.chars ? 5.0 : 4.6, z); d.scale.set(1.8, 1.8, 1.8); d.rotation.set(0, 0, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
         this.tmpColor.setHex(RES_INFO[v.carryRes].color); this.cMesh.setColorAt(nc, this.tmpColor); nc++;
       }
     }
@@ -197,7 +215,7 @@ export class Renderer {
     for (let i = 0; i <= SECTORS; i++) { const x = Math.min(W - 3, Math.max(3, i * SECTOR_W)); if (i === 0 || i === SECTORS) put(tw[0], a++, x, 146, 0, 1.15, 1.15, 1.15); else put(tw[1], b++, x, 146, 0, 1.1, 1.1, 1.1); }
     tw[0].count = a; tw[1].count = b; for (const t of tw) t.instanceMatrix.needsUpdate = true;
     // château (orientation : façade vers le sud, côté village)
-    const castle = new THREE.Mesh(geo.Castle, kit.material); castle.position.set(CASTLE.x, 0, CASTLE.z); castle.scale.setScalar(0.8); this.scene.add(castle); this.castleKit = castle;
+    const castle = new THREE.Mesh(geo.Castle, kit.material); castle.position.set(CASTLE.x, 0, CASTLE.z); castle.scale.setScalar(0.8); castle.rotation.y = Math.PI / 2; this.scene.add(castle); this.castleKit = castle;
     // maisons de population : une instance par maison construite
     this.houseTypes = ['House1', 'House2', 'House3', 'House4', 'House5']; this.hm = this.houseTypes.map(n => mk(n, 64));
     const slots = []; for (const z of [214, 224, 233]) for (let x = 14; x <= 186; x += 9.2) if (Math.abs(x - 100) > 9) slots.push({ x, z });
@@ -224,7 +242,7 @@ export class Renderer {
     for (let i = 0; i < SEGS; i++) {
       const hpR = wall.hp[i] / wall.segMax(i), breached = wall.hp[i] <= 0, lvl = wall.level[wall.sectorOf(i)], gate = wall.isGate(i);
       const type = gate ? 'Wall4' : ['Wall1', 'Wall2', 'Wall3'][i % 3], im = this.kw[type], k = cnt[type]++;
-      this.put(im, k, i * SEG_W + SEG_W / 2, 146, Math.PI / 2, 1.45, breached ? 0.28 : 1.12 + 0.03 * lvl, 0.64);
+      this.put(im, k, i * SEG_W + SEG_W / 2, 146, -Math.PI / 2, 1.45, breached ? 0.28 : 1.12 + 0.03 * lvl, 0.64);
       if (breached) c.setRGB(0.35, 0.25, 0.22); else { c.setRGB(1, 1, 1); c.lerp(this.tmpC2.setRGB(1, 0.35, 0.25), (1 - hpR) * 0.85); }
       im.setColorAt(k, c);
     }
@@ -240,6 +258,41 @@ export class Renderer {
     for (const id in this.kitB) { const lv = E.level[id]; this.kitB[id].visible = lv > 0; this.kitB[id].scale.y = this.kitB[id].scale.x * (1 + 0.06 * (lv - 1)); }
     this.wagons.forEach((w, k) => { w.visible = E.up.carts > k; });
   }
+  // ——— personnages de l'ancien jeu : zombies animés (VAT), archers, villageois humanoïdes ———
+  useCharacters(ch) {
+    this.chars = ch; this.vRot = new WeakMap(); const cap = MAX_Z;
+    this.zv = ch.zombies.variants.map((v, i) => {
+      const im = new THREE.InstancedMesh(v.geo, ch.zombies.mats[i], cap); im.frustumCulled = false; im.count = 0;
+      im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+      im.anim = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); im.anim.setUsage(THREE.DynamicDrawUsage); v.geo.setAttribute('aAnim', im.anim); this.scene.add(im); return im;
+    });
+    this.zvCount = new Int32Array(this.zv.length); this.zMesh.visible = false;
+    this.zTint = ZOMBIES.map(z => new THREE.Color(0xffffff).lerp(new THREE.Color(z.color), 0.4));
+    const mk = geo => { const im = new THREE.InstancedMesh(geo, ch.archerMat, SECTORS * ARCHER_SLOTS + 4); im.frustumCulled = false; im.count = 0; this.scene.add(im); return im; };
+    this.ab = mk(ch.archer.body); this.abow = mk(ch.archer.bow); this.aMesh.visible = false;
+    this.vMesh.geometry = ch.villagerGeo; this.vMesh.material = ch.villagerMat;
+  }
+  renderZombies(alpha) {
+    const Z = this.sim.zombies, n = Z.n, cnt = this.zvCount.fill(0), clock = this.clock, tc = this.tmpColor;
+    for (let i = 0; i < n; i++) {
+      const t = Z.type[i], Zt = ZOMBIES[t], pool = ZVAR[t], vi = pool[((Z.phase[i] * 1000) | 0) % pool.length], im = this.zv[vi], k = cnt[vi]++;
+      const x = Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, z = Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, dx = Z.x[i] - Z.px[i], dz = Z.z[i] - Z.pz[i];
+      const rot = dx * dx + dz * dz > 4e-6 ? Math.atan2(dx, dz) : 0, c = Math.cos(rot), s2 = Math.sin(rot), sc = Zt.size * 1.9, o = k * 16, m = im.instanceMatrix.array;
+      m[o] = c * sc; m[o + 1] = 0; m[o + 2] = -s2 * sc; m[o + 3] = 0; m[o + 4] = 0; m[o + 5] = sc; m[o + 6] = 0; m[o + 7] = 0; m[o + 8] = s2 * sc; m[o + 9] = 0; m[o + 10] = c * sc; m[o + 11] = 0; m[o + 12] = x; m[o + 13] = 0; m[o + 14] = z; m[o + 15] = 1;
+      const cps = Z.state[i] === 1 ? 1.3 : Math.max(0.25, Zt.speed / (2.2 * sc));
+      im.anim.array[k] = ((clock * cps + Z.phase[i] / 6.2832) % 1) * 16;
+      const hurt = Z.hp[i] / Zt.hp < 0.5 ? 0.7 : 1, tt = this.zTint[t], ca = im.instanceColor.array; ca[k * 3] = tt.r * hurt; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt;
+    }
+    this.zv.forEach((im, v) => { im.count = cnt[v]; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.anim.needsUpdate = true; });
+  }
+  renderArchers() {
+    const sim = this.sim, d = this.dummy; let ai = 0;
+    for (let s = 0; s < SECTORS; s++) for (let k = 0; k < sim.army.archers[s].n; k++) {
+      const p = archerPos(s, k), a = sim.siege ? 0 : 0; d.position.set(p.x, this.kitWalls ? 4.9 : 4, p.z); d.scale.set(2.0, 2.0, 2.0); d.rotation.set(0, Math.PI, 0); d.updateMatrix();
+      this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); ai++;
+    }
+    this.ab.count = this.abow.count = ai; this.ab.instanceMatrix.needsUpdate = this.abow.instanceMatrix.needsUpdate = true;
+  }
   setSquad(id) { this.selSquad = id || 0; }
   setTargeting(on) { this.targetMode = on; }
   setSelected(s) { this.selected = s; this.hl.visible = s >= 0; if (s >= 0) this.hl.position.set(s * SECTOR_W + SECTOR_W / 2, 0.2, 112); }
@@ -247,6 +300,7 @@ export class Renderer {
   render(alpha, dtReal) {
     const sim = this.sim, Z = sim.zombies, d = this.dummy; this.clock += dtReal;
     // zombies (interpolés)
+    if (this.zv) this.renderZombies(alpha); else {
     const zm = this.zMesh, ma = zm.instanceMatrix.array, ca = zm.instanceColor.array, n = Z.n;
     for (let i = 0; i < n; i++) {
       const t = Z.type[i], sc = ZOMBIES[t].size * ZSCALE, x = Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, z = Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha;
@@ -256,6 +310,7 @@ export class Renderer {
       const c = this.zCol[t], hurt = Z.hp[i] / ZOMBIES[t].hp < 0.5 ? 0.75 : 1; ca[i * 3] = c.r * hurt; ca[i * 3 + 1] = c.g * hurt; ca[i * 3 + 2] = c.b * hurt;
     }
     zm.count = n; zm.instanceMatrix.needsUpdate = true; zm.instanceColor.needsUpdate = true;
+    }
     // escouades : chaque membre est dessiné selon la formation (la simulation ne connaît que l'escouade)
     let si = 0; const sm = this.sMesh, sel = this.selSquad;
     for (const q of sim.army.squads) {
@@ -278,12 +333,14 @@ export class Renderer {
       this.mark.visible = sq.mode === 'field'; this.mark.position.set(sq.tx, 0.35, sq.tz); const pu = 1 + 0.12 * Math.sin(this.clock * 6); this.mark.scale.set(pu, pu, pu);
     } else this.mark.visible = false;
     this.targeting.visible = this.targetMode;
+    if (this.ab) this.renderArchers(); else {
     // archers (sur le chemin de ronde)
     let ai = 0;
     for (let s = 0; s < SECTORS; s++) for (let k = 0; k < sim.army.archers[s].n; k++) {
       const p = archerPos(s, k); d.position.set(p.x, this.kitWalls ? 4.9 : 4, p.z); d.scale.set(USCALE * .7, USCALE * .9, USCALE * .7); d.rotation.set(0, 0, 0); d.updateMatrix(); this.aMesh.setMatrixAt(ai, d.matrix); this.tmpColor.setRGB(0.18, 0.68, 0.42); this.aMesh.setColorAt(ai, this.tmpColor); ai++;
     }
     this.aMesh.count = ai; this.aMesh.instanceMatrix.needsUpdate = true; if (this.aMesh.instanceColor) this.aMesh.instanceColor.needsUpdate = true;
+    }
     // flèches
     const ar = sim.arrows; this.arMesh.count = Math.min(ar.length, 256);
     for (let i = 0; i < this.arMesh.count; i++) {

@@ -61,6 +61,9 @@ Three.js (MIT, `lib/THREE_LICENSE`). Packs assetfactory archivés dans `assets/a
 - Démontage = ½ des ressources rendues. Sauvegarde : champ `siege` (sans changement de version ; les anciennes sauvegardes v3 restent valides).
 - Test : `node tests/siege.mjs`. Reporté : bélier mobile, armes attaquables par les zombies.
 
+## Personnages (repris de l'ancien jeu)
+`src/render/Characters.js` charge `assets/characters/` (copies de l'archive v2) : **zombies animés** (cycle de marche, 6 modèles, animation par texture de sommets, un seul appel de rendu par modèle), **archers** « Bard the Bowman » (corps + arc, modèle statique) et **villageois** humanoïdes reconstruits à partir du code du cultivateur de l'ancien jeu (teinte selon la tâche, cap selon le déplacement, balancement). Limites : l'archive ne contient ni course, ni attaque, ni mort animées, ni squelette ; pas de modèle de villageois (le sien est procédural). Sans les fichiers, le rendu retombe sur les boîtes provisoires. Les licences des packs « Polyart Zombies » et « Bard the Bowman » ne sont pas fournies : à vérifier.
+
 ## Ancien jeu (v2)
 Sauvegardé dans `legacy/` (ressource de développement : animations, muraille, zombies, archers, villageois…) et intégralement dans la branche `claude/legacy-v2`. Voir `legacy/README.md`.
 
