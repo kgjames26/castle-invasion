@@ -11,9 +11,9 @@ export const ATMOS = {
 };
 export const CAMERA = { pitchDeg: 40, fov: 60 };                           // vue plus rasante et plus ample : moins « maquette »
 export const PRESETS = {
-  low:    { shadows: false, shadowMap: 0,    glow: false, pixelRatio: 1,   particles: 0.5 },
-  medium: { shadows: true,  shadowMap: 1024, glow: true,  pixelRatio: 1.5, particles: 0.8 },
-  high:   { shadows: true,  shadowMap: 2048, glow: true,  pixelRatio: 2,   particles: 1 },
+  low:    { shadows: false, shadowMap: 0,    glow: false, pixelRatio: 1,   particles: 0.5, grass: 0.35 },
+  medium: { shadows: true,  shadowMap: 1024, glow: true,  pixelRatio: 1.5, particles: 0.8, grass: 0.7 },
+  high:   { shadows: true,  shadowMap: 2048, glow: true,  pixelRatio: 2,   particles: 1, grass: 1 },
 };
 const KEY = 'castle-quality';
 function initial() {

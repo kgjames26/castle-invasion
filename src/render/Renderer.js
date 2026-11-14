@@ -10,7 +10,7 @@ import { WallView } from './WallView.js';
 import { stoneMaterial } from './Stone.js';
 import { Effects, EFFECTS } from './Effects.js';
 import { ATMOS, CAMERA, quality, setQualityName } from './config.js';
-import { fogUniforms } from './fog.js';
+import { fogUniforms, patchNorthFog } from './fog.js';
 import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry } from './Troops.js';
 const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1]];      // variantes de modèle par type de zombie
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
@@ -34,6 +34,7 @@ export class Renderer {
     Object.assign(sun.shadow.camera, { left: -A.hw, right: A.hw, top: A.hd, bottom: -A.hd, near: 10, far: 420 }); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.35; sun.shadow.radius = 3;
     this.dummy = new THREE.Object3D(); this.tmpColor = new THREE.Color();
     this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildSiege(); this.rigs = buildTroopRigs(this.scene); this.vrigs = buildVillagerRigs(this.scene); this.vMesh.visible = false; this.buildHighlight();
+    this.buildGrass();
     this.applyQuality();
     this.buildTorches(); this.buildRangeIndicator();
     this.fx = new Effects(this.scene, { enabled: EFFECTS.enabled });   // particules (flèches, zombies, muraille, siège) : vue seule
@@ -48,10 +49,36 @@ export class Renderer {
     if (q.shadows) { const sm = this.sun.shadow; if (sm.mapSize.x !== q.shadowMap) { sm.mapSize.set(q.shadowMap, q.shadowMap); if (sm.map) { sm.map.dispose(); sm.map = null; } } }
     this.scene.traverse(o => { if (o.material) { for (const m of [].concat(o.material)) m.needsUpdate = true; } });
     if (this.fx) this.fx.setQuality(q);
+    if (this.grass) this.grass.count = Math.round(this.grass.userData.max * q.grass);
     if (this.lastSize) this.resize(this.lastSize[0], this.lastSize[1]);
   }
   // les objets qui projettent et reçoivent une ombre (personnages animés exclus : leur ombre serait figée)
   shadowize(obj) { obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }
+  // ——— touffes d'herbe : une seule maille instanciée (3 lames croisées par touffe), balancée par le vent dans le shader ———
+  buildGrass() {
+    const MAXN = 4200, blades = [], pos = [], nor = [];
+    for (let b = 0; b < 5; b++) {   // 5 lames : triangle effilé, inclinées et orientées différemment
+      const a = b * 1.256 + 0.3, h = 0.8 + 0.5 * ((b * 37) % 5) / 4, lean = 0.12 + 0.1 * (b % 3), w = 0.09, ox = Math.cos(a) * 0.12, oz = Math.sin(a) * 0.12, cx = Math.cos(a + 1.57), cz = Math.sin(a + 1.57);
+      pos.push(ox - cx * w, 0, oz - cz * w, ox + cx * w, 0, oz + cz * w, ox + Math.cos(a) * lean, h, oz + Math.sin(a) * lean); for (let i = 0; i < 3; i++) nor.push(0, 1, 0);
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }); this.grassTime = { value: 0 };
+    mat.onBeforeCompile = sh => { patchNorthFog(sh); sh.uniforms.uTime = this.grassTime; sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;').replace('#include <begin_vertex>', `#include <begin_vertex>
+      { float ph = instanceMatrix[3][0] * 0.7 + instanceMatrix[3][2] * 0.5; transformed.x += sin( uTime * 1.7 + ph ) * 0.16 * position.y; transformed.z += cos( uTime * 1.3 + ph ) * 0.1 * position.y; }`); };
+    mat.customProgramCacheKey = () => 'grass-wind';
+    const im = new THREE.InstancedMesh(geo, mat, MAXN); im.frustumCulled = false; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAXN * 3), 3);
+    const type = this.sim.terrain.type; let seed = 4242; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647, d = this.dummy, c = this.tmpColor; let n = 0, tries = 0;
+    const cols = { south: [[0.32, 0.5, 0.22], [0.42, 0.55, 0.26], [0.55, 0.55, 0.28]], north: [[0.62, 0.58, 0.38], [0.5, 0.52, 0.36], [0.72, 0.7, 0.55]] };
+    while (n < MAXN && tries++ < MAXN * 8) {
+      const south = r() < 0.62, z = south ? 206 + r() * 106 : 30 + r() * 108, x = 2 + r() * 196;
+      if (Math.hypot((x - CASTLE.x) / 38, (z - CASTLE.z) / 28) < 1) continue;                                        // pas sur les pavés du château
+      if (Math.abs(x - PLAZA.x) < PLAZA.hw + 2 && Math.abs(z - PLAZA.z) < PLAZA.hd + 2) continue;                       // ni sur la placette
+      const t = type[((z / CELL) | 0) * GW + ((x / CELL) | 0)]; if (t === T.ROAD || t === T.ROCK) continue;
+      const k = r() < 0.5 ? 0.8 + r() * 0.6 : 0.5 + r() * 0.4, pal = south ? cols.south : cols.north, col = pal[(r() * pal.length) | 0], v = 1.45 + r() * 0.5;
+      d.position.set(x, 0, z); d.rotation.set(0, r() * 6.28, 0); d.scale.set(k, k * (0.8 + r() * 0.5), k); d.updateMatrix(); im.setMatrixAt(n, d.matrix); im.setColorAt(n, c.setRGB(col[0] * v, col[1] * v, col[2] * v)); n++;
+    }
+    im.userData.max = n; im.count = n; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; this.scene.add(im); this.grass = im;
+  }
   // ——— torches des portes : flamme + lueur (désactivable avec la qualité) ———
   buildTorches() {
     this.torches = new THREE.Group(); this.torchPos = [];
@@ -114,6 +141,12 @@ export class Renderer {
     // ——— village : terre battue, herbe morte, neige par plaques ———
     for (let i = 0; i < 520; i++) blob(r() * W, rr(203, 292), rr(2, 8), r() < 0.62 ? 'rgba(158,124,82,A)' : 'rgba(255,255,255,A)', rr(0.12, 0.3));
     for (let i = 0; i < 700; i++) { const x = r() * W, z = rr(203, 296); g.strokeStyle = r() < 0.7 ? 'rgba(120,128,80,.55)' : 'rgba(150,140,90,.5)'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(X(x), X(z)); g.lineTo(X(x + rr(-.4, .4)), X(z - rr(.5, 1.4))); g.stroke(); }
+    // ——— texture fine : mousse et herbe rase, galets, fissures, grain en deux tons (détail visible de près) ———
+    for (let i = 0; i < 260; i++) blob(r() * W, rr(206, 305), rr(2, 7), 'rgba(92,128,66,A)', rr(0.12, 0.3));          // herbe du village
+    for (let i = 0; i < 160; i++) blob(r() * W, rr(40, 138), rr(2, 6), 'rgba(110,126,84,A)', rr(0.08, 0.2));        // herbe gelée du champ de bataille
+    for (let i = 0; i < 2600; i++) { const z = r() * D; if (z > WALL_Z0 - 2 && z < 200) continue; const gr = z > 203; g.fillStyle = r() < 0.5 ? (gr ? 'rgba(76,112,52,.45)' : 'rgba(96,108,84,.35)') : (gr ? 'rgba(168,150,92,.4)' : 'rgba(255,255,255,.35)'); g.fillRect(X(r() * W), X(z), rr(1, 4), rr(1, 6)); }
+    for (let i = 0; i < 900; i++) { const z = r() * D; if (z > WALL_Z0 - 2 && z < 200) continue; g.fillStyle = r() < 0.5 ? 'rgba(110,108,104,.5)' : 'rgba(190,188,182,.5)'; const s = rr(2, 5); g.beginPath(); g.ellipse(X(r() * W), X(z), s, s * 0.7, r() * 3, 0, 7); g.fill(); }   // galets
+    g.strokeStyle = 'rgba(60,56,50,.35)'; g.lineWidth = 1; for (let i = 0; i < 160; i++) { const x = r() * W, z = rr(WALL_Z1 + 2, 186); g.beginPath(); g.moveTo(X(x), X(z)); g.lineTo(X(x + rr(-1.5, 1.5)), X(z + rr(0.5, 2))); g.lineTo(X(x + rr(-2, 2)), X(z + rr(1.5, 3.5))); g.stroke(); }   // fissures des dalles
     // ——— placette (point de ralliement par défaut) : grandes dalles claires, bordure sombre, rosace centrale ———
     g.fillStyle = '#8a8478'; g.fillRect(X(PLAZA.x - PLAZA.hw - 1), X(PLAZA.z - PLAZA.hd - 1), X(PLAZA.hw * 2 + 2), X(PLAZA.hd * 2 + 2));
     flags(PLAZA.x - PLAZA.hw, PLAZA.z - PLAZA.hd, PLAZA.x + PLAZA.hw, PLAZA.z + PLAZA.hd, [214, 206, 190], 1.1);
@@ -185,6 +218,7 @@ export class Renderer {
   }
   // brume du nord : respire lentement et avance pendant un assaut ; pulsation de l'indicateur de portée ; ombres des nouvelles structures
   updateAtmosphere(dt) {
+    if (this.grassTime) this.grassTime.value = this.clock;
     const sim = this.sim, a = sim.phase === 'assault' || sim.phase === 'alert' ? 1 : 0; this.fogA = (this.fogA || 0) + (a - (this.fogA || 0)) * Math.min(1, dt * 0.5);
     const near = ATMOS.fogNear - ATMOS.fogAssault * this.fogA + ATMOS.fogBreath * Math.sin(this.clock * ATMOS.fogBreathSpeed);
     fogUniforms.uNFogRange.value.set(near, ATMOS.fogFar);
@@ -391,7 +425,7 @@ export class Renderer {
     for (const k in this.kw) this.shadowize(this.kw[k]);
     // château (orientation : façade vers le sud, côté village)
     // château : +20 % (échelle 0,96) et pierre grise procédurale, à la place du blanc neige du kit
-    const castle = new THREE.Mesh(geo.Castle, stoneMaterial(0xb3b7bd)); castle.position.set(CASTLE.x, 0, CASTLE.z); castle.scale.setScalar(0.96); castle.rotation.y = Math.PI / 2; this.scene.add(castle); this.castleKit = castle; this.shadowize(castle);
+    const castle = new THREE.Mesh(geo.Castle, stoneMaterial(0xffffff, true)); castle.position.set(CASTLE.x, 0, CASTLE.z); castle.scale.setScalar(0.96); castle.rotation.y = Math.PI / 2; this.scene.add(castle); this.castleKit = castle; this.shadowize(castle);
     this.struct.setKit(kit);   // maisons, tours, moulin, entrepôt, grenier : modèles du kit
     // monuments et décor du village
     const one = (name, x, z, ry, sc) => { const m = new THREE.Mesh(geo[name], kit.material); m.position.set(x, 0, z); m.rotation.y = ry; m.scale.setScalar(sc); this.scene.add(m); return m; };
