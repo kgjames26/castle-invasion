@@ -3,7 +3,7 @@
 // Deux pools fixes (aucune création/destruction par image) : particules opaques (débris, poussière, fumée) et ADDITIVES (feu, magie).
 // Plus : ondes de choc (anneaux), traces de brûlure au sol, éclairs (segments), lueurs, secousse de caméra.
 import * as THREE from 'three';
-import { MAX_Z, SEGS, SEG_W, WALL_Z0 } from '../sim/constants.js';
+import { MAX_Z, SEGS, SEG_W, WALL_Z0, wallOff } from '../sim/constants.js';
 import { quality } from './config.js';
 
 // Interrupteur global : EFFECTS.enabled = false, ou ajouter ?fx=0 à l'URL, coupe tous les effets (aucun coût CPU hors comparaison).
@@ -211,7 +211,7 @@ export class Effects {
     if (!this.prevHp) this.prevHp = Float32Array.from(W.hp);
     for (let i = 0; i < SEGS; i++) {
       const d = this.prevHp[i] - W.hp[i];
-      if (d > 0 && budget > 0) { budget--; this.wallHit(i * SEG_W + SEG_W / 2, WALL_Z0 + 4, W.hp[i] <= 0 && this.prevHp[i] > 0); }
+      if (d > 0 && budget > 0) { budget--; this.wallHit(i * SEG_W + SEG_W / 2, WALL_Z0 + 4 + wallOff(i * SEG_W + SEG_W / 2), W.hp[i] <= 0 && this.prevHp[i] > 0); }
       this.prevHp[i] = W.hp[i];
     }
   }

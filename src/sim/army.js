@@ -1,22 +1,22 @@
 // Armée : réserve, archers de garnison (chemin de ronde), ESCOUADES avec formations (garnison ou sortie sur le champ de bataille),
 // files d'entraînement. Les escouades agissent comme une seule entité : points de vie en réserve commune, membres dessinés par formation.
-import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_XS, WALL_Z0, WALL_Z1, WALK_H, PLAZA, sectorOfX } from './constants.js';
+import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_XS, WALL_Z0, WALL_Z1, WALK_H, PLAZA, sectorOfX, wallOff } from './constants.js';
 import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN, RANKS, UPGRADES, INFIRMARY } from '../content/medieval.js';
 
 const tmp = new Int32Array(1024), tmp2 = new Int32Array(1024);
 export const MOVE_Z0 = WALL_Z1 + 4, MOVE_Z1 = 208;          // zone où l'on peut poster une escouade à l'intérieur (cour + placette)
-export const archerPos = (s, k) => ({ x: s * SECTOR_W + ((k >> 1) + 0.5) * SECTOR_W / (ARCHER_SLOTS / 2), z: ARCHER_Z + (k & 1) * 2.4 - 1.2 });
+export const archerPos = (s, k) => { const x = s * SECTOR_W + ((k >> 1) + 0.5) * SECTOR_W / (ARCHER_SLOTS / 2); return { x, z: ARCHER_Z + wallOff(x) + (k & 1) * 2.4 - 1.2 }; };
 // ——— archers : montée par l'escalier le plus proche, puis marche sur le chemin de ronde jusqu'à leur créneau ———
 export const STAIR_Z0 = 159, STAIR_Z1 = 150.2, ARCHER_SPEED = 5;
 export const stairX = (s, k) => s * SECTOR_W + (archerPos(s, k).x < s * SECTOR_W + SECTOR_W / 2 ? 8 : 32);
 const _ap = { x: 0, z: 0, y: 0, rot: Math.PI, len: 0 };
 // position de l'archer k du secteur s après avoir parcouru `prog` mètres (au-delà de la longueur : à son créneau, face au nord)
 export function archerPose(s, k, prog) {
-  const p = archerPos(s, k), sx = stairX(s, k), l1 = Math.hypot(STAIR_Z0 - STAIR_Z1, WALK_H), l2 = Math.abs(p.z - STAIR_Z1), l3 = Math.abs(p.x - sx), len = l1 + l2 + l3; _ap.len = len;
+  const p = archerPos(s, k), sx = stairX(s, k), o = wallOff(sx), Z0 = STAIR_Z0 + o, Z1 = STAIR_Z1 + o, l1 = Math.hypot(Z0 - Z1, WALK_H), l2 = Math.abs(p.z - Z1), l3 = Math.abs(p.x - sx), len = l1 + l2 + l3; _ap.len = len;
   if (prog >= len) { _ap.x = p.x; _ap.z = p.z; _ap.y = WALK_H; _ap.rot = Math.PI; return _ap; }
-  if (prog < l1) { const f = prog / l1; _ap.x = sx; _ap.z = STAIR_Z0 + (STAIR_Z1 - STAIR_Z0) * f; _ap.y = WALK_H * f; _ap.rot = Math.PI; }
-  else if (prog < l1 + l2) { const f = (prog - l1) / l2; _ap.x = sx; _ap.z = STAIR_Z1 + (p.z - STAIR_Z1) * f; _ap.y = WALK_H; _ap.rot = p.z >= STAIR_Z1 ? 0 : Math.PI; }
-  else { const f = (prog - l1 - l2) / l3; _ap.x = sx + (p.x - sx) * f; _ap.z = p.z; _ap.y = WALK_H; _ap.rot = p.x > sx ? Math.PI / 2 : -Math.PI / 2; }
+  if (prog < l1) { const f = prog / l1; _ap.x = sx; _ap.z = Z0 + (Z1 - Z0) * f; _ap.y = WALK_H * f; _ap.rot = Math.PI; }
+  else if (prog < l1 + l2) { const f = (prog - l1) / l2; _ap.x = sx; _ap.z = Z1 + (p.z - Z1) * f; _ap.y = WALK_H; _ap.rot = p.z >= Z1 ? 0 : Math.PI; }
+  else { const f = (prog - l1 - l2) / l3; _ap.x = sx + (p.x - sx) * f; _ap.z = p.z + (wallOff(sx + (p.x - sx) * f) - wallOff(p.x)); _ap.y = WALK_H; _ap.rot = p.x > sx ? Math.PI / 2 : -Math.PI / 2; }
   return _ap;
 }
 // emplacement d'attente de la i-ème recrue autour du point de ralliement
@@ -137,7 +137,7 @@ export class Army {
   garrison(q, s) { q.mode = 'garrison'; q.sector = s; q.custom = null; this.layoutPosts(); this.route(q, q.postX, q.postZ); }
   // ordre direct : un point touché sur la carte. Devant la muraille = sortie ; derrière = nouveau poste de garnison à cet endroit précis.
   moveTo(q, x, z) {
-    if (z < WALL_Z0 - 1) return this.sortie(q, x, z);
+    if (z < WALL_Z0 + wallOff(x) - 1) return this.sortie(q, x, z);
     x = Math.min(196, Math.max(4, x)); z = Math.min(MOVE_Z1, Math.max(MOVE_Z0, z));
     q.mode = 'garrison'; q.sector = sectorOfX(x); q.custom = { x, z }; this.layoutPosts(); this.route(q, x, z);
   }
@@ -147,9 +147,9 @@ export class Army {
   }
   // les escouades franchissent la muraille par la PORTE (centre) : trajet intérieur ↔ extérieur
   route(q, tx, tz) {
-    q.way = []; const inside = q.z > WALL_Z1, toOut = tz < WALL_Z0, g = this.gateNear(q.x), gx = GATE_XS[g];
-    if (inside && toOut) q.way.push({ x: gx, z: GARRISON_Z, gi: g }, { x: gx, z: WALL_Z0 - 4, gi: g });
-    else if (!inside && !toOut) q.way.push({ x: gx, z: WALL_Z0 - 4, gi: g }, { x: gx, z: GARRISON_Z, gi: g });
+    q.way = []; const inside = q.z > WALL_Z1 + wallOff(q.x), toOut = tz < WALL_Z0 + wallOff(tx), g = this.gateNear(q.x), gx = GATE_XS[g], go = wallOff(gx);
+    if (inside && toOut) q.way.push({ x: gx, z: GARRISON_Z, gi: g }, { x: gx, z: WALL_Z0 + go - 4, gi: g });
+    else if (!inside && !toOut) q.way.push({ x: gx, z: WALL_Z0 + go - 4, gi: g }, { x: gx, z: GARRISON_Z, gi: g });
     q.way.push({ x: tx, z: tz });
   }
   layoutPosts() {
@@ -206,7 +206,7 @@ export class Army {
     if (this.squads.length !== before) this.layoutPosts();
     // préparation du tick suivant pour les zombies : escouades à l'extérieur, compteurs de contact remis à zéro
     this.outside.length = 0;
-    for (const q of this.squads) { q.attackers = 0; q.cap = Math.ceil(FORMATIONS[q.form].contact * q.n); if (q.z < WALL_Z0) this.outside.push(q); }
+    for (const q of this.squads) { q.attackers = 0; q.cap = Math.ceil(FORMATIONS[q.form].contact * q.n); if (q.z < WALL_Z0 + wallOff(q.x)) this.outside.push(q); }
   }
   updateSquad(q, dt, sim, weaponsLvl) {
     const Z = sim.zombies, hash = sim.hash, U = UNITS[q.type], F = FORMATIONS[q.form];
@@ -218,7 +218,7 @@ export class Army {
     // ordre explicite : suivre le trajet ; devant la porte, on attend qu'elle soit ouverte
     const gw = q.way[0], viaGate = !!gw && gw.gi !== undefined;
     if (viaGate) this.gateReq[gw.gi] = 1;
-    GATE_XS.forEach((gx, g) => { if (Math.abs(q.x - gx) < q.rad + 8 && q.z > WALL_Z0 - 9 && q.z < WALL_Z1 + 9) this.gateReq[g] = 1; });       // encore dans le passage : on garde la porte ouverte
+    GATE_XS.forEach((gx, g) => { if (Math.abs(q.x - gx) < q.rad + 8 && q.z > WALL_Z0 + wallOff(gx) - 9 && q.z < WALL_Z1 + wallOff(gx) + 9) this.gateReq[g] = 1; });       // encore dans le passage : on garde la porte ouverte
     if (q.way.length) { const wait = viaGate && this.gate[gw.gi] < 0.7 && Math.abs(q.z - 146) < 22 && Math.abs(q.z - 146) > 5; if (!wait && step(q.way[0].x, q.way[0].z)) q.way.shift(); }
     // cibles à portée de coups
     const reach = rad + (U.reach || 2) + 0.6, m = hash.query(q.x, q.z, reach, Z.x, Z.z, tmp);
@@ -227,15 +227,15 @@ export class Army {
       if (q.mode === 'garrison') {
         // défend l'intérieur du secteur : poursuit les zombies entrés (à portée de laisse), puis retourne à son poste
         let best = -1, bd = Infinity; const mm = hash.query(q.postX, q.postZ, SQUAD.garrisonLeash, Z.x, Z.z, tmp2);
-        for (let k = 0; k < mm; k++) { const i = tmp2[k]; if (Z.hp[i] <= 0 || Z.z[i] < WALL_Z1 + 0.8) continue; const d = (Z.x[i] - q.x) ** 2 + (Z.z[i] - q.z) ** 2; if (d < bd) { bd = d; best = i; } }
+        for (let k = 0; k < mm; k++) { const i = tmp2[k]; if (Z.hp[i] <= 0 || Z.z[i] < WALL_Z1 + wallOff(Z.x[i]) + 0.8) continue; const d = (Z.x[i] - q.x) ** 2 + (Z.z[i] - q.z) ** 2; if (d < bd) { bd = d; best = i; } }
         if (best < 0) { // personne près du poste : intercepte les intrus plus loin à l'intérieur
           const m3 = hash.query(q.x, q.z, SQUAD.intercept, Z.x, Z.z, tmp2);
-          for (let k = 0; k < m3; k++) { const i = tmp2[k]; if (Z.hp[i] <= 0 || Z.z[i] < WALL_Z1 + 0.8) continue; const d = (Z.x[i] - q.x) ** 2 + (Z.z[i] - q.z) ** 2; if (d < bd) { bd = d; best = i; } }
+          for (let k = 0; k < m3; k++) { const i = tmp2[k]; if (Z.hp[i] <= 0 || Z.z[i] < WALL_Z1 + wallOff(Z.x[i]) + 0.8) continue; const d = (Z.x[i] - q.x) ** 2 + (Z.z[i] - q.z) ** 2; if (d < bd) { bd = d; best = i; } }
         }
         if (best >= 0 && live === 0) step(Z.x[best], Z.z[best]); else if (best < 0) step(q.postX, q.postZ);
       } else if (q.stance === 'charge' && live === 0) {
         let best = -1, bd = Infinity; const mm = hash.query(q.x, q.z, SQUAD.chargeRange, Z.x, Z.z, tmp2);
-        for (let k = 0; k < mm; k++) { const i = tmp2[k]; if (Z.hp[i] <= 0 || Z.z[i] > WALL_Z0 - 2) continue; const d = (Z.x[i] - q.x) ** 2 + (Z.z[i] - q.z) ** 2; if (d < bd) { bd = d; best = i; } }
+        for (let k = 0; k < mm; k++) { const i = tmp2[k]; if (Z.hp[i] <= 0 || Z.z[i] > WALL_Z0 + wallOff(Z.x[i]) - 2) continue; const d = (Z.x[i] - q.x) ** 2 + (Z.z[i] - q.z) ** 2; if (d < bd) { bd = d; best = i; } }
         if (best >= 0) step(Z.x[best], Z.z[best]);
       }
     }

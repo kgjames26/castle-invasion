@@ -1,7 +1,7 @@
 // Rendu Three.js : lit l'état de la simulation, ne le modifie jamais. Géométrie provisoire (low-poly basique).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, GATE_SEGS, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT, PLAZA, WALK_H } from '../sim/constants.js';
+import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, GATE_SEGS, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT, PLAZA, WALK_H, wallOff, wallSlope } from '../sim/constants.js';
 import { T } from '../sim/terrain.js';
 import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/medieval.js';
 import { archerPos, formationLayout, archerPose, rallySlot } from '../sim/army.js';
@@ -122,9 +122,9 @@ export class Renderer {
   buildTorches() {
     this.torches = new THREE.Group(); this.torchPos = [];
     for (const [a, b] of GATE_SEGS) for (const x of [a * SEG_W - 0.6, (b + 1) * SEG_W + 0.6]) {
-      const pole = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, 0.3), lam(0x4a3426)); pole.position.set(x, 1.3, WALL_Z0 - 1.2);
-      const fl = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.55), new THREE.MeshBasicMaterial({ color: 0xffc14a })); fl.position.set(x, 2.9, WALL_Z0 - 1.2);
-      this.torches.add(pole, fl); this.torchPos.push([x, 3.1, WALL_Z0 - 1.2]);
+      const tz = WALL_Z0 - 1.2 + wallOff(x), pole = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, 0.3), lam(0x4a3426)); pole.position.set(x, 1.3, tz);
+      const fl = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.55), new THREE.MeshBasicMaterial({ color: 0xffc14a })); fl.position.set(x, 2.9, tz);
+      this.torches.add(pole, fl); this.torchPos.push([x, 3.1, tz]);
     }
     this.scene.add(this.torches);
   }
@@ -173,7 +173,7 @@ export class Renderer {
       for (let z = z0; z < z1; z += rows) { let x = x0 - r() * 2; while (x < x1) { const w = rr(0.7, 1.5), v = rr(-14, 14); g.fillStyle = `rgb(${base[0] + v},${base[1] + v},${base[2] + v})`; g.fillRect(X(x) + 1, X(z) + 1, X(w) - 2, X(rows) - 2); if (r() < 0.18) { g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(X(x) + 2, X(z) + 2, X(w) - 4, rr(2, 6)); } x += w; } }
       g.restore();
     };
-    g.fillStyle = '#6e6a63'; g.fillRect(0, X(WALL_Z0), W * k, X(WALL_Z1 - WALL_Z0));
+    g.fillStyle = '#6e6a63'; g.beginPath(); for (let x = 0; x <= W; x += 5) g.lineTo(X(x), X(WALL_Z0 + wallOff(x))); for (let x = W; x >= 0; x -= 5) g.lineTo(X(x), X(WALL_Z1 + wallOff(x))); g.closePath(); g.fill();   // emprise de la muraille (en arc)
     flags(0, WALL_Z1, W, 188, [150, 144, 133], 0.8);
     for (let i = 0; i < 420; i++) blob(r() * W, rr(WALL_Z1, 188), rr(2, 7), 'rgba(250,252,255,A)', rr(0.1, 0.32));       // neige poudrée sur les dalles
     flags(0, 0, 0, 0, [170, 162, 148], 0.8, () => { g.beginPath(); g.ellipse(X(CASTLE.x), X(CASTLE.z), X(36), X(26), 0, 0, 7); g.clip(); });
@@ -202,7 +202,7 @@ export class Renderer {
     path([[100, 150], [100, 200], [100, 284]], 9); path([[100, 238], [40, 255]], 5); path([[100, 238], [160, 255]], 5); path([[100, 262], [182, 243]], 4.5); path([[100, 262], [18, 238]], 4.5); path([[8, 205], [192, 205]], 4);
     // repères de secteurs sur le champ de bataille
     g.strokeStyle = 'rgba(40,60,90,.28)'; g.lineWidth = 3; g.setLineDash([k * 2.2, k * 2.2]);
-    for (let s = 1; s < SECTORS; s++) { g.beginPath(); g.moveTo(X(s * SECTOR_W), X(70)); g.lineTo(X(s * SECTOR_W), X(WALL_Z0 - 2)); g.stroke(); }
+    for (let s = 1; s < SECTORS; s++) { g.beginPath(); g.moveTo(X(s * SECTOR_W), X(70)); g.lineTo(X(s * SECTOR_W), X(WALL_Z0 - 2 + wallOff(s * SECTOR_W))); g.stroke(); }
     g.setLineDash([]); g.fillStyle = 'rgba(40,60,90,.32)'; g.font = `bold ${6 * k}px sans-serif`; g.textAlign = 'center';
     for (let s = 0; s < SECTORS; s++) g.fillText(SECTOR_SHORT[s], X((s + .5) * SECTOR_W), X(118));
     // vignettage des bords du monde
@@ -267,7 +267,7 @@ export class Renderer {
     this.wallMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(SEGS * 3), 3);
     this.scene.add(this.wallMesh);
     const tw = new THREE.InstancedMesh(new THREE.BoxGeometry(6, 8, 10), lam(0x8c8f96), SECTORS + 1);
-    for (let i = 0; i <= SECTORS; i++) { this.dummy.position.set(Math.min(W - 3, Math.max(3, i * SECTOR_W)), 4, 146); this.dummy.scale.set(1, 1, 1); this.dummy.rotation.set(0, 0, 0); this.dummy.updateMatrix(); tw.setMatrixAt(i, this.dummy.matrix); }
+    for (let i = 0; i <= SECTORS; i++) { this.dummy.position.set(Math.min(W - 3, Math.max(3, i * SECTOR_W)), 4, 146 + wallOff(i * SECTOR_W)); this.dummy.scale.set(1, 1, 1); this.dummy.rotation.set(0, 0, 0); this.dummy.updateMatrix(); tw.setMatrixAt(i, this.dummy.matrix); }
     this.scene.add(tw); this.towers = tw;
   }
   updateWall() {
@@ -277,7 +277,7 @@ export class Renderer {
     for (let i = 0; i < SEGS; i++) {
       const hpR = wall.hp[i] / wall.segMax(i), breached = wall.hp[i] <= 0;
       const lvl = wall.level[wall.sectorOf(i)];
-      this.dummy.position.set(i * SEG_W + SEG_W / 2, breached ? 0.45 : 2, 146); this.dummy.scale.set(1, breached ? 0.22 : 1, 1); this.dummy.rotation.set(0, 0, 0); this.dummy.updateMatrix();
+      this.dummy.position.set(i * SEG_W + SEG_W / 2, breached ? 0.45 : 2, 146 + wallOff(i * SEG_W + SEG_W / 2)); this.dummy.scale.set(1, breached ? 0.22 : 1, 1); this.dummy.rotation.set(0, 0, 0); this.dummy.updateMatrix();
       this.wallMesh.setMatrixAt(i, this.dummy.matrix);
       if (breached) c.setRGB(0.25, 0.16, 0.14);
       else { c.setRGB(0.55 + 0.1 * lvl, 0.55 + 0.1 * lvl, 0.58 + 0.08 * lvl); if (wall.isGate(i)) c.setRGB(0.55, 0.36, 0.2); const dmg = 1 - hpR; c.lerp(this.tmpColor2 || (this.tmpColor2 = new THREE.Color(0.85, 0.18, 0.1)), dmg * 0.9); }
@@ -559,7 +559,7 @@ export class Renderer {
     this.kitWalls = true; this.put = put; if (this.wv) for (const k in this.kw) this.kw[k].visible = false;
     const tw = [mk('Tower1', 2), mk('Tower2', 6)]; for (const t of tw) t.material = kitMaterial(kit.material.map, 0x4a5f80, 0xb8b2a6);
     let a = 0, b = 0;   // tours : ardoise et pierre grise
-    for (let i = 0; i <= SECTORS; i++) { const x = Math.min(W - 3, Math.max(3, i * SECTOR_W)); if (i === 0 || i === SECTORS) put(tw[0], a++, x, 146, 0, 1.15, 1.15, 1.15); else put(tw[1], b++, x, 146, 0, 1.1, 1.1, 1.1); }
+    for (let i = 0; i <= SECTORS; i++) { const x = Math.min(W - 3, Math.max(3, i * SECTOR_W)); if (i === 0 || i === SECTORS) put(tw[0], a++, x, 146 + wallOff(x), -Math.atan(wallSlope(x)), 1.15, 1.15, 1.15); else put(tw[1], b++, x, 146 + wallOff(x), -Math.atan(wallSlope(x)), 1.1, 1.1, 1.1); }
     tw[0].count = a; tw[1].count = b; for (const t of tw) { t.instanceMatrix.needsUpdate = true; this.shadowize(t); }
     for (const k in this.kw) this.shadowize(this.kw[k]);
     // château (orientation : façade vers le sud, côté village)
@@ -575,7 +575,7 @@ export class Renderer {
     for (let i = 0; i < SEGS; i++) {
       const hpR = wall.hp[i] / wall.segMax(i), breached = wall.hp[i] <= 0, lvl = wall.level[wall.sectorOf(i)], gate = wall.isGate(i);
       const type = gate ? 'Wall4' : ['Wall1', 'Wall2', 'Wall3'][i % 3], im = this.kw[type], k = cnt[type]++;
-      this.put(im, k, i * SEG_W + SEG_W / 2, 146, -Math.PI / 2, 1.45, breached ? 0.28 : 1.12 + 0.03 * lvl, 0.64);
+      this.put(im, k, i * SEG_W + SEG_W / 2, 146 + wallOff(i * SEG_W + SEG_W / 2), -Math.PI / 2 - Math.atan(wallSlope(i * SEG_W + SEG_W / 2)), 1.45, breached ? 0.28 : 1.12 + 0.03 * lvl, 0.64);
       if (breached) c.setRGB(0.35, 0.25, 0.22); else { c.setRGB(1, 1, 1); c.lerp(this.tmpC2.setRGB(1, 0.35, 0.25), (1 - hpR) * 0.85); }
       im.setColorAt(k, c);
     }

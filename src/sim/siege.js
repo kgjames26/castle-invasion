@@ -1,11 +1,11 @@
 // Armes de siège : baliste, catapulte, trébuchet. Posées derrière la muraille (3 emplacements par secteur),
 // construites par l'Atelier de siège (niveau = 2 armes déployables par niveau, et accès aux armes plus lourdes).
 // Les munitions sont prélevées dans les stocks ; les équipages comptent dans la population partagée.
-import { SECTORS, SECTOR_W } from './constants.js';
+import { SECTORS, SECTOR_W, wallOff } from './constants.js';
 import { SIEGE, SIEGE_ORDER, SIEGE_RULES, FIRE } from '../content/medieval.js';
 
 export const SIEGE_Z = 166;
-export const siegePos = (s, slot) => ({ x: s * SECTOR_W + 10 + slot * 10, z: SIEGE_Z });
+export const siegePos = (s, slot) => { const x = s * SECTOR_W + 10 + slot * 10; return { x, z: SIEGE_Z + wallOff(x) }; };
 const tmp = new Int32Array(1024), cand = new Int32Array(40);
 
 export class Siege {

@@ -1,5 +1,5 @@
 // Simulation : 100 % indépendante du rendu (aucune dépendance à Three.js ni au DOM). Pas fixe de 20 Hz.
-import { TICK, SECTORS, SECTOR_W, W, CASTLE, SEGS, SEG_W, WALL_Z0, ARCHER_Z, sectorOfX } from './constants.js';
+import { TICK, SECTORS, SECTOR_W, W, CASTLE, SEGS, SEG_W, WALL_Z0, ARCHER_Z, sectorOfX, wallOff } from './constants.js';
 import { makeRng } from './rng.js';
 import { SpatialHash } from './spatial.js';
 import { generateTerrain } from './terrain.js';
@@ -99,6 +99,13 @@ export class Simulation {
       for (let q = 0; q < k; q++) { const i = this.scratch[q]; if (Z.hp[i] > 0 && (Z.x[i] - F.x) ** 2 + (Z.z[i] - F.z) ** 2 <= F.r * F.r) Z.hit(i, FIRE.dps * dt); }
     }
   }
+  // garnison du château : ses archers tirent sur les zombies arrivés à ses portes (les vagues ne restent jamais bloquées)
+  castleGuard(dt) {
+    this.guardCd = (this.guardCd || 0) - dt; if (this.guardCd > 0) return; this.guardCd = 0.8;
+    const Z = this.zombies, k = this.hash.query(CASTLE.x, CASTLE.z, 34, Z.x, Z.z, this.scratch); let best = -1, bd = Infinity;
+    for (let q = 0; q < k; q++) { const i = this.scratch[q]; if (Z.hp[i] <= 0) continue; const d = (Z.x[i] - CASTLE.x) ** 2 + (Z.z[i] - CASTLE.z) ** 2; if (d < bd) { bd = d; best = i; } }
+    if (best < 0) return; Z.hit(best, 26); if (this.arrows.length < 220) this.arrows.push({ x0: CASTLE.x + (this.rng() - 0.5) * 24, z0: CASTLE.z - 8, x1: Z.x[best], z1: Z.z[best], t: 0, h: 16 });
+  }
   // coups sismiques des golems : la muraille voisine tremble, des archers tombent du chemin de ronde
   golemSlams(dt) {
     const Z = this.zombies;
@@ -113,7 +120,7 @@ export class Simulation {
         const lives = this.rng() < GOLEM.survive; if (lives) this.army.reserve.archer++; else dead++;
         this.fallers.push({ x: p.x, z: p.z, t: 0, dead: !lives, rot: this.rng() * 6.28 });
       }
-      this.blast('quake', sl.x, WALL_Z0, SEG_W * (GOLEM.reach + 0.5));
+      this.blast('quake', sl.x, WALL_Z0 + wallOff(sl.x), SEG_W * (GOLEM.reach + 0.5));
       if (fell) this.events.push({ type: 'golem', fell, dead });
     }
     Z.slams.length = 0;
@@ -200,6 +207,7 @@ export class Simulation {
     this.mages.update(dt, this);
     this.night.update(dt, this); this.roads.update(dt, this);
     this.golemSlams(dt);
+    this.castleGuard(dt);
     this.burn(dt);
     this.build.update(dt);
     this.eco.update(dt);

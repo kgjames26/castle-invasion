@@ -1,7 +1,7 @@
 // Interface « parchemin » : la carte reste visible ; les menus apparaissent à la demande.
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
-import { SECTORS, SECTOR_NAMES, SECTOR_SHORT, ARCHER_SLOTS, CASTLE } from '../sim/constants.js';
+import { SECTORS, SECTOR_NAMES, SECTOR_SHORT, ARCHER_SLOTS, CASTLE, wallOff } from '../sim/constants.js';
 import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP } from '../content/medieval.js';
 import { MAGE_TIERS } from '../render/Heroes.js';
 import { FORMATS, idealFormat } from '../render/config.js';
@@ -349,7 +349,7 @@ export class UI {
   updateRange() {
     const c = this.card, sim = this.sim; let spec = null;
     if (c && c.kind === 'struct') { const s = sim.build.get(c.id); if (s && s.type === 'tower' && s.state !== 'site') spec = { kind: 'circle', x: s.x, z: s.z, r: sim.build.towerStats(s, sim).range }; }
-    else if (c && c.kind === 'sector') { const r = UNITS.archer.range + 3 * sim.eco.up.archery; spec = { kind: 'band', x0: c.id * 40, x1: c.id * 40 + 40, z: 146, r }; }
+    else if (c && c.kind === 'sector') { const r = UNITS.archer.range + 3 * sim.eco.up.archery; spec = { kind: 'band', x0: c.id * 40, x1: c.id * 40 + 40, z: 146 + wallOff(c.id * 40 + 20), r }; }
     const key = spec ? JSON.stringify(spec) : ''; if (key !== this.rangeKey) { this.rangeKey = key; this.rd.setRangeIndicator(spec); }
   }
   // astuces de premier lancement (désactivables : UI_FLAGS.tutorial ou ?tuto=0)
@@ -367,13 +367,13 @@ export class UI {
     this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.watchRepairs(); this.refresh(false); }
     const vw = innerWidth, vh = innerHeight;
     for (let s = 0; s < SECTORS; s++) {
-      const p = this.rd.project(s * 40 + 20, 8, 143), b = this.badges[s];
+      const p = this.rd.project(s * 40 + 20, 8, 143 + wallOff(s * 40 + 20)), b = this.badges[s];
       b.style.display = p.vis && p.x > 0 && p.x < vw && p.y > 90 && p.y < vh - 90 ? '' : 'none'; b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
     }
     const c = this.card; if (!c) return;
     let a;
     if (c.kind === 'struct') { const s = this.sim.build.get(c.id); if (!s) return; a = this.rd.project(s.x, 4, s.z); }
-    else if (c.kind === 'sector') a = this.rd.project(c.id * 40 + 20, 6, 146); else if (c.kind === 'squad') { const q = this.sim.squad(c.id); if (!q) return; a = this.rd.project(q.x, 4, q.z); } else if (c.kind === 'patch') { const p = this.sim.frontier.patches[c.id]; a = this.rd.project(p.x, 5, p.z); } else a = this.rd.project(CASTLE.x, 14, CASTLE.z);
+    else if (c.kind === 'sector') a = this.rd.project(c.id * 40 + 20, 6, 146 + wallOff(c.id * 40 + 20)); else if (c.kind === 'squad') { const q = this.sim.squad(c.id); if (!q) return; a = this.rd.project(q.x, 4, q.z); } else if (c.kind === 'patch') { const p = this.sim.frontier.patches[c.id]; a = this.rd.project(p.x, 5, p.z); } else a = this.rd.project(CASTLE.x, 14, CASTLE.z);
     const w = this.cardEl.offsetWidth, h = this.cardEl.offsetHeight, topMin = 96, botMax = vh - 90;
     let top = a.y - h - 26; if (top < topMin) top = Math.min(botMax - h, a.y + 30); if (top + h > botMax) top = Math.max(topMin, botMax - h);
     this.cardEl.style.left = Math.min(vw - w - 8, Math.max(8, a.x - w / 2)) + 'px'; this.cardEl.style.top = top + 'px';

@@ -3,14 +3,14 @@
 // du champ de bataille, au-delà de la muraille (ils passent par les portes et rentrent si un zombie approche).
 // Les zombies qui passent sur un brasero allumé l'ÉTEIGNENT.
 import { DAY, BRAZIERS, FIRE_KEEP, GATE_XS_LIST } from '../content/medieval.js';
-import { SECTORS, SECTOR_W, WALL_Z0, WALL_Z1, sectorOfX } from './constants.js';
+import { SECTORS, SECTOR_W, WALL_Z0, WALL_Z1, sectorOfX, wallOff } from './constants.js';
 
 const tmp = new Int32Array(64);
 export class Night {
   constructor() { this.reset(); }
   reset() {
     this.t = DAY.start;      // 0 = aube … 0,5 = crépuscule … 1 = aube suivante
-    this.fires = BRAZIERS.map((b, i) => ({ id: i, x: b.x, z: b.z, zone: b.zone, fuel: 0, lit: false, claim: 0 }));
+    this.fires = BRAZIERS.map((b, i) => ({ id: i, x: b.x, z: b.zone === 'wall' ? b.z + wallOff(b.x) : b.z, zone: b.zone, fuel: 0, lit: false, claim: 0 }));
     this.out = 0;
   }
   // luminosité du jour : 1 en plein jour, ~0,12 au cœur de la nuit, transitions douces
@@ -54,9 +54,9 @@ export class Night {
   danger(sim, x, z) { const Z = sim.zombies, k = sim.hash.query(x, z, FIRE_KEEP.flee, Z.x, Z.z, tmp); for (let q = 0; q < k; q++) if (Z.hp[tmp[q]] > 0) return true; return false; }
   // chemin d'un point à un autre : passer par la porte la plus proche si l'on traverse la muraille
   route(x0, z0, x1, z1) {
-    const inside0 = z0 > WALL_Z1 - 0.5, inside1 = z1 > WALL_Z1 - 0.5; if (inside0 === inside1) return [[x1, z1]];
+    const inside0 = z0 > WALL_Z1 + wallOff(x0) - 0.5, inside1 = z1 > WALL_Z1 + wallOff(x1) - 0.5; if (inside0 === inside1) return [[x1, z1]];
     const gx = GATE_XS_LIST.reduce((a, g) => Math.abs(g - (x0 + x1) / 2) < Math.abs(a - (x0 + x1) / 2) ? g : a, GATE_XS_LIST[0]);
-    return inside0 ? [[gx, WALL_Z1 + 2], [gx, WALL_Z0 - 3], [x1, z1]] : [[gx, WALL_Z0 - 3], [gx, WALL_Z1 + 2], [x1, z1]];
+    const go = wallOff(gx); return inside0 ? [[gx, WALL_Z1 + go + 2], [gx, WALL_Z0 + go - 3], [x1, z1]] : [[gx, WALL_Z0 + go - 3], [gx, WALL_Z1 + go + 2], [x1, z1]];
   }
   serialize() { return { t: +this.t.toFixed(4), fires: this.fires.map(f => [+f.fuel.toFixed(3), f.lit ? 1 : 0]) }; }
   restore(st) { this.reset(); if (!st) return; this.t = st.t ?? DAY.start; (st.fires || []).forEach(([fu, l], i) => { const f = this.fires[i]; if (f) { f.fuel = fu; f.lit = !!l; } }); }

@@ -1,7 +1,7 @@
 // Économie : villageois autonomes (aucun ordre individuel). Le joueur fixe seulement les EFFECTIFS par tâche.
 // Chaque villageois sait quoi faire : aller au site → récolter → TOUT rapporter au château → recommencer.
 import { TASKS, BUILDINGS, UPGRADES, ECON, START, RES, RES_INFO, PROSPECT, START_DEPOSITS, AUTO_REPAIR, SMITH, FIRE_KEEP } from '../content/medieval.js';
-import { SEGS, SEG_W, SECTORS, SEGS_PER_SECTOR } from './constants.js';
+import { SEGS, SEG_W, SECTORS, SEGS_PER_SECTOR, wallOff } from './constants.js';
 import { WALL } from '../content/medieval.js';
 
 const TASK_IDS = Object.keys(TASKS);
@@ -258,7 +258,7 @@ export class Economy {
         break;
       }
       case 'toRepair':
-        if (this.moveTo(v, v.seg * SEG_W + SEG_W / 2 + ((i % 3) - 1) * 1.2, 153.8, dt)) v.state = 'repairing';
+        { const rx = v.seg * SEG_W + SEG_W / 2 + ((i % 3) - 1) * 1.2; if (this.moveTo(v, rx, 153.8 + wallOff(rx), dt)) v.state = 'repairing'; }
         break;
       case 'repairing': this.repairWork(v, dt); break;
     }

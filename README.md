@@ -180,3 +180,9 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Braseros et allumeurs** (`BRAZIERS`, `FIRE_KEEP`) : 22 braseros (muraille, champ de bataille, cour, village) ; la tâche « Allumeurs de feux » les allume et les ravitaille en bois à l'approche de la nuit, passe par les portes pour ceux du champ de bataille et rentre si un zombie approche. Les zombies qui passent dessus les éteignent.
 - **Flèches enflammées** (forge niveau 2, 3 niveaux) : archers et tours enflamment le sol à l'impact.
 - Sauvegarde v6. Test : `tests/monde.mjs`.
+
+## Phase 21 — Muraille en arc
+- La muraille forme un léger arc bombé vers le nord (`WALL_BOW` = 7 m au centre, `wallOff(x)` dans constants.js).
+- Tout suit la courbe : remparts, merlons, escaliers, portes et herses, tours fixes, archers, braseros, engins de siège, champ de flux des zombies, routes des allumeurs, points de réparation et badges d'interface.
+- Le château tire lui-même sur les zombies qui l'atteignent (garde du château).
+- Cohésion des hordes corrigée : un zombie isolé loin de sa meute n'est plus bloqué.

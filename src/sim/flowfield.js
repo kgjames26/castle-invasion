@@ -1,10 +1,12 @@
 // Champs de flux (Dijkstra inversé) : un par secteur ciblé. Les zombies descendent le gradient.
 // Buts : devant chaque tronçon intact (attaque) ou derrière chaque brèche (infiltration, plus attractif).
-import { GW, GD, CELL, SECTORS, SECTOR_W, SEG_W } from './constants.js';
+import { GW, GD, CELL, SECTORS, SECTOR_W, SEG_W, wallOff } from './constants.js';
 import { COST, T } from './terrain.js';
 
 const ROW_WALL0 = 71, ROW_WALL1 = 74, ROW_FRONT = 70, ROW_BACK = 76;
-const CPS = SECTOR_W / CELL;               // cellules par secteur (20)
+const CPS = SECTOR_W / CELL;
+// muraille en arc : décalage (en cellules) des rangées de muraille pour chaque colonne
+const RO = Array.from({ length: GW }, (_, gx) => Math.round(wallOff((gx + 0.5) * CELL) / CELL));               // cellules par secteur (20)
 const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 export class FlowFields {
@@ -22,7 +24,7 @@ export class FlowFields {
   solid(gx, gz) {
     if (gx < 0 || gz < 0 || gx >= GW || gz >= GD) return true;
     if (this.terrain.type[gz * GW + gx] === T.ROCK) return true;
-    if (gz >= ROW_WALL0 && gz <= ROW_WALL1) return this.wall.hp[Math.min(39, (((gx + .5) * CELL) / SEG_W) | 0)] > 0;
+    const ro = RO[gx]; if (gz >= ROW_WALL0 + ro && gz <= ROW_WALL1 + ro) return this.wall.hp[Math.min(39, (((gx + .5) * CELL) / SEG_W) | 0)] > 0;
     return false;
   }
   push(k, v) {
@@ -47,8 +49,9 @@ export class FlowFields {
     dist.fill(Infinity); this.hn = 0;
     for (let c = 0; c < CPS; c++) {
       const gx = s * CPS + c, seg = Math.min(39, (((gx + .5) * CELL) / SEG_W) | 0);
-      if (this.wall.hp[seg] > 0) { dist[ROW_FRONT * GW + gx] = 0; this.push(0, ROW_FRONT * GW + gx); }
-      else { dist[ROW_BACK * GW + gx] = -12; this.push(-12, ROW_BACK * GW + gx); }
+      const ro = RO[gx];
+      if (this.wall.hp[seg] > 0) { dist[(ROW_FRONT + ro) * GW + gx] = 0; this.push(0, (ROW_FRONT + ro) * GW + gx); }
+      else { dist[(ROW_BACK + ro) * GW + gx] = -12; this.push(-12, (ROW_BACK + ro) * GW + gx); }
     }
     while (this.hn > 0) {
       const kd = this.hk[0], cur = this.pop();

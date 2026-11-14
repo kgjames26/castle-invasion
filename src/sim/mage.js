@@ -1,7 +1,7 @@
 // Magicien (Maison du sorcier) : une unité AUTONOME. Le joueur l'invoque et l'améliore ; il décide seul, selon l'urgence,
 // de soigner une escouade, de refermer une brèche ou de frapper la plus grosse menace. Il se tient toujours à distance des zombies,
 // derrière la muraille. Les effets visuels sont publiés dans `sim.blasts` (lus par le rendu, jamais l'inverse).
-import { WALL_Z1, SEGS, SEG_W, SECTORS, SECTOR_W, CASTLE } from './constants.js';
+import { WALL_Z1, SEGS, SEG_W, SECTORS, SECTOR_W, CASTLE, wallOff } from './constants.js';
 import { MAGE, FIRE, UPGRADES } from '../content/medieval.js';
 
 const tmp = new Int32Array(2048), cand = new Int32Array(64);
@@ -72,7 +72,7 @@ export class Mages {
     if (ok('mend')) {
       let seg = -1, sc = 0; const W = sim.wall;
       for (let i = 0; i < SEGS; i++) { const r = W.hp[i] / W.segMax(i), v = r <= 0 ? 100 : r < 0.35 ? 55 * (1 - r) : 0; if (v > sc) { sc = v; seg = i; } }
-      if (seg >= 0) opts.push({ k: 'mend', score: sc, tx: seg * SEG_W + SEG_W / 2, tz: 146, seg, label: 'Répare' });
+      if (seg >= 0) opts.push({ k: 'mend', score: sc, tx: seg * SEG_W + SEG_W / 2, tz: 146 + wallOff(seg * SEG_W + SEG_W / 2), seg, label: 'Répare' });
     }
     // attaques : on échantillonne les zombies à portée
     const nc = this.sample(sim, m.x, m.z, st.range);
@@ -81,22 +81,22 @@ export class Mages {
       for (let a = 0; a < nc; a++) {
         const i = cand[a]; let n = 0, hp = 0;
         for (let b = 0; b < nc; b++) { const j = cand[b]; if ((Z.x[i] - Z.x[j]) ** 2 + (Z.z[i] - Z.z[j]) ** 2 < 36) { n++; hp += Z.hp[j]; } }
-        const danger = Z.z[i] > WALL_Z1 ? 2 : Z.state[i] === 1 ? 1.4 : 1, s = (n * 10 + hp / 40) * danger;
+        const danger = Z.z[i] > WALL_Z1 + wallOff(Z.x[i]) ? 2 : Z.state[i] === 1 ? 1.4 : 1, s = (n * 10 + hp / 40) * danger;
         if (s > bs) { bs = s; bi = i; bn = n; }
       }
-      const tx = Z.x[bi], tz = Z.z[bi], inside = tz > WALL_Z1;
+      const tx = Z.x[bi], tz = Z.z[bi], inside = tz > WALL_Z1 + wallOff(tx);
       if (ok('nova') && near >= 0 && Math.hypot(Z.x[near] - m.x, Z.z[near] - m.z) < S.nova.aoe) opts.push({ k: 'nova', score: 96, tx: m.x, tz: m.z, label: 'Givre' });
       if (ok('meteor') && bn >= 7) opts.push({ k: 'meteor', score: 75 + bn * 2, tx, tz, label: 'Météores' });
       if (ok('lightning') && nc >= 3) opts.push({ k: 'lightning', score: 45 + Math.min(nc, 12) * 2 + (inside ? 20 : 0), tx, tz, zi: bi, label: 'Foudroie' });
       if (ok('fireball')) opts.push({ k: 'fireball', score: 38 + bn * 3 + (inside ? 25 : 0), tx, tz, label: 'Boule de feu' });
     } else if (sim.zombies.n) {     // des zombies existent mais hors de portée : on se rapproche du plus menaçant
-      const t = this.mostThreatening(sim); if (t) return { goal: { x: t.x, z: WALL_Z1 + 7 }, label: 'Se place', tx: t.x, tz: t.z, ready: false };
+      const t = this.mostThreatening(sim); if (t) return { goal: { x: t.x, z: WALL_Z1 + wallOff(t.x) + 7 }, label: 'Se place', tx: t.x, tz: t.z, ready: false };
     }
     opts.sort((a, b) => b.score - a.score);
     for (const o of opts) {
       if (m.mana < S[o.k].mana) continue;
       if (o.self || o.k === 'nova' || inRange(o.tx, o.tz)) return { ...o, ready: true };
-      return { ...o, ready: false, goal: { x: o.tx, z: Math.max(MIN_Z, Math.min(o.tz + st.range * 0.6, o.tz < WALL_Z1 ? WALL_Z1 + 8 : o.tz + 10)) } };
+      return { ...o, ready: false, goal: { x: o.tx, z: Math.max(MIN_Z, Math.min(o.tz + st.range * 0.6, o.tz < WALL_Z1 + wallOff(o.tx) ? WALL_Z1 + wallOff(o.tx) + 8 : o.tz + 10)) } };
     }
     return null;
   }
@@ -119,7 +119,7 @@ export class Mages {
       if (c.self) { m.hp = Math.min(st.hp, m.hp + frac * st.hp); sim.blast('heal', m.x, m.z, 3); }
       else { const q = sim.squad(c.sq); if (q) { sim.army.healSquad(q, frac); sim.blast('heal', q.x, q.z, q.rad + 1, { from: [m.x, m.z] }); } }
     }
-    else if (c.k === 'mend') { const hp = S.hp * (1 + S.hpPerLevel * (lv - 1)); if (sim.wall.heal(c.seg, hp)) sim.onRepaired(c.seg); sim.blast('mend', c.seg * SEG_W + SEG_W / 2, 146, 4, { from: [m.x, m.z] }); }
+    else if (c.k === 'mend') { const hp = S.hp * (1 + S.hpPerLevel * (lv - 1)); if (sim.wall.heal(c.seg, hp)) sim.onRepaired(c.seg); sim.blast('mend', c.seg * SEG_W + SEG_W / 2, 146 + wallOff(c.seg * SEG_W + SEG_W / 2), 4, { from: [m.x, m.z] }); }
     else if (c.k === 'meteor') { for (let k = 0; k < S.count; k++) { const a = sim.rng() * 6.283, r = Math.sqrt(sim.rng()) * S.spread; this.meteors.push({ x: c.tx + Math.cos(a) * r, z: c.tz + Math.sin(a) * r * 0.8, t: -k * 0.22, dur: 0.9, dmg: S.dmg * mult, aoe: S.aoe }); } sim.blast('meteorCall', c.tx, c.tz, S.spread); }
     else if (c.k === 'nova') {
       const k = sim.hash.query(m.x, m.z, S.aoe, Z.x, Z.z, tmp);
@@ -157,7 +157,7 @@ export class Mages {
   idleSpot(m, sim) {
     if (sim.phase === 'assault' || sim.phase === 'alert') {
       let s = 2, bd = -1; for (let k = 0; k < SECTORS; k++) { const d = sim.zombies.attacking[k] * 3 + sim.zombies.near[k] + (sim.targets.includes(k) ? 1 : 0); if (d > bd) { bd = d; s = k; } }
-      return { x: s * SECTOR_W + SECTOR_W / 2 + Math.sin(sim.time * 0.3 + m.id) * 6, z: WALL_Z1 + 9 };
+      return { x: s * SECTOR_W + SECTOR_W / 2 + Math.sin(sim.time * 0.3 + m.id) * 6, z: WALL_Z1 + wallOff(s * SECTOR_W + SECTOR_W / 2) + 9 };
     }
     const h = this.home(sim); return { x: h.x + Math.sin(sim.time * 0.2) * 4, z: h.z + Math.cos(sim.time * 0.17) * 2 };
   }

@@ -1,10 +1,10 @@
 // Hordes : agents individuels en tableaux typés (SoA). Dans ce prototype tous les zombies sont simulés ;
 // l'architecture prévoit des cohortes agrégées au-delà (voir conception §6).
-import { MAX_Z, W, WALL_Z1, WALL_Z0, WALL_STAND_Z, GW, CELL, CASTLE, SECTORS, segOfX } from './constants.js';
+import { MAX_Z, W, WALL_Z1, WALL_Z0, WALL_STAND_Z, GW, CELL, CASTLE, SECTORS, segOfX, wallOff } from './constants.js';
 import { GOLEM, ZOMBIES, SQUAD } from '../content/medieval.js';
 import { COST, T } from './terrain.js';
 
-const INSIDE_Z = WALL_Z1 + 0.8;
+const INSIDE_Z = WALL_Z1 + 0.8;      // + wallOff(x) : la muraille est en arc
 const tmp = new Int32Array(64);
 const GROUPS = 1024;     // identifiants de hordes (cycliques)
 
@@ -52,7 +52,7 @@ export class ZombieSwarm {
     const squads = army.squads, outside = army.outside;
     // centre de chaque horde (zombies encore dehors et en marche)
     const GX = this.gx, GZ = this.gz, GN = this.gn; GN.fill(0); GX.fill(0); GZ.fill(0);
-    for (let i = 0; i < n; i++) { const g = this.grp[i]; if (!g || this.hp[i] <= 0 || Z[i] > WALL_STAND_Z - 1 || this.state[i] === 1) continue; const k = g % GROUPS; GX[k] += X[i] - this.ox[i]; GZ[k] += Z[i] - this.oz[i]; GN[k]++; }
+    for (let i = 0; i < n; i++) { const g = this.grp[i]; if (!g || this.hp[i] <= 0 || Z[i] > WALL_STAND_Z + wallOff(X[i]) - 1 || this.state[i] === 1) continue; const k = g % GROUPS; GX[k] += X[i] - this.ox[i]; GZ[k] += Z[i] - this.oz[i]; GN[k]++; }
     for (let k = 0; k < GROUPS; k++) if (GN[k]) { GX[k] /= GN[k]; GZ[k] /= GN[k]; }
     for (let i = 0; i < n; i++) {
       this.px[i] = X[i]; this.pz[i] = Z[i];
@@ -64,12 +64,12 @@ export class ZombieSwarm {
       let speed = t.speed / cost;
       if (this.slow[i] > 0) { this.slow[i] -= dt; speed *= 0.4; }
 
-      if (z > INSIDE_Z) {                                   // ——— dans le royaume
+      if (z > INSIDE_Z + wallOff(x)) {                                   // ——— dans le royaume
         this.state[i] = 2;
         // cible : escouade proche (dans le royaume), sinon château
         let tx = CASTLE.x, tz = CASTLE.z - CASTLE.r * 0.6, ts = null, bd = 100;
         for (let k = 0; k < squads.length; k++) {
-          const so = squads[k]; if (so.hp <= 0 || so.z < WALL_Z1) continue;
+          const so = squads[k]; if (so.hp <= 0 || so.z < WALL_Z1 + wallOff(so.x)) continue;
           const d = (so.x - x) * (so.x - x) + (so.z - z) * (so.z - z);
           if (d < bd) { bd = d; ts = so; }
         }
@@ -98,12 +98,13 @@ export class ZombieSwarm {
       } else if (flow.sample(s, x, z)) {
         dx = flow.sx; dz = flow.sz;
         const g = this.grp[i], k = g % GROUPS;
-        if (g && GN[k] > 1 && z < WALL_STAND_Z - 3) {
+        if (g && GN[k] > 2 && z < WALL_STAND_Z + wallOff(x) - 3) {
           // cohésion : rejoindre sa place dans la horde ; ceux qui sont devant ralentissent, ceux qui traînent accélèrent
           const px = GX[k] + this.ox[i] - x, pz = GZ[k] + this.oz[i] - z, pl = Math.hypot(px, pz);
-          if (pl > 0.4) { const f = Math.min(0.85, pl * 0.18); dx += px / pl * f; dz += pz / pl * f; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl; }
+          // au-delà de 14 m, le zombie a perdu sa horde : il suit seul le flux (évite les blocages)
+          if (pl > 0.4 && pl < 14) { const f = Math.min(0.6, pl * 0.12); dx += px / pl * f; dz += pz / pl * f; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl; }
           const ahead = -(px * flow.sx + pz * flow.sz);
-          speed *= ahead > 1.5 ? 0.7 : ahead < -1.5 ? 1.2 : 1;
+          if (pl < 14) speed *= ahead > 1.5 ? 0.7 : ahead < -1.5 ? 1.2 : 1;
         }
       }
       let sx = 0, sz = 0;
@@ -117,13 +118,14 @@ export class ZombieSwarm {
       let nx = x + vx * dt, nz = z + vz * dt;
       // mur
       let attacking = false;
-      if (nz > WALL_STAND_Z && nz < WALL_Z1 + 0.5) {
+      const wo = wallOff(nx), WSZ = WALL_STAND_Z + wo;
+      if (nz > WSZ && nz < WALL_Z1 + wo + 0.5) {
         const seg = segOfX(nx);
         if (wall.hp[seg] > 0) {
-          nz = Math.min(nz, WALL_STAND_Z); attacking = true;
+          nz = Math.min(nz, WSZ); attacking = true;
           if (wall.damage(seg, t.wall * dt)) sim.onBreach(seg);
         }
-      } else if (nz >= WALL_STAND_Z - 0.3 && nz <= WALL_STAND_Z + 0.05) {
+      } else if (nz >= WSZ - 0.3 && nz <= WSZ + 0.05) {
         // reste au contact : continue d'attaquer
         const seg = segOfX(nx);
         if (wall.hp[seg] > 0) { attacking = true; if (wall.damage(seg, t.wall * dt)) sim.onBreach(seg); }

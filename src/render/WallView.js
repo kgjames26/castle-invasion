@@ -5,11 +5,19 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { SEGS, SEG_W, SECTORS, SECTOR_W, WALK_H, GATE_SEGS } from '../sim/constants.js';
+import { SEGS, SEG_W, SECTORS, SECTOR_W, WALK_H, GATE_SEGS, wallOff, wallSlope } from '../sim/constants.js';
 import { STAIR_Z0, STAIR_Z1 } from '../sim/army.js';
 import { stoneMaterial } from './Stone.js';
 
 export const WALL_H = 6.4, GATE_H = 4.4, Z_OUT = 143.5, Z_IN = 148.9, Z_MID = 146.2, THICK = 2.0, STEPS = 12;
+// muraille en ARC (v2.1) : un point exprimé dans le repère « muraille droite » (x le long du mur, z en profondeur) est reporté sur l'arc :
+// décalé vers le nord de wallOff(x) et tourné selon la pente locale, pour que chaque pièce suive la courbe.
+export function arcPoint(x, z, out = {}) {
+  const s = wallSlope(x), n = Math.hypot(1, s), nx = -s / n, nz = 1 / n, dz = z - Z_MID;
+  out.x = x + nx * dz; out.z = Z_MID + wallOff(x) + nz * dz; out.ry = -Math.atan(s); return out;
+}
+export function arcObject(o) { const p = arcPoint(o.position.x, o.position.z); o.position.x = p.x; o.position.z = p.z; o.rotation.y += p.ry; return o; }
+const _ap = {};
 export const STAIR_XS = Array.from({ length: SECTORS * 2 }, (_, i) => ((i / 2) | 0) * SECTOR_W + (i % 2 ? 32 : 8));
 
 export async function loadWall(url) {
@@ -36,7 +44,7 @@ export class WallView {
     // châtelets : tours, salle au-dessus du passage, créneaux, toits, bannières (statiques : construits une fois)
     this.gatehouse = new THREE.Group(); scene.add(this.gatehouse);
     const st = stoneMaterial(0xb0aca4), roof = fog(new THREE.MeshLambertMaterial({ color: 0x7a3a2a, flatShading: true })), wood = fog(new THREE.MeshLambertMaterial({ color: 0x4a3426, flatShading: true }));
-    const add = (geo, m, x, y, z, ry = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.y = ry; o.castShadow = o.receiveShadow = true; this.gatehouse.add(o); return o; };
+    const add = (geo, m, x, y, z, ry = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.y = ry; arcObject(o); o.castShadow = o.receiveShadow = true; this.gatehouse.add(o); return o; };
     for (const [a, b] of GATE_SEGS) {
       const x0 = a * SEG_W, x1 = (b + 1) * SEG_W, gc = (x0 + x1) / 2, TH = 10.5;
       add(new THREE.BoxGeometry(x1 - x0 + 0.4, TH - GATE_H, THICK + 1.6), st, gc, GATE_H + (TH - GATE_H) / 2 - 0.6, Z_OUT + 0.4);                  // salle de la herse
@@ -57,11 +65,11 @@ export class WallView {
   stairs() {
     const d = this.d, dz = (STAIR_Z0 - STAIR_Z1) / STEPS; let n = 0;
     for (const x of STAIR_XS) for (let i = 0; i < STEPS; i++) {
-      const top = (i + 1) * WALK_H / STEPS; d.position.set(x, top / 2, STAIR_Z0 - (i + 0.5) * dz); d.scale.set(3.4, top, dz + 0.02); d.rotation.set(0, 0, 0); d.updateMatrix(); this.steps.setMatrixAt(n, d.matrix); this.steps.setColorAt(n, this.c.setRGB(0.5 + 0.012 * (i & 1), 0.48, 0.45)); n++;
+      const top = (i + 1) * WALK_H / STEPS, p = arcPoint(x, STAIR_Z0 - (i + 0.5) * dz, _ap); d.position.set(p.x, top / 2, p.z); d.scale.set(3.4, top, dz + 0.02); d.rotation.set(0, p.ry, 0); d.updateMatrix(); this.steps.setMatrixAt(n, d.matrix); this.steps.setColorAt(n, this.c.setRGB(0.5 + 0.012 * (i & 1), 0.48, 0.45)); n++;
     }
     this.steps.count = n; this.steps.instanceMatrix.needsUpdate = true; this.steps.instanceColor.needsUpdate = true;
   }
-  place(im, k, x, y, z, ry, sx, sy, sz) { const d = this.d; d.position.set(x, y, z); d.rotation.set(0, ry, 0); d.scale.set(sx, sy, sz); d.updateMatrix(); im.setMatrixAt(k, d.matrix); }
+  place(im, k, x, y, z, ry, sx, sy, sz) { const d = this.d, p = arcPoint(x, z, _ap); d.position.set(p.x, y, p.z); d.rotation.set(0, ry + p.ry, 0); d.scale.set(sx, sy, sz); d.updateMatrix(); im.setMatrixAt(k, d.matrix); }
   tint(im, k, ratio, breached, base = 1) { const c = this.c; if (breached) c.setRGB(0.35, 0.27, 0.24); else c.setRGB(base, base, base).lerp(this.c2, (1 - ratio) * 0.85); im.setColorAt(k, c); }
   update() {
     const wall = this.sim.wall, gates = this.sim.army.gate, ease = t => t * t * (3 - 2 * t); let n = 0, nl = 0;

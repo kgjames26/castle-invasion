@@ -3,7 +3,7 @@
 // jusqu'au passage d'un ouvrier). Les ouvriers sont des villageois LIBRES (sans tâche) : le joueur règle leur nombre par chantier.
 // La simulation ignore tout du rendu ; `eco.level` et `eco.houses` sont recalculés à partir des structures (source de vérité = ici).
 import { STRUCT, BUILDINGS, BUILD, TOWER, ECON, TASKS, RANK_BUILDINGS, RANK_UP , UPGRADES } from '../content/medieval.js';
-import { sectorOfX } from './constants.js';
+import { sectorOfX, wallOff } from './constants.js';
 
 const tmp = new Int32Array(512);
 const WORKING = s => s.state === 'site' || s.state === 'upgrading' || s.state === 'moving';
@@ -13,7 +13,7 @@ export class Build {
   constructor(sim) { this.sim = sim; this.items = []; this.nextId = 1; this.version = 0; this.reset(); }
   reset() {
     this.items = []; this.nextId = 1; this.version++;
-    TOWER.wallXs.forEach((x, k) => this.items.push(this.make('tower', x, TOWER.wallZ, 0, { fixed: true, wt: k, level: 1, state: 'built', progress: 1 })));
+    TOWER.wallXs.forEach((x, k) => this.items.push(this.make('tower', x, TOWER.wallZ + wallOff(x), 0, { fixed: true, wt: k, level: 1, state: 'built', progress: 1 })));
     this.syncLevels();
   }
   make(type, x, z, rot, o = {}) {
@@ -214,6 +214,7 @@ export class Build {
       else this.items.push({ ...this.make(o.type, o.x, o.z, o.rot, { level: o.level, state: o.state, progress: o.progress, work: o.work, workers: o.workers, paid: o.paid }), id: o.id });   // mêmes ids : les ouvriers retrouvent leur chantier
     }
     let mx = 0; for (const s of this.items) mx = Math.max(mx, s.id); this.nextId = Math.max(mx + 1, st.next || 1);
+    for (const t of this.items) if (t.fixed && t.type === 'tower') t.z = TOWER.wallZ + wallOff(t.x);   // muraille en arc (v2.1)
     this.relocateInvalid();
     this.version++; this.syncLevels();
   }
