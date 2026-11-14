@@ -1,3 +1,4 @@
+import { ZONE_OF } from '../world/City.js';
 import { BUILDINGS, UNITS, SIEGE, TECHS, RECIPES, RESOURCES, RES_INFO, CENTER } from '../data/Config.js';
 import { costText, fmtTime } from '../utils/MathUtils.js';
 import { FORMATIONS, formationLock } from '../formations/FormationTypes.js';
@@ -28,18 +29,19 @@ export class UndergroundUI {
 
   get isOpen() { return !this.el.classList.contains('hidden'); }
   open(bid) {
-    this.el.classList.remove('hidden');
-    this.game.setView('city');
-    if (bid) this.select(bid); else this.render(true);
+    this.game.setZone(bid ? ZONE_OF[bid] : 'army');
+    if (bid) this.select(bid);
   }
-  close() {
-    this.el.classList.add('hidden');
+  close() { this.game.setZone('combat'); }
+  toggle() { if (this.isOpen) this.close(); else this.open(); }
+  // appelé à chaque changement de zone : réinitialise la fiche et adapte le titre
+  onZone(z) {
     this.current = null;
     this.detail.classList.add('hidden');
     this.game.city.select(null);
-    this.game.setView('map');
+    $('ug-title').textContent = z === 'village' ? '🌾 Village' : '⚔️ Armée';
+    this.render(true);
   }
-  toggle() { if (this.isOpen) this.close(); else this.open(); }
   select(id) {
     this.current = id;
     this.detail.classList.remove('hidden');
@@ -79,7 +81,7 @@ export class UndergroundUI {
     if (W.state === 'prep') { wv.textContent = `Vague ${W.wave} dans ${fmtTime(W.timer)}`; wv.classList.remove('alert'); }
     else { const rem = W.remaining(); wv.textContent = `⚠ Vague ${W.wave} en cours — ${rem} zombie${rem > 1 ? 's' : ''} · 🏰 ${Math.round(g.castle.hp / g.castle.maxHp * 100)} %`; wv.classList.add('alert'); }
     // grille des bâtiments
-    const cards = Object.entries(BUILDINGS).map(([id, b]) => {
+    const cards = Object.entries(BUILDINGS).filter(([id]) => ZONE_OF[id] === this.game.city.zone).map(([id, b]) => {
       const st = P.buildings[id];
       const q = P.queues[id]?.length || 0;
       const busy = st.upgrade ? '⏳' : (id === 'lab' && P.research ? '⚗️' : '');

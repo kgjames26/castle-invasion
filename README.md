@@ -19,7 +19,7 @@ et utilise des armes de siège pour protéger ta muraille contre des vagues de z
 - **7 formations** : Ligne, Double ligne, Coin, Carré, Escarmouche, Colonne, Cavalerie en coin (bonus selon le cahier des charges). Elles se brisent sous 40 % d'effectif.
 - **Siège** : baliste, catapulte, trébuchet (tir parabolique, zone, munitions pierre ou métal), bélier mobile qui détruit les nids. Aperçu de portée et de trajectoire au placement.
 - **Ennemis** : zombie, rapide, chien, golem, sauteur (franchit la muraille) + golem bélier et lanceur de rochers.
-- **Carte « Ville »** (bouton au sud de la base) : Quartiers, Caserne, Écurie, Atelier de siège, Laboratoire (10 recherches), Forge, Marché, Défenses souterraines.
+- **Carte « Ville »** (bouton au sud de la base) : Quartiers, Caserne, Écurie, Atelier de siège, Laboratoire (10 recherches), Forge, Marché, Défenses.
 - **Sauvegarde** automatique toutes les 30 s et à chaque fin de vague (localStorage). Pause automatique en arrière-plan.
 
 ## Contrôles

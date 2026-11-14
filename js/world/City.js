@@ -6,14 +6,21 @@ import { rng } from '../utils/MathUtils.js';
 // Chaque bâtiment est visible dans le décor ; toucher un bâtiment (ou son étiquette) ouvre son menu.
 const SLOTS = {
   landscape: {
-    lab: [-30, -24], barracks: [0, -24], stable: [30, -24],
-    quarters: [-34, 2], market: [34, 2],
-    workshop: [-24, 28], forge: [0, 28], defenses: [24, 28],
+    lab: [-30, -26], barracks: [0, -26], stable: [30, -26],
+    workshop: [-30, 2], forge: [0, 2], defenses: [30, 2],
+    quarters: [-22, 36], market: [22, 36],
   },
   portrait: {
-    lab: [-17, -38], barracks: [17, -38], stable: [-17, -13], quarters: [17, -13],
-    market: [-17, 13], workshop: [17, 13], forge: [-17, 38], defenses: [17, 38],
+    lab: [-17, -38], barracks: [17, -38], stable: [-17, -13],
+    workshop: [17, -13], forge: [-17, 12], defenses: [17, 12],
+    quarters: [-17, 46], market: [17, 46],
   },
+};
+// zones de la ville : l'Armée (au nord) et le Village (au sud)
+export const ZONE_OF = { lab: 'army', barracks: 'army', stable: 'army', workshop: 'army', forge: 'army', defenses: 'army', quarters: 'village', market: 'village' };
+const ZONE_VIEW = {
+  landscape: { army: { z: -20, dist: 92 }, village: { z: 36, dist: 62 } },
+  portrait: { army: { z: -22, dist: 160 }, village: { z: 46, dist: 110 } },
 };
 // modèles du pack médiéval composant chaque bâtiment [nom, dx, dz, rotY, échelle]
 const PARTS = {
@@ -36,7 +43,8 @@ export class City {
     this.b = {};          // id → { x, z, group, site, label }
     this.selected = null;
     const P = MAP.orient === 'portrait';
-    this.bounds = P ? { minX: -26, maxX: 26, minZ: -50, maxZ: 54 } : { minX: -52, maxX: 52, minZ: -36, maxZ: 44 };
+    this.bounds = P ? { minX: -26, maxX: 26, minZ: -50, maxZ: 62 } : { minX: -52, maxX: 52, minZ: -36, maxZ: 52 };
+    this.zone = 'army';
   }
 
   build() {
@@ -145,6 +153,15 @@ export class City {
     this.backLabel = back;
   }
 
+  // cadre la caméra sur l'Armée ou le Village
+  setZone(z) {
+    this.zone = z;
+    const v = (ZONE_VIEW[MAP.orient] || ZONE_VIEW.landscape)[z], g = this.game.cityCam.goal;
+    g.x = 0; g.z = v.z; g.dist = v.dist;
+    this.game.cityCam.clampGoal();
+    this.select(null);
+  }
+
   select(id) {
     this.selected = id;
     const b = this.b[id];
@@ -178,12 +195,12 @@ export class City {
       if (up) b.site.position.y = Math.abs(Math.sin(time * 6)) * 0.08;
       cam.worldToScreen(b.x, 11 + (b.level > 0 ? 3 : -2), b.z, tmp);
       b.label.style.transform = `translate(${tmp.x}px, ${tmp.y}px) translate(-50%, -100%)`;
-      b.label.style.display = tmp.visible ? '' : 'none';
+      b.label.style.display = tmp.visible && ZONE_OF[id] === this.zone ? '' : 'none';
       b.label.classList.toggle('sel', this.selected === id);
     }
     cam.worldToScreen(this.gate.x, 10, this.gate.z, tmp);
     this.backLabel.style.transform = `translate(${tmp.x}px, ${tmp.y}px) translate(-50%, -100%)`;
-    this.backLabel.style.display = tmp.visible ? '' : 'none';
+    this.backLabel.style.display = tmp.visible && this.zone === 'army' ? '' : 'none';
   }
 
   // toucher dans le décor : bâtiment le plus proche du point visé
@@ -191,6 +208,7 @@ export class City {
     const cam = this.game.cam, tmp = {};
     let best = null, bd = 90;
     for (const id in this.b) {
+      if (ZONE_OF[id] !== this.zone) continue;
       const b = this.b[id];
       cam.worldToScreen(b.x, 4, b.z, tmp);
       const d = Math.hypot(tmp.x - sx, tmp.y - sy);

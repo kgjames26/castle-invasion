@@ -1,6 +1,6 @@
 // Service worker : mise en cache de tout le jeu pour jouer hors ligne
 // (liste générée par scripts/generate-sw.mjs — relancer `npm run sw` après modification)
-const CACHE = 'castle-invasion-550104b01b';
+const CACHE = 'castle-invasion-93fda549f0';
 const FILES = [
   "./",
   "./assets/icons/icon-192.png",

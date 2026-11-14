@@ -562,6 +562,15 @@ export class Game {
     this.ui.onView(v);
   }
 
+  // zones du royaume : combat (carte), armée et village (ville). Une seule simulation, seul l'affichage change.
+  setZone(z) {
+    if (!this.running) return;
+    this.zone = z;
+    this.setView(z === 'combat' ? 'map' : 'city');
+    if (z !== 'combat') this.city.setZone(z);
+    this.ui.onZone(z);
+  }
+
   setPaused(p, auto = false) {
     if (this.over) return;
     this.paused = p;

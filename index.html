@@ -48,12 +48,17 @@
       <div id="mini-wrap" class="panel"><canvas id="minimap"></canvas></div>
       <div id="actions-right">
         <button id="btn-siege" class="big hidden" data-tip="Réserve d'armes de siège à déployer">🛡️<b>Siège</b><em id="siege-badge">0</em></button>
-        <button id="btn-base" class="big" data-tip="Ville (au sud) : production, caserne, atelier, laboratoire… (B)">🏘️<b>Ville</b></button>
         <button id="btn-pause" class="big" data-tip="Pause (Espace)">⏸<b>Pause</b></button>
         <button id="btn-speed" class="big" data-tip="Vitesse du jeu (1, 2, 3)">▶<b>×1</b></button>
       </div>
     </div>
   </div>
+
+  <nav id="nav" class="hidden">
+    <button data-z="combat" class="sel"><span>🏰</span><b>Combat</b></button>
+    <button data-z="army"><span>⚔️</span><b>Armée</b></button>
+    <button data-z="village"><span>🌾</span><b>Village</b></button>
+  </nav>
 
   <div id="box-rect"></div>
   <div id="toasts"></div>
@@ -69,10 +74,10 @@
     <div id="ug-labels"></div>
     <div id="ug-top">
       <div class="ug-head panel">
-        <div class="ug-title">🏘️ Ville</div>
+        <div class="ug-title" id="ug-title">⚔️ Armée</div>
         <div id="ug-res"></div>
         <div id="ug-wave"></div>
-        <button id="ug-close" class="small">⬆ Carte</button>
+        <button id="ug-close" class="small">🏰 Combat</button>
       </div>
       <div id="ug-grid" class="panel"></div>
     </div>

@@ -21,7 +21,6 @@ export class HUD {
     this.sel = $('sel');
     this.selSig = '';
     this.sel.addEventListener('click', e => this.onSelClick(e));
-    $('btn-base').onclick = () => ui.toggleUnderground();
     $('btn-pause').onclick = () => this.game.setPaused(!this.game.paused);
     $('btn-speed').onclick = () => this.game.setSpeed(this.game.speed >= 3 ? 1 : this.game.speed + 1);
     $('btn-early').onclick = () => this.game.waves.callEarly();

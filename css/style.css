@@ -36,7 +36,7 @@ button.danger { border-color: #8a3a2a; }
 .bar.red i { background: linear-gradient(90deg, #8a2a1a, #e0603a); }
 
 /* ---------- HUD ---------- */
-#hud { position: fixed; inset: 0; pointer-events: none; }
+#hud { position: fixed; inset: 0 0 var(--nav-h) 0; pointer-events: none; }
 #hud > * , #hud button, #hud .panel, #hud canvas { pointer-events: auto; }
 #top { position: absolute; top: calc(8px + var(--sat)); left: calc(8px + var(--sal)); right: calc(8px + var(--sar)); display: flex; gap: 8px; align-items: flex-start; pointer-events: none; }
 #res { display: grid; grid-template-columns: repeat(3, auto); gap: 3px 10px; padding: 6px 10px; font-variant-numeric: tabular-nums; }
@@ -137,7 +137,7 @@ button.big b { font-size: 11px; font-weight: 600; color: var(--dim); }
 #go-stats { color: var(--dim); line-height: 1.6; }
 
 /* ---------- ville (carte secondaire) ---------- */
-#underground { position: fixed; inset: 0; z-index: 40; pointer-events: none; }
+#underground { position: fixed; inset: 0 0 var(--nav-h) 0; z-index: 40; pointer-events: none; }
 #underground > * { pointer-events: auto; }
 #ug-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 #ug-top { position: absolute; top: calc(8px + var(--sat)); left: calc(8px + var(--sal)); right: calc(8px + var(--sar)); display: flex; flex-direction: column; gap: 6px; }
@@ -238,3 +238,14 @@ button.big b { font-size: 11px; font-weight: 600; color: var(--dim); }
 @media (orientation: portrait), (max-width: 720px) {
   #ug-detail { left: calc(8px + var(--sal)); right: calc(8px + var(--sar)); top: auto; width: auto; height: 50vh; }
 }
+
+/* barre de navigation des trois zones */
+:root { --nav-h: calc(54px + var(--sab)); }
+#nav { position: fixed; left: 0; right: 0; bottom: 0; height: var(--nav-h); padding-bottom: var(--sab); z-index: 45; display: flex; background: linear-gradient(#2a1f14, #1a120a); border-top: 2px solid var(--gold); }
+#nav.hidden { display: none; }
+#nav button { flex: 1; background: none; border: 0; border-right: 1px solid #3a2d1f; color: var(--dim); display: flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--serif); font-size: 16px; cursor: pointer; position: relative; }
+#nav button:last-child { border-right: 0; }
+#nav button span { font-size: 22px; }
+#nav button.sel { color: var(--gold2); background: rgba(255, 210, 122, .1); }
+#nav button.sel::before { content: ''; position: absolute; top: 0; left: 18%; right: 18%; height: 3px; background: var(--gold2); border-radius: 0 0 3px 3px; }
+@media (max-width: 480px) { #nav button { flex-direction: column; gap: 0; font-size: 12px; } #nav button span { font-size: 20px; } }

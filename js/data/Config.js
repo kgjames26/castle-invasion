@@ -131,7 +131,7 @@ export const BUILDINGS = {
     desc: 'Transforme les ressources (pierre + bois → métal, etc.).' },
   market: { name: 'Marché', icon: '⚖️', max: 3, start: 0, base: { wood: 150, gold: 40 }, time: 20,
     desc: 'Échange tes ressources contre de l\'or et inversement. Meilleurs taux à chaque niveau.' },
-  defenses: { name: 'Défenses souterraines', icon: '🛡️', max: 4, start: 0, base: { stone: 200, metal: 40 }, time: 30,
+  defenses: { name: 'Défenses', icon: '🛡️', max: 4, start: 0, base: { stone: 200, metal: 40 }, time: 30,
     desc: 'Zone tampon autour du château : pièges qui blessent les zombies et +20 % PV du château par niveau.' },
 };
 export function buildingCost(id, level) { return scale(BUILDINGS[id].base, level); }

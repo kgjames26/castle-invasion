@@ -59,6 +59,9 @@ export class BaseUI {
     $('menu').classList.add('hidden');
     $('hud').classList.remove('hidden');
     $('underground').classList.add('hidden');
+    $('nav').classList.remove('hidden');
+    document.querySelectorAll('#nav button').forEach(b => { b.onclick = () => { this.game.audio.unlock?.(); this.game.setZone(b.dataset.z); }; });
+    this.onZone('combat');
     this.minimap.resize();
   }
 
@@ -78,8 +81,13 @@ export class BaseUI {
   onSpeed(s) { $('btn-speed').innerHTML = `${s === 1 ? '▶' : s === 2 ? '⏩' : '⏭'}<b>×${s}</b>`; }
 
   toggleUnderground(force) {
-    if (force) this.underground.open(); else this.underground.toggle();
     this.game.siege.cancelPlacement();
+    if (force) this.game.setZone('army');
+    else this.game.setZone(this.game.view === 'city' ? 'combat' : 'army');
+  }
+  onZone(z) {
+    document.querySelectorAll('#nav button').forEach(b => b.classList.toggle('sel', b.dataset.z === z));
+    this.underground.onZone(z);
   }
   openFormations() { this.formation.show(); }
   // la carte « Ville » remplace l'interface de jeu de la carte principale
@@ -88,7 +96,6 @@ export class BaseUI {
     $('hud').classList.toggle('hidden', city);
     $('underground').classList.toggle('hidden', !city);
     if (city) { this.underground.render(true); this.formation.close?.(); $('reserve-menu').classList.add('hidden'); }
-    else { $('btn-base').blur(); }
   }
   closeTop() {
     if (!$('help').classList.contains('hidden')) { $('help').classList.add('hidden'); return true; }
