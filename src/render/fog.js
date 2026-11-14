@@ -1,8 +1,9 @@
 // Brouillard de guerre du NORD : lié à la coordonnée monde z (pas à la caméra) → les hordes émergent de la brume.
 import * as THREE from 'three';
+import { ATMOS } from './config.js';
 export const fogUniforms = {
-  uNFogColor: { value: new THREE.Color(0x0a0f16) },
-  uNFogRange: { value: new THREE.Vector2(78, 18) },   // z monde : clair à 78 m, opaque à 18 m
+  uNFogColor: { value: new THREE.Color(ATMOS.fogColor) },
+  uNFogRange: { value: new THREE.Vector2(ATMOS.fogNear, ATMOS.fogFar) },   // z monde : clair à fogNear, opaque à fogFar (animé par le Renderer)
 };
 export function patchNorthFog(shader) {
     Object.assign(shader.uniforms, fogUniforms);

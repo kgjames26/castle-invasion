@@ -134,3 +134,8 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Le niveau de la caserne, de l'écurie et du champ de tir (1 à 5) est le rang de ses unités : Recrue, Régulier, Vétéran, Élite, Légende (`RANKS` dans medieval.js : coût, force, résistance, vitesse ; le moral est noté mais pas encore simulé).
 - Passage au rang suivant payant et de plus en plus cher (`RANK_UP`). Le coût d'une unité est fixé à l'entraînement (`army.unitCost`), la force et la vitesse suivent le rang courant du bâtiment, la résistance divise les dégâts reçus.
 - Test : `tests/rangs.mjs`.
+
+## Phase 16 — Atmosphère et retours d'interface
+- `src/render/config.js` : constantes d'atmosphère (soleil, ciel, brume), caméra (inclinaison 40°, champ 60°) et qualité (`low`/`medium`/`high`, choisie par `?q=`, ☰ Paramètres ou automatiquement : `low` sur écran tactile). `low` coupe ombres et lueurs.
+- Ombres douces (PCF) sur muraille, château et bâtiments ; brume du nord qui respire et avance pendant l'assaut ; lueurs additives (torches des portes, impacts, explosions) sans post-traitement ; fumée de cheminées.
+- UI : indicateur de portée (tour ou secteur d'archers), toasts typés et regroupés (brèche, vague, sortie des escouades), flash d'écran, retour tactile du dock (+ vibration), astuces de premier lancement désactivables (`UI_FLAGS.tutorial` ou `?tuto=0`).

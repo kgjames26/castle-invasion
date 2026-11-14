@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import { W, D } from '../sim/constants.js';
 
-const PITCH = 42 * Math.PI / 180;       // vue plus rasante (v3.1) : moins « table de jeu »
+import { CAMERA } from '../render/config.js';
+const PITCH = CAMERA.pitchDeg * Math.PI / 180;       // vue rasante : moins « table de jeu » (réglable dans render/config.js)
 export class CameraController {
   constructor(camera, dom, onTap) {
     this.cam = camera; this.dom = dom; this.onTap = onTap;

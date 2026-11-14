@@ -108,3 +108,25 @@ h2,h3,.ptitle,.wave b,.tile b,.dk span { font-family:var(--serif); }
 .vols { display:flex; flex-direction:column; gap:6px; padding:6px 12px; }
 .vrow { display:grid; grid-template-columns: 80px 1fr; align-items:center; gap:8px; font-size:14px; color:var(--ink); }
 .vrow input { width:100%; accent-color:#8b5a2b; }
+
+/* ——— retours d'interface : toasts typés, flash d'écran, dock tactile ——— */
+.toast { display:flex; align-items:center; gap:6px; border-left:5px solid #8a6420; }
+.toast.ok { border-left-color:#3f9a55; background:#f1f7ea; }
+.toast.warn { border-left-color:#d98a1e; background:#fff3dc; }
+.toast.danger { border-left-color:#c0392b; background:#fde8e4; animation:tin .25s, shake .35s .1s, tout .4s 4.1s forwards; font-size:15px; }
+.toast.warn { animation:tin .25s, tout .4s 3.4s forwards; }
+.toast .tn { background:#0002; border-radius:9px; padding:0 6px; font-size:12px; }
+@keyframes shake { 20%,60% { transform:translateX(-4px); } 40%,80% { transform:translateX(4px); } }
+.vflash { position:fixed; inset:0; pointer-events:none; z-index:30; opacity:0; }
+.vflash.danger { animation:vfl .9s ease-out; box-shadow:inset 0 0 90px 26px #e0301e; }
+.vflash.warn { animation:vfl .9s ease-out; box-shadow:inset 0 0 80px 18px #f0a020; }
+@keyframes vfl { 0% { opacity:.85; } 100% { opacity:0; } }
+.dk, .rb, .btn, .badge, .chipb { touch-action:manipulation; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; }
+.dk { transition:transform .12s cubic-bezier(.3,1.6,.5,1), box-shadow .12s, background .15s; }
+.dk.down { transform:scale(.9) translateY(2px); box-shadow:0 0 0 #0000, inset 0 3px 8px #0004; filter:brightness(.93); }
+.dk.tap { animation:dkpop .32s cubic-bezier(.3,1.7,.5,1); }
+.dk.tap::after { content:''; position:absolute; inset:0; border-radius:50%; border:3px solid #f3d98c; animation:dkring .45s ease-out forwards; pointer-events:none; }
+@keyframes dkpop { 0% { transform:scale(.88); } 60% { transform:scale(1.08); } 100% { transform:scale(1); } }
+@keyframes dkring { from { opacity:.9; transform:scale(1); } to { opacity:0; transform:scale(1.55); } }
+.btn:active { transform:scale(.96); filter:brightness(.95); }
+@media (prefers-reduced-motion: reduce) { .dk.tap, .dk.tap::after, .toast.danger, .vflash { animation:none !important; } }

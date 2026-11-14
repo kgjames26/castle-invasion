@@ -12,6 +12,9 @@ const TASK_ORDER = ['wood', 'stone', 'iron', 'gold', 'food'];
 const TB = { sawmill: ['wood'], quarry: ['stone'], mine: ['iron', 'gold'], farm: ['food'] };       // bâtiment → tâches de récolte
 const GROUPS = [['Économie', ['sawmill', 'quarry', 'mine', 'farm', 'mill', 'granary', 'warehouse', 'house']], ['Armée', ['barracks', 'range', 'stable', 'workshop', 'forge']], ['Défense', ['tower']]];
 import { VERSION } from '../version.js';
+// Réglages de l'interface : tutorial = astuces de premier lancement (aussi coupé par ?tuto=0) ; haptics = vibrations sur mobile.
+export const UI_FLAGS = { tutorial: !/[?&]tuto=0\b/.test(location.search), haptics: true };
+const QUALITY_NAMES = { low: 'Bas', medium: 'Moyen', high: 'Élevé' };
 const SHEETS = { build: '⚒ Bâtir', army: '🛡 Armée', folk: '👥 Villageois', tech: '📜 Savoir' }, MENU_TITLE = '⚙ Paramètres';
 const snap = v => Math.round(v * 2) / 2;
 
@@ -37,7 +40,9 @@ export class UI {
     $('#b-speed').addEventListener('click', e => { sim.speed = sim.speed === 1 ? 2 : sim.speed === 2 ? 4 : sim.speed === 4 ? 0 : 1; e.currentTarget.textContent = sim.speed ? '×' + sim.speed : '⏸'; });
     $('#b-menu').addEventListener('click', () => this.toggleSheet('menu'));
     $('#over-btn').addEventListener('click', () => hooks.newGame());
-    this.dock.addEventListener('click', e => { const b = e.target.closest('[data-sheet]'); if (b) this.toggleSheet(b.dataset.sheet); });
+    this.dock.addEventListener('click', e => { const b = e.target.closest('[data-sheet]'); if (b) { this.buzz(12); b.classList.remove('tap'); void b.offsetWidth; b.classList.add('tap'); this.toggleSheet(b.dataset.sheet); } });
+    this.dock.addEventListener('pointerdown', e => { const b = e.target.closest('.dk'); if (b) b.classList.add('down'); });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) this.dock.addEventListener(ev, () => this.dock.querySelectorAll('.down').forEach(b => b.classList.remove('down')));
     for (const el0 of [this.sheetEl, this.cardEl, this.placeEl]) {
       el0.addEventListener('pointerdown', () => { this.pressing = true; });
       el0.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b && !b.disabled) { this.act(b.dataset.a); this.refresh(true); } });
@@ -47,6 +52,7 @@ export class UI {
     this.cam.ghostHit = (x, z) => this.mode !== 'idle' && this.place && Math.abs(x - this.place.x) < this.halfW() + 4 && Math.abs(z - this.place.z) < this.halfD() + 4;
     this.cam.ghostMove = (x, z) => this.moveGhost(x, z);
     this.refresh(true);
+    this.startTutorial();
   }
   // ——— feuille ———
   toggleSheet(n) { if (this.sheet === n) this.closeSheet(); else this.openSheet(n); }
@@ -133,6 +139,7 @@ export class UI {
     const [v, x, y] = a.split(':'), sim = this.sim, s = this.sel;
     switch (v) {
       case 'sheet': this.openSheet(x, y); break;
+      case 'quality': this.rd.setQuality(x); this.html.sheet = ''; this.refresh(true); break;
       case 'newgame': if (confirm('Commencer une nouvelle partie ? La partie en cours sera perdue.')) { this.closeSheet(); this.hooks.newGame(); } break;
       case 'rally': this.rallying = !this.rallying; if (this.rallying) { const r = this.sim.army.rally; this.cam.focusOn(r.x, r.z); } break;
       case 'close': this.card ? this.closeCard() : this.closeSheet(); break;
@@ -172,13 +179,24 @@ export class UI {
       case 'disb': sim.squadDisband(this.selSq); this.selSq = 0; this.rd.setSquad(0); this.setTargeting(false); break;
     }
   }
-  toast(msg) { const t = el('div', 'toast', msg); this.toasts.appendChild(t); setTimeout(() => t.remove(), 3000); while (this.toasts.children.length > 3) this.toasts.firstChild.remove(); }
+  // toast : kind = 'info' | 'ok' | 'warn' | 'danger' (couleur et durée) ; les messages identiques consécutifs sont regroupés (×2, ×3…)
+  toast(msg, kind = 'info') {
+    const last = this.toasts.lastElementChild;
+    if (last && last.dataset.msg === msg && last.dataset.k === kind) { const n = (+last.dataset.n || 1) + 1; last.dataset.n = n; last.innerHTML = `${msg} <b class="tn">×${n}</b>`; clearTimeout(last._t); last._t = setTimeout(() => last.remove(), 3000); return; }
+    const t = el('div', 'toast ' + kind, msg); t.dataset.msg = msg; t.dataset.k = kind; this.toasts.appendChild(t);
+    t._t = setTimeout(() => t.remove(), kind === 'danger' ? 4500 : kind === 'warn' ? 3800 : 3000);
+    while (this.toasts.children.length > 3) this.toasts.firstChild.remove();
+    if (kind === 'danger' && UI_FLAGS.haptics) this.buzz([40, 40, 80]);
+  }
+  buzz(p) { if (UI_FLAGS.haptics && navigator.vibrate) try { navigator.vibrate(p); } catch { /* non supporté */ } }
   onEvent(e) {
     const sim = this.sim;
     if (e.type === 'built') { const d = STRUCT[e.what]; this.toast(e.kind === 'site' ? `${d.ico} ${d.name} terminé !` : e.kind === 'upgrading' ? `⬆ ${d.name} amélioré` : `✥ ${d.name} remis en service`); }
-    else if (e.type === 'breach') this.toast(`💥 Brèche — ${SECTOR_NAMES[e.s]} !`);
+    else if (e.type === 'breach') { this.toast(`💥 Brèche — ${SECTOR_NAMES[e.s]} ! Envoyez des renforts`, 'danger'); this.flashScreen('danger') }
+    else if (e.type === 'repair') this.toast(`🔧 Muraille réparée — ${SECTOR_NAMES[e.s]}`, 'ok');
+    else if (e.type === 'waveStart') { const t = (sim.targets || []).map(s => SECTOR_SHORT[s]).join(' · '); this.toast(`🌊 Vague ${e.wave} — attaque : ${t || '?'}`, 'warn'); this.flashScreen('warn'); this.buzz(60); }
     else if (e.type === 'discovered') { this.toast(`🧭 Nouveau gisement de ${RES_INFO[e.res].name.toLowerCase()} découvert (${e.amount}) !`); this.cam.focusOn(e.x, e.z); }
-    else if (e.type === 'waveEnd') this.toast(`🏆 Vague ${e.wave} repoussée`);
+    else if (e.type === 'waveEnd') { const r = e.reward || {}; this.toast(`🏆 Vague ${e.wave} repoussée · ${Object.keys(r).map(k => `+${r[k]} ${RES_INFO[k].ico}`).join(' ')}`, 'ok'); this.buzz([30, 30, 30]); }
   }
   // ——— mise à jour de l'affichage ———
   refresh(force) {
@@ -218,7 +236,9 @@ export class UI {
     // curseurs de volume : valeurs figées à l'ouverture du menu (pas de re-rendu pendant le glissement)
     const v = this.volSnap || {}, sl = (k, l) => `<label class="vrow"><span>${l}</span><input type="range" min="0" max="100" step="5" value="${Math.round((v[k] ?? 0) * 100)}" data-vol="${k}"></label>`;
     const audio = this.hooks.audio ? `<div class="vols"><div class="hint small"><b>Son</b></div>${sl('master', 'Général')}${sl('sfx', 'Effets')}${sl('music', 'Musique')}</div>` : '';
-    return `<div class="hint">Castle Invasion · <b>v${VERSION}</b></div>${audio}<div class="row">${this.btn('🔄 Nouvelle partie', 'la partie en cours sera perdue', 'newgame', false, 'act warnb')}</div>`;
+    const cq = this.hooks.rd.qualityName ? this.hooks.rd.qualityName() : '';
+    const qual = `<div class="vols"><div class="hint small"><b>Qualité graphique</b> (ombres, lueurs)</div><div class="row">${Object.keys(QUALITY_NAMES).map(k => this.btn(QUALITY_NAMES[k], '', 'quality:' + k, false, 'act slim' + (k === cq ? '' : ' sec'))).join('')}</div></div>`;
+    return `<div class="hint">Castle Invasion · <b>v${VERSION}</b></div>${audio}${qual}<div class="row">${this.btn('🔄 Nouvelle partie', 'la partie en cours sera perdue', 'newgame', false, 'act warnb')}</div>`;
   }
   renderCard() {
     const c = this.card; if (!c) return;
@@ -239,8 +259,32 @@ export class UI {
     this.setHtml('place', this.placeEl, html);
   }
   // ancrage des bulles et pastilles sur la carte (chaque image)
+  // flash rouge/orange sur les bords de l'écran (brèche, début de vague)
+  flashScreen(kind) { const f = this.flashEl || (this.flashEl = el('div', 'vflash')); if (!f.isConnected) document.body.appendChild(f); f.className = 'vflash'; void f.offsetWidth; f.className = 'vflash ' + kind; }
+  // sorties et retours d'escouades : détectés par comparaison du mode (lecture seule de la simulation)
+  watchSquads() {
+    const prev = this.sqModes || (this.sqModes = new Map()), seen = new Set();
+    for (const q of this.sim.army.squads) {
+      seen.add(q.id); const was = prev.get(q.id); prev.set(q.id, q.mode);
+      if (was && was !== q.mode) this.toast(q.mode === 'field' ? `${UNITS[q.type].ico} ${UNITS[q.type].name} ×${q.n} sortent de la muraille` : `${UNITS[q.type].ico} ${UNITS[q.type].name} rentrent au poste`, q.mode === 'field' ? 'warn' : 'info');
+    }
+    for (const id of [...prev.keys()]) if (!seen.has(id)) prev.delete(id);
+  }
+  // indicateur de portée : tour sélectionnée (cercle) ou secteur d'archers (bande devant la muraille)
+  updateRange() {
+    const c = this.card, sim = this.sim; let spec = null;
+    if (c && c.kind === 'struct') { const s = sim.build.get(c.id); if (s && s.type === 'tower' && s.state !== 'site') spec = { kind: 'circle', x: s.x, z: s.z, r: sim.build.towerStats(s, sim).range }; }
+    else if (c && c.kind === 'sector') { const r = UNITS.archer.range + 3 * sim.eco.up.archery; spec = { kind: 'band', x0: c.id * 40, x1: c.id * 40 + 40, z: 146, r }; }
+    const key = spec ? JSON.stringify(spec) : ''; if (key !== this.rangeKey) { this.rangeKey = key; this.rd.setRangeIndicator(spec); }
+  }
+  // astuces de premier lancement (désactivables : UI_FLAGS.tutorial ou ?tuto=0)
+  startTutorial() {
+    if (!UI_FLAGS.tutorial) return; try { if (localStorage.getItem('castle-tuto')) return; localStorage.setItem('castle-tuto', '1'); } catch { return; }
+    [[2500, '👆 Touche ⚒ Bâtir pour construire tes premiers bâtiments'], [9000, '👥 Dans Villageois, répartis tes ouvriers sur les ressources'], [17000, '🛡 Prépare des archers (Armée) avant la première vague']].forEach(([t, m]) => setTimeout(() => this.toast(m, 'info'), t));
+  }
   tick(dt) {
-    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.refresh(false); }
+    this.watchSquads();
+    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.refresh(false); }
     const vw = innerWidth, vh = innerHeight;
     for (let s = 0; s < SECTORS; s++) {
       const p = this.rd.project(s * 40 + 20, 8, 143), b = this.badges[s];

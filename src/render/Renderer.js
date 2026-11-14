@@ -1,6 +1,6 @@
 // Rendu Three.js : lit l'état de la simulation, ne le modifie jamais. Géométrie provisoire (low-poly basique).
 import * as THREE from 'three';
-import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT, PLAZA } from '../sim/constants.js';
+import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, GATE_SEGS, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT, PLAZA } from '../sim/constants.js';
 import { T } from '../sim/terrain.js';
 import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/medieval.js';
 import { archerPos, formationLayout, archerPose, rallySlot } from '../sim/army.js';
@@ -9,6 +9,8 @@ import { StructureView } from './Structures.js';
 import { WallView } from './WallView.js';
 import { stoneMaterial } from './Stone.js';
 import { Effects, EFFECTS } from './Effects.js';
+import { ATMOS, CAMERA, quality, setQualityName } from './config.js';
+import { fogUniforms } from './fog.js';
 import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry } from './Troops.js';
 const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1]];      // variantes de modèle par type de zombie
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
@@ -21,19 +23,61 @@ export class Renderer {
   constructor(canvasParent, sim) {
     this.sim = sim;
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    this.renderer.setClearColor(0x0a0f16);
+    this.renderer.setClearColor(ATMOS.fogColor);
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;      // ombres douces
     canvasParent.appendChild(this.renderer.domElement);
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(58, 1, 2, 900);
-    this.scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x4a4030, 1.55));
-    const sun = new THREE.DirectionalLight(0xfff1d0, 1.5); sun.position.set(-60, 120, 80); this.scene.add(sun);
+    this.camera = new THREE.PerspectiveCamera(CAMERA.fov, 1, 2, 900);
+    this.scene.add(new THREE.HemisphereLight(ATMOS.hemiSky, ATMOS.hemiGround, ATMOS.hemiIntensity));
+    const sun = new THREE.DirectionalLight(ATMOS.sunColor, ATMOS.sunIntensity), A = ATMOS.shadowArea; this.sun = sun;
+    sun.target.position.set(A.x, 0, A.z); sun.position.set(A.x + ATMOS.sunPos[0], ATMOS.sunPos[1], A.z + ATMOS.sunPos[2]); this.scene.add(sun, sun.target);
+    Object.assign(sun.shadow.camera, { left: -A.hw, right: A.hw, top: A.hd, bottom: -A.hd, near: 10, far: 420 }); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.35; sun.shadow.radius = 3;
     this.dummy = new THREE.Object3D(); this.tmpColor = new THREE.Color();
     this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildSiege(); this.rigs = buildTroopRigs(this.scene); this.vrigs = buildVillagerRigs(this.scene); this.vMesh.visible = false; this.buildHighlight();
+    this.applyQuality();
+    this.buildTorches(); this.buildRangeIndicator();
     this.fx = new Effects(this.scene, { enabled: EFFECTS.enabled });   // particules (flèches, zombies, muraille, siège) : vue seule
     this.selected = -1; this.clock = 0; this.selSquad = 0; this.targetMode = false; this.tmpC2 = new THREE.Color(); this.white = new THREE.Color(1, 1, 1);
   }
-  resize(w, h) { this.renderer.setSize(w, h, false); this.renderer.domElement.style.width = w + 'px'; this.renderer.domElement.style.height = h + 'px'; this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
+  // ——— qualité (voir render/config.js) : ombres, lueurs, résolution ———
+  qualityName() { return quality.name; }
+  setQuality(name) { if (setQualityName(name)) this.applyQuality(); }
+  applyQuality() {
+    const q = quality; this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pixelRatio));
+    this.renderer.shadowMap.enabled = q.shadows; this.sun.castShadow = q.shadows;
+    if (q.shadows) { const sm = this.sun.shadow; if (sm.mapSize.x !== q.shadowMap) { sm.mapSize.set(q.shadowMap, q.shadowMap); if (sm.map) { sm.map.dispose(); sm.map = null; } } }
+    this.scene.traverse(o => { if (o.material) { for (const m of [].concat(o.material)) m.needsUpdate = true; } });
+    if (this.fx) this.fx.setQuality(q);
+    if (this.lastSize) this.resize(this.lastSize[0], this.lastSize[1]);
+  }
+  // les objets qui projettent et reçoivent une ombre (personnages animés exclus : leur ombre serait figée)
+  shadowize(obj) { obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }
+  // ——— torches des portes : flamme + lueur (désactivable avec la qualité) ———
+  buildTorches() {
+    this.torches = new THREE.Group(); this.torchPos = [];
+    for (const [a, b] of GATE_SEGS) for (const x of [a * SEG_W - 0.6, (b + 1) * SEG_W + 0.6]) {
+      const pole = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, 0.3), lam(0x4a3426)); pole.position.set(x, 1.3, WALL_Z0 - 1.2);
+      const fl = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.55), new THREE.MeshBasicMaterial({ color: 0xffc14a })); fl.position.set(x, 2.9, WALL_Z0 - 1.2);
+      this.torches.add(pole, fl); this.torchPos.push([x, 3.1, WALL_Z0 - 1.2]);
+    }
+    this.scene.add(this.torches);
+  }
+  // ——— indicateur de portée (tour ou secteur d'archers sélectionné) ———
+  buildRangeIndicator() {
+    const ring = new THREE.RingGeometry(0.97, 1, 64); ring.rotateX(-Math.PI / 2);
+    const disc = new THREE.CircleGeometry(1, 48); disc.rotateX(-Math.PI / 2);
+    const mat = o => new THREE.MeshBasicMaterial({ color: 0x9ad0ff, transparent: true, opacity: o, depthWrite: false });
+    this.rangeRing = new THREE.Mesh(ring, mat(0.9)); this.rangeFill = new THREE.Mesh(disc, mat(0.12)); this.rangeBand = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat(0.14));
+    this.rangeBand.rotation.x = -Math.PI / 2;
+    for (const m of [this.rangeRing, this.rangeFill, this.rangeBand]) { m.visible = false; m.renderOrder = 5; this.scene.add(m); }
+  }
+  // spec : null | { kind: 'circle', x, z, r } | { kind: 'band', x0, x1, z, r }
+  setRangeIndicator(spec) {
+    const R = this.rangeRing, F = this.rangeFill, B = this.rangeBand; R.visible = F.visible = B.visible = false; if (!spec) return;
+    if (spec.kind === 'circle') { R.visible = F.visible = true; R.position.set(spec.x, 0.35, spec.z); F.position.set(spec.x, 0.3, spec.z); R.scale.set(spec.r, 1, spec.r); F.scale.set(spec.r, 1, spec.r); }
+    else { B.visible = true; B.position.set((spec.x0 + spec.x1) / 2, 0.3, spec.z - spec.r / 2); B.scale.set(spec.x1 - spec.x0, spec.r, 1); }
+  }
+  resize(w, h) { this.lastSize = [w, h]; this.renderer.setSize(w, h, false); this.renderer.domElement.style.width = w + 'px'; this.renderer.domElement.style.height = h + 'px'; this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
 
   // Sol : une seule texture 6 px/m, peinte par zones (neige gelée au nord, terre piétinée au front, dalles de la cour, terre battue du village,
   // pavés autour du château), avec chemins à bords doux, gisements, mares gelées, bruit de grain et vignettage. Déterministe (graine fixe).
@@ -97,7 +141,7 @@ export class Renderer {
     g.putImageData(img, 0, 0);
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, D), applyNorthFog(new THREE.MeshLambertMaterial({ map: tex })));
-    m.rotation.x = -Math.PI / 2; m.position.set(W / 2, 0, D / 2); this.scene.add(m);
+    m.rotation.x = -Math.PI / 2; m.position.set(W / 2, 0, D / 2); m.receiveShadow = true; this.scene.add(m);
   }
   buildTerrainProps() {
     const type = this.sim.terrain.type, rock = [], tree = [];
@@ -138,6 +182,14 @@ export class Renderer {
       this.wallMesh.setColorAt(i, c);
     }
     this.wallMesh.instanceMatrix.needsUpdate = true; this.wallMesh.instanceColor.needsUpdate = true;
+  }
+  // brume du nord : respire lentement et avance pendant un assaut ; pulsation de l'indicateur de portée ; ombres des nouvelles structures
+  updateAtmosphere(dt) {
+    const sim = this.sim, a = sim.phase === 'assault' || sim.phase === 'alert' ? 1 : 0; this.fogA = (this.fogA || 0) + (a - (this.fogA || 0)) * Math.min(1, dt * 0.5);
+    const near = ATMOS.fogNear - ATMOS.fogAssault * this.fogA + ATMOS.fogBreath * Math.sin(this.clock * ATMOS.fogBreathSpeed);
+    fogUniforms.uNFogRange.value.set(near, ATMOS.fogFar);
+    if (this.rangeRing.visible) { const p = 0.75 + 0.25 * Math.sin(this.clock * 4); this.rangeRing.material.opacity = p; }
+    if (quality.shadows) for (const v of this.struct.map.values()) if (!v.g.userData.sh) { v.g.userData.sh = 1; this.shadowize(v.g); }
   }
   buildCastle() {
     const g = new THREE.Group(), m = lam(0xa49d8e);
@@ -321,7 +373,7 @@ export class Renderer {
   }
   // ——— muraille GLB (assets/wall) : remplace la muraille provisoire / du kit, ajoute escaliers et porte à deux battants ———
   useWall(asset) {
-    this.wv = new WallView(this.scene, asset, this.sim, applyNorthFog); this.wallMesh.visible = false; if (this.kw) for (const k in this.kw) this.kw[k].visible = false;
+    this.wv = new WallView(this.scene, asset, this.sim, applyNorthFog); for (const m of [this.wv.outer, this.wv.inner, this.wv.core, this.wv.leaves, this.wv.steps]) this.shadowize(m); this.wallMesh.visible = false; if (this.kw) for (const k in this.kw) this.kw[k].visible = false;
     if (this.towerKit) for (const t of this.towerKit) t.scale.setScalar(1);
   }
   // ——— décor issu du kit (assets/world) : remplace les boîtes provisoires quand il est chargé ———
@@ -335,10 +387,11 @@ export class Renderer {
     this.kitWalls = true; this.put = put; if (this.wv) for (const k in this.kw) this.kw[k].visible = false;
     const tw = [mk('Tower1', 2), mk('Tower2', 6)]; let a = 0, b = 0;
     for (let i = 0; i <= SECTORS; i++) { const x = Math.min(W - 3, Math.max(3, i * SECTOR_W)); if (i === 0 || i === SECTORS) put(tw[0], a++, x, 146, 0, 1.15, 1.15, 1.15); else put(tw[1], b++, x, 146, 0, 1.1, 1.1, 1.1); }
-    tw[0].count = a; tw[1].count = b; for (const t of tw) t.instanceMatrix.needsUpdate = true;
+    tw[0].count = a; tw[1].count = b; for (const t of tw) { t.instanceMatrix.needsUpdate = true; this.shadowize(t); }
+    for (const k in this.kw) this.shadowize(this.kw[k]);
     // château (orientation : façade vers le sud, côté village)
     // château : +20 % (échelle 0,96) et pierre grise procédurale, à la place du blanc neige du kit
-    const castle = new THREE.Mesh(geo.Castle, stoneMaterial(0xb3b7bd)); castle.position.set(CASTLE.x, 0, CASTLE.z); castle.scale.setScalar(0.96); castle.rotation.y = Math.PI / 2; this.scene.add(castle); this.castleKit = castle;
+    const castle = new THREE.Mesh(geo.Castle, stoneMaterial(0xb3b7bd)); castle.position.set(CASTLE.x, 0, CASTLE.z); castle.scale.setScalar(0.96); castle.rotation.y = Math.PI / 2; this.scene.add(castle); this.castleKit = castle; this.shadowize(castle);
     this.struct.setKit(kit);   // maisons, tours, moulin, entrepôt, grenier : modèles du kit
     // monuments et décor du village
     const one = (name, x, z, ry, sc) => { const m = new THREE.Mesh(geo[name], kit.material); m.position.set(x, 0, z); m.rotation.y = ry; m.scale.setScalar(sc); this.scene.add(m); return m; };
@@ -514,6 +567,8 @@ export class Renderer {
       this.threat[s].material.opacity = o;
     }
     this.updateWall(); this.updateEconomy(alpha); this.updateSiege(alpha); this.struct.update(dtReal, this.clock);
+    this.updateAtmosphere(dtReal);
+    this.fx.setTorches(this.torchPos, sim.army.gate, this.clock);
     this.fx.frame(sim, dtReal);   // effets : lit l'état, ne le modifie pas
     this.renderer.render(this.scene, this.camera);
   }
