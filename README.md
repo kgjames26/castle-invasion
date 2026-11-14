@@ -63,3 +63,6 @@ Three.js (MIT, `lib/THREE_LICENSE`). Packs assetfactory archivés dans `assets/a
 
 ## Ancien jeu (v2)
 Sauvegardé dans `legacy/` (ressource de développement : animations, muraille, zombies, archers, villageois…) et intégralement dans la branche `claude/legacy-v2`. Voir `legacy/README.md`.
+
+## Décor du monde (kit)
+Le décor vient du pack « Low poly winter medieval castle and town pack » (assetfactory, licence Sketchfab Standard — voir `assets/world/LICENSE-NOTICE.md`), converti en kit compact par `tools/extract_kit.py` et chargé par `src/render/Kit.js` ; `Renderer.useKit()` remplace les boîtes provisoires : tronçons de muraille (4 variantes, porte à escalier), tours, château, **maisons de population** (une par maison construite, 5 modèles), moulin / entrepôt / grenier, église, puits, étals, petits objets, et **chariots** (un de plus par niveau de l'amélioration « Chariots »). Les bâtiments militaires restent des volumes simples provisoires. Sans le kit, le jeu retombe sur les boîtes.

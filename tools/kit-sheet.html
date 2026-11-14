@@ -1,0 +1,19 @@
+<!DOCTYPE html><meta charset="utf-8"><title>Planche du kit</title>
+<style>body{margin:0;background:#789} .l{position:absolute;color:#fff;font:11px sans-serif;background:#0008;padding:1px 3px;transform:translate(-50%,0)}</style>
+<script type="importmap">{ "imports": { "three": "../lib/three.module.min.js" } }</script>
+<div id="c"></div>
+<script type="module">
+import * as THREE from 'three'; import { loadKit } from '../src/render/Kit.js';
+const kit = await loadKit('../assets/world/'); const R = new THREE.WebGLRenderer({ antialias: true }); R.setSize(innerWidth, innerHeight); document.getElementById('c').appendChild(R.domElement);
+const S = new THREE.Scene(); S.background = new THREE.Color(0x8aa0b8); S.add(new THREE.HemisphereLight(0xffffff, 0x666655, 2.2)); const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(-30, 60, 40); S.add(sun);
+const groups = [['Wall', 'Tower', 'Castle', 'Church', 'Windmill'], ['House', 'Wagon', 'Market', 'Tent', 'Water'], ['Item']]; const which = +new URLSearchParams(location.search).get('g') || 0;
+const names = kit.names.filter(n => groups[which].some(p => n.startsWith(p)));
+const cols = Math.ceil(Math.sqrt(names.length * 1.4)); let max = 0; names.forEach(n => max = Math.max(max, Math.max(...kit.size[n].filter((_, i) => i != 1)), 0));
+const cell = Math.min(40, Math.max(...names.map(n => Math.max(kit.size[n][0], kit.size[n][2]))) * 1.15);
+if (new URLSearchParams(location.search).get('basic') == 2) { kit.material = new THREE.MeshLambertMaterial({ map: kit.material.map, side: THREE.DoubleSide }); } else if (new URLSearchParams(location.search).get('basic')) { kit.material = new THREE.MeshBasicMaterial({ map: kit.material.map, side: THREE.DoubleSide }); }
+const labels = []; names.forEach((n, i) => { const m = new THREE.Mesh(kit.geo[n], kit.material); const x = (i % cols) * cell, z = ((i / cols) | 0) * cell; m.position.set(x, 0, z); S.add(m); labels.push([n, new THREE.Vector3(x, 0, z + cell * 0.45)]); });
+const cx = (cols - 1) * cell / 2, rows = Math.ceil(names.length / cols), cz = (rows - 1) * cell / 2, span = Math.max(cols, rows) * cell;
+const cam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 2000); cam.position.set(cx + span * 0.25, span * 0.95, cz + span * 0.9); cam.lookAt(cx, 0, cz); R.render(S, cam);
+labels.forEach(([n, p]) => { const v = p.clone().project(cam); const d = document.createElement('div'); d.className = 'l'; d.textContent = n + ' ' + kit.size[n].map(x => x.toFixed(1)).join('×'); d.style.left = (v.x * .5 + .5) * innerWidth + 'px'; d.style.top = (-v.y * .5 + .5) * innerHeight + 'px'; document.body.appendChild(d); });
+document.title = 'ready';
+</script>

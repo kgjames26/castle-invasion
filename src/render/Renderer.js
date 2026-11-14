@@ -65,9 +65,10 @@ export class Renderer {
     this.scene.add(this.wallMesh);
     const tw = new THREE.InstancedMesh(new THREE.BoxGeometry(6, 8, 10), lam(0x8c8f96), SECTORS + 1);
     for (let i = 0; i <= SECTORS; i++) { this.dummy.position.set(Math.min(W - 3, Math.max(3, i * SECTOR_W)), 4, 146); this.dummy.scale.set(1, 1, 1); this.dummy.rotation.set(0, 0, 0); this.dummy.updateMatrix(); tw.setMatrixAt(i, this.dummy.matrix); }
-    this.scene.add(tw);
+    this.scene.add(tw); this.towers = tw;
   }
   updateWall() {
+    if (this.kitWalls) return this.updateKitWall();
     const wall = this.sim.wall, c = this.tmpColor;
     for (let i = 0; i < SEGS; i++) {
       const hpR = wall.hp[i] / wall.segMax(i), breached = wall.hp[i] <= 0;
@@ -84,7 +85,7 @@ export class Renderer {
     const g = new THREE.Group(), m = lam(0xa49d8e);
     const keep = new THREE.Mesh(new THREE.BoxGeometry(34, 16, 18), m); keep.position.set(CASTLE.x, 8, CASTLE.z); g.add(keep);
     for (const [dx, dz] of [[-19, -10], [19, -10], [-19, 10], [19, 10]]) { const t = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 5, 22, 8), lam(0x8d877b)); t.position.set(CASTLE.x + dx, 11, CASTLE.z + dz); g.add(t); }
-    this.scene.add(g);
+    this.scene.add(g); this.keepBoxes = g;
   }
   buildEconomy() {
     this.bMesh = {};
@@ -111,8 +112,9 @@ export class Renderer {
     const E = this.sim.eco, d = this.dummy;
     for (const id in this.bMesh) {
       const lv = E.level[id], { m, ghost } = this.bMesh[id];
-      m.visible = lv > 0; ghost.visible = lv === 0; m.scale.y = 1 + 0.12 * (lv - 1);
+      m.visible = lv > 0 && !this.bMesh[id].kit; ghost.visible = lv === 0; m.scale.y = 1 + 0.12 * (lv - 1);
     }
+    if (this.kit) this.updateKitEconomy();
     const vs = E.villagers, VS = 2.8; this.vMesh.count = vs.length; let nc = 0;
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], x = v.px + (v.x - v.px) * alpha, z = v.pz + (v.z - v.pz) * alpha;
@@ -182,6 +184,62 @@ export class Renderer {
       m.rotation.x = -Math.PI / 2; m.position.set(s * SECTOR_W + SECTOR_W / 2, 0.3, 136); this.scene.add(m); this.threat.push(m);
     }
   }
+  // ——— décor issu du kit (assets/world) : remplace les boîtes provisoires quand il est chargé ———
+  useKit(kit) {
+    this.kit = kit; const d = this.dummy, geo = kit.geo;
+    const mk = (name, cap) => { const im = new THREE.InstancedMesh(geo[name], kit.material, cap); im.frustumCulled = false; im.count = 0; this.scene.add(im); return im; };
+    const put = (im, i, x, z, ry, sx, sy, sz, y = 0) => { d.position.set(x, y, z); d.rotation.set(0, ry, 0); d.scale.set(sx, sy, sz); d.updateMatrix(); im.setMatrixAt(i, d.matrix); };
+    // muraille : variantes de tronçons (la porte utilise le tronçon à escalier), 5 m de long, épaisseur 6 m
+    this.wallMesh.visible = false; this.towers.visible = false; this.keepBoxes.visible = false;
+    this.kw = { Wall1: mk('Wall1', SEGS), Wall2: mk('Wall2', SEGS), Wall3: mk('Wall3', SEGS), Wall4: mk('Wall4', 4) };
+    this.kitWalls = true; this.put = put;
+    const tw = [mk('Tower1', 2), mk('Tower2', 6)]; let a = 0, b = 0;
+    for (let i = 0; i <= SECTORS; i++) { const x = Math.min(W - 3, Math.max(3, i * SECTOR_W)); if (i === 0 || i === SECTORS) put(tw[0], a++, x, 146, 0, 1.15, 1.15, 1.15); else put(tw[1], b++, x, 146, 0, 1.1, 1.1, 1.1); }
+    tw[0].count = a; tw[1].count = b; for (const t of tw) t.instanceMatrix.needsUpdate = true;
+    // château (orientation : façade vers le sud, côté village)
+    const castle = new THREE.Mesh(geo.Castle, kit.material); castle.position.set(CASTLE.x, 0, CASTLE.z); castle.scale.setScalar(0.8); this.scene.add(castle); this.castleKit = castle;
+    // maisons de population : une instance par maison construite
+    this.houseTypes = ['House1', 'House2', 'House3', 'House4', 'House5']; this.hm = this.houseTypes.map(n => mk(n, 64));
+    const slots = []; for (const z of [214, 224, 233]) for (let x = 14; x <= 186; x += 9.2) if (Math.abs(x - 100) > 9) slots.push({ x, z });
+    slots.sort((p, q) => (Math.abs(p.x - 100) + Math.abs(p.z - 224) * 1.4) - (Math.abs(q.x - 100) + Math.abs(q.z - 224) * 1.4));
+    this.houseSlots = slots.slice(0, 60).map((p, i) => ({ ...p, t: (i * 7 + ((i / 5) | 0)) % 5, ry: (((i * 37) % 11) - 5) * 0.03 })); this.houseShown = -1;
+    // monuments et décor du village
+    const one = (name, x, z, ry, sc) => { const m = new THREE.Mesh(geo[name], kit.material); m.position.set(x, 0, z); m.rotation.y = ry; m.scale.setScalar(sc); this.scene.add(m); return m; };
+    one('Church', 162, 292, -0.3, 1.0); one('Waterhole2', 80, 240, 0, 2.4); one('Waterhole1', 122, 238, 0, 2.4);
+    one('MarketStall1', 82, 280, 0.4, 1.8); one('MarketStall3', 88, 286, -0.3, 1.8); one('MarketStall2', 150, 276, 0.2, 1.5);
+    // chariots : un de plus par niveau de l'amélioration « Chariots » (transport)
+    this.wagons = [['Wagon3', 111, 277, 0.5], ['Wagon1', 119, 280, -0.4], ['Wagon2', 90, 276, 2.6]].map(([n, x, z, r], k) => { const m = one(n, x, z, r, 1.5); m.visible = false; return m; });
+    // petits objets autour des entrepôts (tonneaux, caisses, sacs, bancs)
+    const props = [['Item18', 128, 279], ['Item19', 130, 280.5], ['Item16', 140, 279], ['Item20', 142, 277.5], ['Item21', 138, 281], ['Item11', 60, 276], ['Item19', 70, 277], ['Item18', 72, 278.5], ['Item10', 44, 268], ['Item12', 36, 270], ['Item17', 34, 262], ['Item6', 56, 279], ['Item8', 64, 280]];
+    const pm = {}; for (const [n, x, z] of props) (pm[n] ||= []).push([x, z]);
+    for (const n in pm) { const im = mk(n, pm[n].length); pm[n].forEach(([x, z], i) => put(im, i, x, z, i * 1.7, 2.4, 2.4, 2.4)); im.count = pm[n].length; im.instanceMatrix.needsUpdate = true; }
+    // bâtiments d'économie à modèle : moulin, entrepôt, grenier
+    this.kitB = {};
+    for (const [id, name, sc] of [['mill', 'Windmill', 1.5], ['warehouse', 'House4', 1.15], ['granary', 'House5', 1.2]]) {
+      const B = BUILDINGS[id], m = new THREE.Mesh(geo[name], kit.material); m.position.set(B.pos.x, 0, B.pos.z); m.scale.setScalar(sc); m.visible = false; this.scene.add(m); this.kitB[id] = m; this.bMesh[id].m.visible = false; this.bMesh[id].kit = true;
+    }
+  }
+  updateKitWall() {
+    const wall = this.sim.wall, d = this.dummy, c = this.tmpColor, cnt = { Wall1: 0, Wall2: 0, Wall3: 0, Wall4: 0 };
+    for (let i = 0; i < SEGS; i++) {
+      const hpR = wall.hp[i] / wall.segMax(i), breached = wall.hp[i] <= 0, lvl = wall.level[wall.sectorOf(i)], gate = wall.isGate(i);
+      const type = gate ? 'Wall4' : ['Wall1', 'Wall2', 'Wall3'][i % 3], im = this.kw[type], k = cnt[type]++;
+      this.put(im, k, i * SEG_W + SEG_W / 2, 146, Math.PI / 2, 1.45, breached ? 0.28 : 1.12 + 0.03 * lvl, 0.64);
+      if (breached) c.setRGB(0.35, 0.25, 0.22); else { c.setRGB(1, 1, 1); c.lerp(this.tmpC2.setRGB(1, 0.35, 0.25), (1 - hpR) * 0.85); }
+      im.setColorAt(k, c);
+    }
+    for (const t in this.kw) { const im = this.kw[t]; im.count = cnt[t]; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
+  }
+  updateKitEconomy() {
+    const E = this.sim.eco;
+    if (E.houses !== this.houseShown) {
+      this.houseShown = E.houses; const n = Math.min(E.houses, this.houseSlots.length), cn = [0, 0, 0, 0, 0];
+      for (let i = 0; i < n; i++) { const h = this.houseSlots[i]; this.put(this.hm[h.t], cn[h.t]++, h.x, h.z, h.ry, 1, 1, 1); }
+      this.hm.forEach((im, t) => { im.count = cn[t]; im.instanceMatrix.needsUpdate = true; });
+    }
+    for (const id in this.kitB) { const lv = E.level[id]; this.kitB[id].visible = lv > 0; this.kitB[id].scale.y = this.kitB[id].scale.x * (1 + 0.06 * (lv - 1)); }
+    this.wagons.forEach((w, k) => { w.visible = E.up.carts > k; });
+  }
   setSquad(id) { this.selSquad = id || 0; }
   setTargeting(on) { this.targetMode = on; }
   setSelected(s) { this.selected = s; this.hl.visible = s >= 0; if (s >= 0) this.hl.position.set(s * SECTOR_W + SECTOR_W / 2, 0.2, 112); }
@@ -223,7 +281,7 @@ export class Renderer {
     // archers (sur le chemin de ronde)
     let ai = 0;
     for (let s = 0; s < SECTORS; s++) for (let k = 0; k < sim.army.archers[s].n; k++) {
-      const p = archerPos(s, k); d.position.set(p.x, 4, p.z); d.scale.set(USCALE * .7, USCALE * .9, USCALE * .7); d.rotation.set(0, 0, 0); d.updateMatrix(); this.aMesh.setMatrixAt(ai, d.matrix); this.tmpColor.setRGB(0.18, 0.68, 0.42); this.aMesh.setColorAt(ai, this.tmpColor); ai++;
+      const p = archerPos(s, k); d.position.set(p.x, this.kitWalls ? 4.9 : 4, p.z); d.scale.set(USCALE * .7, USCALE * .9, USCALE * .7); d.rotation.set(0, 0, 0); d.updateMatrix(); this.aMesh.setMatrixAt(ai, d.matrix); this.tmpColor.setRGB(0.18, 0.68, 0.42); this.aMesh.setColorAt(ai, this.tmpColor); ai++;
     }
     this.aMesh.count = ai; this.aMesh.instanceMatrix.needsUpdate = true; if (this.aMesh.instanceColor) this.aMesh.instanceColor.needsUpdate = true;
     // flèches

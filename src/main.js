@@ -3,6 +3,7 @@ import { TICK, SECTOR_W, WALL_Z0 } from './sim/constants.js';
 import { SQUAD } from './content/medieval.js';
 import { save, load, clearSave } from './sim/save.js';
 import { Renderer } from './render/Renderer.js';
+import { loadKit } from './render/Kit.js';
 import { CameraController } from './camera/CameraController.js';
 import { UI } from './ui/UI.js';
 
@@ -14,6 +15,7 @@ const sim = new Simulation();
 const resumed = load(sim);
 const view = document.getElementById('view');
 const rd = new Renderer(view, sim);
+loadKit().then(k => rd.useKit(k)).catch(e => console.warn('Décor du kit indisponible, géométrie provisoire conservée', e));
 let ui;
 const cam = new CameraController(rd.camera, rd.renderer.domElement, (x, z) => {
   if (ui.tab === 'army') {
