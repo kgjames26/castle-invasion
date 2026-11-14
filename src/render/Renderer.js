@@ -1,16 +1,18 @@
 // Rendu Three.js : lit l'état de la simulation, ne le modifie jamais. Géométrie provisoire (low-poly basique).
 import * as THREE from 'three';
-import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT } from '../sim/constants.js';
+import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT, PLAZA } from '../sim/constants.js';
 import { T } from '../sim/terrain.js';
 import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/medieval.js';
-import { archerPos, formationLayout } from '../sim/army.js';
+import { archerPos, formationLayout, archerPose, rallySlot } from '../sim/army.js';
 import { applyNorthFog } from './fog.js';
 import { StructureView } from './Structures.js';
+import { WallView } from './WallView.js';
 import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry } from './Troops.js';
 const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1]];      // variantes de modèle par type de zombie
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
 
 const lam = (color, opts = {}) => applyNorthFog(new THREE.MeshLambertMaterial({ color, flatShading: true, ...opts }));
+const ASC = 0.95;   // archers nettement plus petits (v1.1)
 const ZSCALE = 1.45, USCALE = 1.75;   // personnages à l'échelle des bâtiments (v3.1 : réduits d'environ 35 % pour éviter l'effet « maquette »)
 
 export class Renderer {
@@ -59,12 +61,17 @@ export class Renderer {
       g.restore();
     };
     g.fillStyle = '#6e6a63'; g.fillRect(0, X(WALL_Z0), W * k, X(WALL_Z1 - WALL_Z0));
-    flags(0, WALL_Z1, W, 203, [150, 144, 133], 0.8);
-    for (let i = 0; i < 420; i++) blob(r() * W, rr(WALL_Z1, 203), rr(2, 7), 'rgba(250,252,255,A)', rr(0.1, 0.32));       // neige poudrée sur les dalles
+    flags(0, WALL_Z1, W, 188, [150, 144, 133], 0.8);
+    for (let i = 0; i < 420; i++) blob(r() * W, rr(WALL_Z1, 188), rr(2, 7), 'rgba(250,252,255,A)', rr(0.1, 0.32));       // neige poudrée sur les dalles
     flags(0, 0, 0, 0, [170, 162, 148], 0.8, () => { g.beginPath(); g.ellipse(X(CASTLE.x), X(CASTLE.z), X(36), X(26), 0, 0, 7); g.clip(); });
     // ——— village : terre battue, herbe morte, neige par plaques ———
     for (let i = 0; i < 520; i++) blob(r() * W, rr(203, 292), rr(2, 8), r() < 0.62 ? 'rgba(158,124,82,A)' : 'rgba(255,255,255,A)', rr(0.12, 0.3));
     for (let i = 0; i < 700; i++) { const x = r() * W, z = rr(203, 296); g.strokeStyle = r() < 0.7 ? 'rgba(120,128,80,.55)' : 'rgba(150,140,90,.5)'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(X(x), X(z)); g.lineTo(X(x + rr(-.4, .4)), X(z - rr(.5, 1.4))); g.stroke(); }
+    // ——— placette (point de ralliement par défaut) : grandes dalles claires, bordure sombre, rosace centrale ———
+    g.fillStyle = '#8a8478'; g.fillRect(X(PLAZA.x - PLAZA.hw - 1), X(PLAZA.z - PLAZA.hd - 1), X(PLAZA.hw * 2 + 2), X(PLAZA.hd * 2 + 2));
+    flags(PLAZA.x - PLAZA.hw, PLAZA.z - PLAZA.hd, PLAZA.x + PLAZA.hw, PLAZA.z + PLAZA.hd, [214, 206, 190], 1.1);
+    g.strokeStyle = 'rgba(96,86,70,.8)'; g.lineWidth = 0.5 * k; g.beginPath(); g.arc(X(PLAZA.x), X(PLAZA.z), X(7), 0, 7); g.stroke(); g.beginPath(); g.arc(X(PLAZA.x), X(PLAZA.z), X(4), 0, 7); g.stroke();
+    g.fillStyle = 'rgba(170,40,30,.35)'; g.beginPath(); g.arc(X(PLAZA.x), X(PLAZA.z), X(2.2), 0, 7); g.fill();
     // ——— décalques de gisements et de sites ———
     blob(40, 255, 11, 'rgba(46,58,46,A)', 0.5); blob(160, 255, 11, 'rgba(120,122,126,A)', 0.6); blob(182, 236, 8, 'rgba(60,62,72,A)', 0.55); blob(18, 236, 8, 'rgba(70,64,56,A)', 0.5);
     for (let i = 0; i < 90; i++) { g.fillStyle = r() < 0.5 ? 'rgba(90,94,100,.7)' : 'rgba(160,160,164,.7)'; g.fillRect(X(160 + rr(-9, 9)), X(255 + rr(-9, 9)), rr(2, 6), rr(2, 5)); }
@@ -115,6 +122,7 @@ export class Renderer {
     this.scene.add(tw); this.towers = tw;
   }
   updateWall() {
+    if (this.wv) return this.wv.update();
     if (this.kitWalls) return this.updateKitWall();
     const wall = this.sim.wall, c = this.tmpColor;
     for (let i = 0; i < SEGS; i++) {
@@ -269,6 +277,15 @@ export class Renderer {
         else { const arm = fight ? -1.1 + Math.sin(ph2) * 0.8 : -0.35 - 0.3 * mvs + 0.3 * Math.sin(ph + Math.PI) * mvs; rig.push(d.matrix, tint, [0, sw, -sw, arm]); }
       }
     }
+    for (const type of ['soldier', 'heavy', 'cavalry']) this.renderWalkers(alpha, type, (x, z, rot, mv, i) => {      // recrues en marche vers la placette / à l'attente
+      const rig = R[type], sc = SCALE[type], ph = t * 9 + i * 1.7, sw = Math.sin(ph) * 0.75 * (mv ? 1 : 0); tint.setRGB(1, 1, 1);
+      d.position.set(x, mv ? Math.abs(Math.sin(ph)) * 0.06 : 0, z); d.scale.set(sc, sc, sc); d.rotation.set(0, rot, 0); d.updateMatrix();
+      if (type === 'cavalry') {
+        if (hh) { const hg = hh.hg, clip = mv ? 'walk' : 'idle', [c0, cn] = hg.clips[clip], fr = ((t * (mv ? 1 : 0.4) + i * 0.173) % 1 + 1) % 1, an = c0 + fr * cn, skin = hg.skins[(i * 3 + 1) % hg.skins.length], im = hh.meshes[skin], n = hh.cnt[skin]++;
+          if (n < 120) { im.setMatrixAt(n, d.matrix); im.anim.array[n] = an; im.setColorAt(n, tint); } this._hm.multiplyMatrices(d.matrix, hg.seat[Math.floor(an)]).multiply(this._rs); rig.push(this._hm, tint, [0, 0.35]); }
+        else rig.push(d.matrix, tint, [0, 0.35]);
+      } else rig.push(d.matrix, tint, [0, sw, -sw, -0.35 - 0.3 * (mv ? 1 : 0) + 0.3 * Math.sin(ph + Math.PI) * (mv ? 1 : 0)]);
+    });
     R.soldier.end(); R.heavy.end(); R.cavalry.end();
     if (hh) for (const k of hh.hg.skins) { const im = hh.meshes[k]; im.count = Math.min(120, hh.cnt[k]); im.instanceMatrix.needsUpdate = true; im.anim.needsUpdate = true; im.instanceColor.needsUpdate = true; }
   }
@@ -299,6 +316,11 @@ export class Renderer {
       m.rotation.x = -Math.PI / 2; m.position.set(s * SECTOR_W + SECTOR_W / 2, 0.3, 136); this.scene.add(m); this.threat.push(m);
     }
   }
+  // ——— muraille GLB (assets/wall) : remplace la muraille provisoire / du kit, ajoute escaliers et porte à deux battants ———
+  useWall(asset) {
+    this.wv = new WallView(this.scene, asset, this.sim, applyNorthFog); this.wallMesh.visible = false; if (this.kw) for (const k in this.kw) this.kw[k].visible = false;
+    if (this.towerKit) for (const t of this.towerKit) t.scale.setScalar(1);
+  }
   // ——— décor issu du kit (assets/world) : remplace les boîtes provisoires quand il est chargé ———
   useKit(kit) {
     this.kit = kit; const d = this.dummy, geo = kit.geo;
@@ -307,7 +329,7 @@ export class Renderer {
     // muraille : variantes de tronçons (la porte utilise le tronçon à escalier), 5 m de long, épaisseur 6 m
     this.wallMesh.visible = false; this.towers.visible = false; this.keepBoxes.visible = false;
     this.kw = { Wall1: mk('Wall1', SEGS), Wall2: mk('Wall2', SEGS), Wall3: mk('Wall3', SEGS), Wall4: mk('Wall4', 4) };
-    this.kitWalls = true; this.put = put;
+    this.kitWalls = true; this.put = put; if (this.wv) for (const k in this.kw) this.kw[k].visible = false;
     const tw = [mk('Tower1', 2), mk('Tower2', 6)]; let a = 0, b = 0;
     for (let i = 0; i <= SECTORS; i++) { const x = Math.min(W - 3, Math.max(3, i * SECTOR_W)); if (i === 0 || i === SECTORS) put(tw[0], a++, x, 146, 0, 1.15, 1.15, 1.15); else put(tw[1], b++, x, 146, 0, 1.1, 1.1, 1.1); }
     tw[0].count = a; tw[1].count = b; for (const t of tw) t.instanceMatrix.needsUpdate = true;
@@ -339,7 +361,7 @@ export class Renderer {
     });
     this.zvCount = new Int32Array(this.zv.length); this.zMesh.visible = false;
     this.zTint = ZOMBIES.map(z => new THREE.Color(0xffffff).lerp(new THREE.Color(z.color), 0.4));
-    const mk = geo => { const im = new THREE.InstancedMesh(geo, ch.archerMat, SECTORS * ARCHER_SLOTS + 4); im.frustumCulled = false; im.count = 0; this.scene.add(im); return im; };
+    const mk = geo => { const im = new THREE.InstancedMesh(geo, ch.archerMat, SECTORS * ARCHER_SLOTS + 150); im.frustumCulled = false; im.count = 0; this.scene.add(im); return im; };
     this.ab = mk(ch.archer.body); this.abow = mk(ch.archer.bow); this.aMesh.visible = false;
     this.vMesh.geometry = ch.villagerGeo; this.vMesh.material = ch.villagerMat;
     if (ch.villager) this.useVillagerGLB(ch.villager);
@@ -411,13 +433,24 @@ export class Renderer {
     }
     this.zv.forEach((im, v) => { im.count = cnt[v]; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.anim.needsUpdate = true; });
   }
-  renderArchers() {
-    const sim = this.sim, d = this.dummy; let ai = 0;
-    for (let s = 0; s < SECTORS; s++) for (let k = 0; k < sim.army.archers[s].n; k++) {
-      const p = archerPos(s, k), a = sim.siege ? 0 : 0; d.position.set(p.x, this.kitWalls ? 4.9 : 4, p.z); d.scale.set(1.55, 1.55, 1.55); d.rotation.set(0, Math.PI, 0); d.updateMatrix();
+  renderArchers(alpha) {
+    const sim = this.sim, d = this.dummy, W = sim.army.walkers; let ai = 0, k = 0; const slot = { x: 0, z: 0 };
+    for (let s = 0; s < SECTORS; s++) { const A = sim.army.archers[s]; for (k = 0; k < A.n; k++) {
+      const p = archerPose(s, k, A.prog[k]), moving = A.prog[k] < 1e8, bob = moving ? Math.abs(Math.sin(this.clock * 9 + k)) * 0.08 : 0;
+      d.position.set(p.x, p.y + bob, p.z); d.scale.set(ASC, ASC, ASC); d.rotation.set(0, p.rot, 0); d.updateMatrix();
       this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); ai++;
-    }
+    } }
+    this.renderWalkers(alpha, 'archer', (x, z, rot, mv) => { d.position.set(x, mv ? Math.abs(Math.sin(this.clock * 9 + ai)) * 0.08 : 0, z); d.scale.set(ASC, ASC, ASC); d.rotation.set(0, rot, 0); d.updateMatrix(); this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); ai++; });
     this.ab.count = this.abow.count = ai; this.ab.instanceMatrix.needsUpdate = this.abow.instanceMatrix.needsUpdate = true;
+  }
+  // recrues : chaque unité créée marche de son bâtiment au point de ralliement ; draw(x, z, rotY, enMarche, indexDansLaListe)
+  renderWalkers(alpha, only, draw) {
+    const W = this.sim.army.walkers; let shown = 0;
+    for (let i = 0; i < W.length && shown < 140; i++) {
+      const w = W[i]; if (w.type !== only) continue;
+      const x = w.px + (w.x - w.px) * alpha, z = w.pz + (w.z - w.pz) * alpha, dx = w.x - w.px, dz = w.z - w.pz, mv = dx * dx + dz * dz > 1e-5;
+      w.rot = mv ? Math.atan2(dx, dz) : (w.rot ?? Math.PI); draw(x, z, w.rot, mv, i); shown++;
+    }
   }
   // point du monde → pixels écran (pour les bulles d'interface ancrées sur la carte)
   project(x, y, z) { const v = this._pv || (this._pv = new THREE.Vector3()); v.set(x, y, z).project(this.camera); const r = this.renderer.domElement.getBoundingClientRect(); return { x: (v.x * 0.5 + 0.5) * r.width + r.left, y: (-v.y * 0.5 + 0.5) * r.height + r.top, vis: v.z > -1 && v.z < 1 }; }
@@ -449,7 +482,13 @@ export class Renderer {
       this.mark.visible = sq.mode === 'field'; this.mark.position.set(sq.tx, 0.35, sq.tz); const pu = 1 + 0.12 * Math.sin(this.clock * 6); this.mark.scale.set(pu, pu, pu);
     } else this.mark.visible = false;
     this.targeting.visible = this.targetMode;
-    if (this.ab) this.renderArchers(); else {
+    if (!this.rallyG) {                                                         // fanion du point de ralliement
+      const g = new THREE.Group(), pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 5, 6), lam(0x4a3320)); pole.position.y = 2.5; g.add(pole);
+      const flag = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.3, 0.08), lam(0xd23a2a)); flag.position.set(1.1, 4.3, 0); g.add(flag); const ring = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.4, 28), new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false })); ring.rotation.x = -Math.PI / 2; ring.position.y = 0.2; g.add(ring);
+      this.rallyG = g; this.rallyFlag = flag; this.scene.add(g);
+    }
+    this.rallyG.position.set(sim.army.rally.x, 0, sim.army.rally.z - 4.5); this.rallyFlag.rotation.y = 0.25 * Math.sin(this.clock * 3);
+    if (this.ab) this.renderArchers(alpha); else {
     // archers (sur le chemin de ronde)
     let ai = 0;
     for (let s = 0; s < SECTORS; s++) for (let k = 0; k < sim.army.archers[s].n; k++) {
@@ -460,7 +499,7 @@ export class Renderer {
     // flèches
     const ar = sim.arrows; this.arMesh.count = Math.min(ar.length, 256);
     for (let i = 0; i < this.arMesh.count; i++) {
-      const a = ar[i], f = Math.min(1, a.t / 0.3), x = a.x0 + (a.x1 - a.x0) * f, z = a.z0 + (a.z1 - a.z0) * f, y = (a.h || 4.5) * (1 - f) + 1 + 3 * Math.sin(Math.PI * f);
+      const a = ar[i], f = Math.min(1, a.t / 0.3), x = a.x0 + (a.x1 - a.x0) * f, z = a.z0 + (a.z1 - a.z0) * f, y = (a.h || 6.4) * (1 - f) + 1 + 3 * Math.sin(Math.PI * f);
       d.position.set(x, y, z); d.scale.set(1, 1, 1); d.rotation.set(0, Math.atan2(a.x1 - a.x0, a.z1 - a.z0), 0); d.updateMatrix(); this.arMesh.setMatrixAt(i, d.matrix); this.tmpColor.setRGB(1, 0.95, 0.7); this.arMesh.setColorAt(i, this.tmpColor);
     }
     this.arMesh.instanceMatrix.needsUpdate = true; if (this.arMesh.instanceColor) this.arMesh.instanceColor.needsUpdate = true;

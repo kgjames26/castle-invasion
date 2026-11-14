@@ -3,9 +3,11 @@ import { TICK } from './sim/constants.js';
 import { save, load, clearSave } from './sim/save.js';
 import { Renderer } from './render/Renderer.js';
 import { loadKit } from './render/Kit.js';
+import { loadWall } from './render/WallView.js';
 import { loadCharacters } from './render/Characters.js';
 import { CameraController } from './camera/CameraController.js';
 import { UI } from './ui/UI.js';
+import { VERSION } from './version.js';
 
 // L'ancien jeu (v2) installait un service worker : on le retire pour ne jamais servir l'ancien code en cache.
 if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
@@ -17,6 +19,7 @@ const view = document.getElementById('view');
 const rd = new Renderer(view, sim);
 loadCharacters().then(c => rd.useCharacters(c)).catch(e => console.warn('Personnages indisponibles, géométrie provisoire conservée', e));
 loadKit().then(k => rd.useKit(k)).catch(e => console.warn('Décor du kit indisponible, géométrie provisoire conservée', e));
+loadWall('assets/wall/dungeon_wall.glb').then(w => rd.useWall(w)).catch(e => console.warn('Muraille GLB indisponible, muraille provisoire conservée', e));
 let ui;
 const cam = new CameraController(rd.camera, rd.renderer.domElement, (x, z) => ui.onMapTap(x, z));
 const hooks = {
@@ -24,6 +27,7 @@ const hooks = {
   newGame: () => { clearSave(); sim.newGame(); ui.sel = -1; ui.cancelPlace(); ui.closeCard(); ui.closeSheet(); ui.showOver(false); ui.refresh(true); save(sim); },
 };
 ui = new UI(sim, hooks);
+{ const v = document.createElement('div'); v.className = 'vtag'; v.textContent = 'v' + VERSION; document.getElementById('app').appendChild(v); const sp = document.getElementById('splash'); document.getElementById('sp-v').textContent = 'v' + VERSION; setTimeout(() => sp.classList.add('off'), 1800); setTimeout(() => sp.remove(), 2700); }
 cam.setView({ tx: 100, tz: innerHeight > innerWidth ? 262 : 278, zoom: innerHeight > innerWidth ? 0.7 : 0.42 });   // vue de départ : la cour du château, pas le champ de bataille
 function onResize() { const r = view.getBoundingClientRect(); rd.resize(Math.max(1, r.width), Math.max(1, r.height)); cam.fit(r.width, r.height); }
 new ResizeObserver(onResize).observe(view); onResize();

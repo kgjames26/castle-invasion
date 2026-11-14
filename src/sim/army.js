@@ -1,10 +1,25 @@
 // Armée : réserve, archers de garnison (chemin de ronde), ESCOUADES avec formations (garnison ou sortie sur le champ de bataille),
 // files d'entraînement. Les escouades agissent comme une seule entité : points de vie en réserve commune, membres dessinés par formation.
-import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_X, WALL_Z0, WALL_Z1 } from './constants.js';
+import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_X, WALL_Z0, WALL_Z1, WALK_H, PLAZA } from './constants.js';
 import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN } from '../content/medieval.js';
 
 const tmp = new Int32Array(1024), tmp2 = new Int32Array(1024);
 export const archerPos = (s, k) => ({ x: s * SECTOR_W + ((k >> 1) + 0.5) * SECTOR_W / (ARCHER_SLOTS / 2), z: ARCHER_Z + (k & 1) * 2.4 - 1.2 });
+// ——— archers : montée par l'escalier le plus proche, puis marche sur le chemin de ronde jusqu'à leur créneau ———
+export const STAIR_Z0 = 159, STAIR_Z1 = 150.2, ARCHER_SPEED = 5;
+export const stairX = (s, k) => s * SECTOR_W + (archerPos(s, k).x < s * SECTOR_W + SECTOR_W / 2 ? 8 : 32);
+const _ap = { x: 0, z: 0, y: 0, rot: Math.PI, len: 0 };
+// position de l'archer k du secteur s après avoir parcouru `prog` mètres (au-delà de la longueur : à son créneau, face au nord)
+export function archerPose(s, k, prog) {
+  const p = archerPos(s, k), sx = stairX(s, k), l1 = Math.hypot(STAIR_Z0 - STAIR_Z1, WALK_H), l2 = Math.abs(p.z - STAIR_Z1), l3 = Math.abs(p.x - sx), len = l1 + l2 + l3; _ap.len = len;
+  if (prog >= len) { _ap.x = p.x; _ap.z = p.z; _ap.y = WALK_H; _ap.rot = Math.PI; return _ap; }
+  if (prog < l1) { const f = prog / l1; _ap.x = sx; _ap.z = STAIR_Z0 + (STAIR_Z1 - STAIR_Z0) * f; _ap.y = WALK_H * f; _ap.rot = Math.PI; }
+  else if (prog < l1 + l2) { const f = (prog - l1) / l2; _ap.x = sx; _ap.z = STAIR_Z1 + (p.z - STAIR_Z1) * f; _ap.y = WALK_H; _ap.rot = p.z >= STAIR_Z1 ? 0 : Math.PI; }
+  else { const f = (prog - l1 - l2) / l3; _ap.x = sx + (p.x - sx) * f; _ap.z = p.z; _ap.y = WALK_H; _ap.rot = p.x > sx ? Math.PI / 2 : -Math.PI / 2; }
+  return _ap;
+}
+// emplacement d'attente de la i-ème recrue autour du point de ralliement
+export function rallySlot(r, i, out) { const col = i % 10, row = (i / 10) | 0; out.x = Math.min(196, Math.max(4, r.x + (col - 4.5) * 2.4)); out.z = r.z + row * 2.4 - 2; return out; }
 export const TRAIN_BUILDINGS = ['barracks', 'stable', 'range'];
 
 // ——— formations : décalages des membres autour du centre (z négatif = devant, vers le nord) ———
@@ -28,7 +43,8 @@ export function formationLayout(form, n, size = 1) {
 export class Army {
   constructor() {
     this.reserve = { archer: 0, soldier: 0, heavy: 0, cavalry: 0 };
-    this.archers = Array.from({ length: SECTORS }, () => ({ n: 0, cd: new Float32Array(ARCHER_SLOTS) }));
+    this.archers = Array.from({ length: SECTORS }, () => ({ n: 0, cd: new Float32Array(ARCHER_SLOTS), prog: new Float32Array(ARCHER_SLOTS).fill(1e9) }));
+    this.rally = { x: PLAZA.x, z: PLAZA.z }; this.walkers = []; this.gate = 0; this.gateT = 0; this.gateReq = 0;
     this.squads = []; this.nextId = 1; this.outside = [];
     this.queues = { barracks: [], stable: [], range: [] };
   }
@@ -46,7 +62,7 @@ export class Army {
     let moved = 0;
     for (let k = 0; k < Math.abs(delta); k++) {
       const a = this.archers[s];
-      if (delta > 0) { if (this.reserve.archer <= 0 || a.n >= ARCHER_SLOTS) break; this.reserve.archer--; a.cd[a.n] = Math.random() * 0.8; a.n++; moved++; }
+      if (delta > 0) { if (this.reserve.archer <= 0 || a.n >= ARCHER_SLOTS) break; this.reserve.archer--; a.cd[a.n] = Math.random() * 0.8; a.prog[a.n] = 0; a.n++; moved++; }
       else { if (a.n <= 0) break; a.n--; this.reserve.archer++; moved++; }
     }
     return moved;
@@ -73,6 +89,27 @@ export class Army {
   // la file attend tant que le bâtiment est bloqué (déplacé) ou en cours de construction
   trainTick(dt, sim) {
     for (const b of TRAIN_BUILDINGS) { const q = this.queues[b]; if (!q.length || sim.eco.level[b] < 1) continue; q[0].t -= dt; if (q[0].t <= 0) { this.reserve[q[0].type]++; q.shift(); } }
+  }
+  // ——— recrues : chaque unité créée sort de son bâtiment et marche jusqu'au point de ralliement (placette par défaut) ———
+  setRally(x, z) { this.rally.x = Math.min(196, Math.max(4, x)); this.rally.z = Math.min(310, Math.max(WALL_Z1 + 8, z)); }
+  syncWalkers(sim) {
+    const W = this.walkers, slot = { x: 0, z: 0 };
+    for (const t of Object.keys(this.reserve)) {
+      let have = 0; for (const w of W) if (w.type === t) have++;
+      const want = this.reserve[t];
+      for (; have < want; have++) { const b = sim.build.items.find(s => s.type === UNITS[t].from && s.state !== 'site'); W.push({ type: t, x: b ? b.x : PLAZA.x, z: b ? b.z + 3 : PLAZA.z, px: 0, pz: 0, tx: 0, tz: 0 }); const w = W[W.length - 1]; w.px = w.x; w.pz = w.z; }
+      for (; have > want; have--) { for (let i = W.length - 1; i >= 0; i--) if (W[i].type === t) { W.splice(i, 1); break; } }
+    }
+    const dt = 1 / 20;
+    for (let i = 0; i < W.length; i++) {
+      const w = W[i]; rallySlot(this.rally, i, slot); w.px = w.x; w.pz = w.z; w.tx = slot.x; w.tz = slot.z;
+      const dx = w.tx - w.x, dz = w.tz - w.z, d = Math.hypot(dx, dz); if (d > 0.05) { const st = Math.min(d, 6 * dt); w.x += dx / d * st; w.z += dz / d * st; }
+    }
+  }
+  // portes de la muraille : s'ouvrent quand une escouade doit passer, se referment ensuite
+  updateGate(dt) {
+    if (this.gateReq) this.gateT = 1.5; else this.gateT -= dt; this.gateReq = 0;
+    const target = this.gateT > 0 ? 1 : 0; this.gate += Math.sign(target - this.gate) * Math.min(Math.abs(target - this.gate), dt * 0.9);
   }
   // ——— escouades ———
   unitHp(type) { return UNITS[type].hp; }
@@ -119,12 +156,13 @@ export class Army {
   // ——— tick ———
   update(dt, sim) {
     const Z = sim.zombies, hash = sim.hash, eco = sim.eco, w = eco.up.weapons, ar = eco.up.archery;
-    this.trainTick(dt, sim);
+    this.trainTick(dt, sim); this.syncWalkers(sim); this.updateGate(dt);
     // archers
     const AU = UNITS.archer, range = AU.range + 3 * ar, adm = AU.dmg * (1 + 0.1 * w) * (1 + 0.1 * ar);
     for (let s = 0; s < SECTORS; s++) {
       const a = this.archers[s];
       for (let k = 0; k < a.n; k++) {
+        if (a.prog[k] < 1e8) { const len = archerPose(s, k, a.prog[k]).len; a.prog[k] += ARCHER_SPEED * dt; if (a.prog[k] >= len) a.prog[k] = 1e9; continue; }   // encore en train de monter
         a.cd[k] -= dt; if (a.cd[k] > 0) continue;
         const p = archerPos(s, k), m = hash.query(p.x, p.z, range, Z.x, Z.z, tmp);
         let best = -1, bd = Infinity;
@@ -150,8 +188,11 @@ export class Army {
     const speed = U.speed * F.speed;
     let moving = false;
     const step = (tx, tz) => { const dx = tx - q.x, dz = tz - q.z, d = Math.hypot(dx, dz); if (d < 0.05) return true; const st = Math.min(d, speed * dt); q.x += dx / d * st; q.z += dz / d * st; moving = true; return d <= st + 0.01; };
-    // ordre explicite : suivre le trajet (porte comprise)
-    if (q.way.length) { if (step(q.way[0].x, q.way[0].z)) q.way.shift(); }
+    // ordre explicite : suivre le trajet ; devant la porte, on attend qu'elle soit ouverte
+    const gw = q.way[0], viaGate = gw && gw.x === GATE_X && (gw.z === WALL_Z0 - 4 || gw.z === GARRISON_Z);
+    if (viaGate) this.gateReq = 1;
+    if (Math.abs(q.x - GATE_X) < q.rad + 8 && q.z > WALL_Z0 - 9 && q.z < WALL_Z1 + 9) this.gateReq = 1;       // encore dans le passage : on garde la porte ouverte
+    if (q.way.length) { const wait = viaGate && this.gate < 0.7 && Math.abs(q.z - 146) < 22 && Math.abs(q.z - 146) > 5; if (!wait && step(q.way[0].x, q.way[0].z)) q.way.shift(); }
     // cibles à portée de coups
     const reach = rad + (U.reach || 2) + 0.6, m = hash.query(q.x, q.z, reach, Z.x, Z.z, tmp);
     let live = 0; for (let k = 0; k < m; k++) if (Z.hp[tmp[k]] > 0) tmp[live++] = tmp[k];
@@ -184,14 +225,15 @@ export class Army {
   // ——— sauvegarde ———
   serialize() {
     return {
-      reserve: { ...this.reserve }, archers: this.archers.map(a => a.n), nextId: this.nextId,
+      reserve: { ...this.reserve }, archers: this.archers.map(a => a.n), nextId: this.nextId, rally: { ...this.rally },
       squads: this.squads.map(q => ({ id: q.id, type: q.type, n: q.n, hp: Math.round(q.hp), form: q.form, mode: q.mode, sector: q.sector, x: +q.x.toFixed(2), z: +q.z.toFixed(2), tx: q.tx, tz: q.tz, stance: q.stance })),
       queues: Object.fromEntries(TRAIN_BUILDINGS.map(b => [b, this.queues[b].map(i => ({ type: i.type, t: +i.t.toFixed(2), full: i.full }))])),
     };
   }
   restore(st) {
     Object.assign(this.reserve, st.reserve); this.nextId = st.nextId || 1;
-    for (let s = 0; s < SECTORS; s++) { this.archers[s].n = st.archers[s]; this.archers[s].cd.fill(0.3); }
+    for (let s = 0; s < SECTORS; s++) { this.archers[s].n = st.archers[s]; this.archers[s].cd.fill(0.3); this.archers[s].prog.fill(1e9); }
+    if (st.rally) { this.rally.x = st.rally.x; this.rally.z = st.rally.z; } this.walkers = [];
     this.squads = [];
     for (const o of st.squads) { const q = this.formSquadRaw(o); this.squads.push(q); }
     this.layoutPosts();

@@ -114,3 +114,10 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Personnages réduits d'environ 35 % par rapport aux bâtiments : zombies `ZSCALE` 1.45, archers 1.55, `USCALE` 1.75, soldats 1.6 / lourds 1.8 / cavaliers 1.35, machines de siège ×0.72, villageois GLB `SC` 0.0105 (≈ 2 m).
 - Caméra : inclinaison 58° → 42° (vue plus rasante), champ de vision 50° → 58°, zoom minimum 0.1 → 0.05, vue de départ plus proche du château.
 - Dalles de la cour et pavés du château deux fois plus petits (repères d'échelle).
+
+## Phase 13 — v1.1 : version affichée, muraille GLB, porte à battants, ralliement
+- **Version** : `src/version.js` (affichée sur l'écran de lancement, en bas à gauche du jeu et dans ☰ Paramètres). Elle monte toute seule à chaque commit (`.githooks/pre-commit` → `tools/bump-version.mjs`) ; activer le hook avec `git config core.hooksPath .githooks`.
+- **Muraille** : panneaux de `assets/wall/dungeon_wall.glb` (façade extérieure ~6,4 m + parement intérieur) autour d'un cœur dont le dessus est le chemin de ronde (`WallView.js`). **Escaliers** (2 par secteur) : les archers assignés montent à pied jusqu'à leur créneau et ne tirent qu'une fois arrivés. **Porte centrale** : deux battants (même panneau) pivotent vers l'intérieur quand une escouade doit passer ; l'escouade attend que la porte soit ouverte.
+- **Archers** nettement plus petits (`ASC` = 0,95).
+- **Recrues** : chaque unité entraînée sort de son bâtiment et marche jusqu'à la placette (par défaut) ou jusqu'au point choisi via Armée → 📍 Point de ralliement.
+- **Disposition (nord → sud)** : armée en formation sur le champ de bataille · muraille (z 142-150) · armée de garnison (z 160-185) · placette (z 188-208) · village (constructible à partir de z 212). Casernes, écurie, champ de tir, forge et atelier déplacés dans le village.

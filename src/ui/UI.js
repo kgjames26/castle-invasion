@@ -11,7 +11,8 @@ const fmt = n => Math.floor(n).toString();
 const TASK_ORDER = ['wood', 'stone', 'iron', 'gold', 'food'];
 const TB = { sawmill: ['wood'], quarry: ['stone'], mine: ['iron', 'gold'], farm: ['food'] };       // bâtiment → tâches de récolte
 const GROUPS = [['Économie', ['sawmill', 'quarry', 'mine', 'farm', 'mill', 'granary', 'warehouse', 'house']], ['Armée', ['barracks', 'range', 'stable', 'workshop', 'forge']], ['Défense', ['tower']]];
-const SHEETS = { build: '⚒ Bâtir', army: '🛡 Armée', folk: '👥 Villageois', tech: '📜 Savoir' };
+import { VERSION } from '../version.js';
+const SHEETS = { build: '⚒ Bâtir', army: '🛡 Armée', folk: '👥 Villageois', tech: '📜 Savoir' }, MENU_TITLE = '⚙ Paramètres';
 const snap = v => Math.round(v * 2) / 2;
 
 export class UI {
@@ -32,7 +33,7 @@ export class UI {
     }
     $('#b-skip').addEventListener('click', () => sim.skipPrep());
     $('#b-speed').addEventListener('click', e => { sim.speed = sim.speed === 1 ? 2 : sim.speed === 2 ? 4 : sim.speed === 4 ? 0 : 1; e.currentTarget.textContent = sim.speed ? '×' + sim.speed : '⏸'; });
-    $('#b-menu').addEventListener('click', () => { if (confirm('Commencer une nouvelle partie ? La partie en cours sera perdue.')) hooks.newGame(); });
+    $('#b-menu').addEventListener('click', () => this.toggleSheet('menu'));
     $('#over-btn').addEventListener('click', () => hooks.newGame());
     this.dock.addEventListener('click', e => { const b = e.target.closest('[data-sheet]'); if (b) this.toggleSheet(b.dataset.sheet); });
     for (const el0 of [this.sheetEl, this.cardEl, this.placeEl]) {
@@ -48,7 +49,7 @@ export class UI {
   // ——— feuille ———
   toggleSheet(n) { if (this.sheet === n) this.closeSheet(); else this.openSheet(n); }
   openSheet(n, sub) { if (this.mode !== 'idle') this.cancelPlace(); this.closeCard(); this.sheet = n; if (sub) this.asub = sub; this.sheetEl.classList.add('on'); this.html.sheet = ''; this.refresh(true); }
-  closeSheet() { this.sheet = null; this.sheetEl.classList.remove('on'); this.setTargeting(false); this.refresh(true); }
+  closeSheet() { this.sheet = null; this.rallying = false; this.sheetEl.classList.remove('on'); this.setTargeting(false); this.refresh(true); }
   setTargeting(on) { this.targeting = on; this.rd.setTargeting(on); }
   pickSquad(id) { this.selSq = id; this.rd.setSquad(id); this.refresh(true); }
   // ——— bulle ancrée ———
@@ -63,6 +64,7 @@ export class UI {
   onMapTap(x, z) {
     const sim = this.sim;
     if (this.mode !== 'idle') { this.moveGhost(x, z); return; }
+    if (this.rallying) { sim.army.setRally(x, z); this.rallying = false; this.toast && this.toast('📍 Point de ralliement placé'); this.refresh(true); return; }
     if (this.targeting && this.selSq && z >= SQUAD.sortieZ[0] - 6 && z <= SQUAD.sortieZ[1] + 4) { sim.squadSortie(this.selSq, x, z); this.setTargeting(false); this.refresh(true); return; }
     const s = this.pickStruct(x, z);
     if (s) { this.openCard({ kind: 'struct', id: s.id }); return; }
@@ -129,6 +131,8 @@ export class UI {
     const [v, x, y] = a.split(':'), sim = this.sim, s = this.sel;
     switch (v) {
       case 'sheet': this.openSheet(x, y); break;
+      case 'newgame': if (confirm('Commencer une nouvelle partie ? La partie en cours sera perdue.')) { this.closeSheet(); this.hooks.newGame(); } break;
+      case 'rally': this.rallying = !this.rallying; if (this.rallying) { const r = this.sim.army.rally; this.cam.focusOn(r.x, r.z); } break;
       case 'close': this.card ? this.closeCard() : this.closeSheet(); break;
       case 'bld': this.startPlace(x); break;
       case 'go': { const t = sim.build.get(+x); if (t) { this.cam.focusOn(t.x, t.z); this.openCard({ kind: 'struct', id: t.id }); } break; }
@@ -203,10 +207,13 @@ export class UI {
   setHtml(key, el0, html) { if (this.html[key] === html) return; const keep = el0.scrollTop; this.html[key] = html; el0.innerHTML = html; el0.scrollTop = keep; }
   renderSheet() {
     if (!this.sheet) return;
-    const body = this.sheet === 'build' ? this.buildSheet() : this.sheet === 'army' ? this.armyHtml() : this.sheet === 'folk' ? this.workHtml() : this.techHtml();
-    const html = `<div class="sh"><h2>${SHEETS[this.sheet]}</h2><button class="x" data-a="close">✕</button></div><div class="sb">${body}</div>`;
+    const body = this.sheet === 'menu' ? this.menuHtml() : this.sheet === 'build' ? this.buildSheet() : this.sheet === 'army' ? this.armyHtml() : this.sheet === 'folk' ? this.workHtml() : this.techHtml();
+    const html = `<div class="sh"><h2>${this.sheet === 'menu' ? MENU_TITLE : SHEETS[this.sheet]}</h2><button class="x" data-a="close">✕</button></div><div class="sb">${body}</div>`;
     if (this.html.sheet === html) return;
     const old = $('.sb', this.sheetEl), keep = old ? old.scrollTop : 0; this.html.sheet = html; this.sheetEl.innerHTML = html; const nb = $('.sb', this.sheetEl); if (nb) nb.scrollTop = keep;
+  }
+  menuHtml() {
+    return `<div class="hint">Castle Invasion · <b>v${VERSION}</b></div><div class="row">${this.btn('🔄 Nouvelle partie', 'la partie en cours sera perdue', 'newgame', false, 'act warnb')}</div>`;
   }
   renderCard() {
     const c = this.card; if (!c) return;
@@ -327,8 +334,9 @@ export class UI {
   popLine() { const E = this.sim.eco; return `<div class="hint small">👥 Population <b>${E.population()}</b>/${E.popCap()} (villageois ${E.villagers.length} · armée ${this.sim.army.popUsed()})</div>`; }
   armyHtml() {
     const subs = [['squads', '🛡 Escouades'], ['train', '🪖 Entraîner'], ['siege', '🛠 Siège'], ['forge', '🔨 Forge']];
-    return `<div class="subtabs">${subs.map(([k, n]) => `<button data-a="asub:${k}" class="${this.asub === k ? 'on' : ''}">${n}</button>`).join('')}</div>${this.popLine()}` + (this.asub === 'squads' ? this.squadsHtml() : this.asub === 'train' ? this.trainHtml() : this.asub === 'siege' ? this.siegeHtml() : this.forgeHtml());
+    return `<div class="subtabs">${subs.map(([k, n]) => `<button data-a="asub:${k}" class="${this.asub === k ? 'on' : ''}">${n}</button>`).join('')}</div>${this.popLine()}${this.rallyLine()}` + (this.asub === 'squads' ? this.squadsHtml() : this.asub === 'train' ? this.trainHtml() : this.asub === 'siege' ? this.siegeHtml() : this.forgeHtml());
   }
+  rallyLine() { return `<div class="row">${this.btn(this.rallying ? '✖ Annuler' : '📍 Point de ralliement', this.rallying ? '' : 'par défaut : la placette', 'rally', false, this.rallying ? 'act warnb' : 'act')}${this.rallying ? '<div class="hint small">Touche la carte, dans la cour ou le village.</div>' : ''}</div>`; }
   squadsHtml() {
     const army = this.sim.army, q = army.squads.find(x => x.id === this.selSq);
     let h = '';

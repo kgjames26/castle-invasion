@@ -82,12 +82,12 @@ export const BUILDINGS = {   // group: 'eco' (onglet Village) ou 'army' (onglet 
 };
 // Bâtiments militaires (onglet Armée) : le niveau accélère l'entraînement (+25 %/niveau) et agrandit la file.
 export const ARMY_BUILDINGS = {
-  barracks: { time: 45, base: 0, name: 'Caserne',      ico: '🪖', group: 'army', start: 0, cost: { wood: 100, stone: 50 }, pos: { x: 38,  z: 180 }, size: [16, 5, 11], color: 0x8a4545, info: 'Fantassins · Lourds dès le niveau 2' },
-  stable:   { time: 45, base: 0, name: 'Écurie',       ico: '🐎', group: 'army', start: 0, cost: { wood: 120, stone: 40 }, pos: { x: 162, z: 180 }, size: [16, 5, 11], color: 0x7a5a3a, info: 'Cavaliers' },
-  range:    { time: 35, base: 0, name: 'Champ de tir', ico: '🎯', group: 'army', start: 0, cost: { wood: 90, stone: 30 },  pos: { x: 100, z: 176 }, size: [18, 3, 9],  color: 0x4a6f4a, info: 'Archers' },
-  forge:    { time: 50, base: 0, name: 'Forge',        ico: '🔨', group: 'army', start: 0, max: 1, cost: { wood: 80, stone: 80, iron: 40 }, pos: { x: 100, z: 195 }, size: [10, 6, 8], color: 0x5a4f58, info: 'Débloque les améliorations militaires' },
+  barracks: { time: 45, base: 0, name: 'Caserne',      ico: '🪖', group: 'army', start: 0, cost: { wood: 100, stone: 50 }, pos: { x: 36,  z: 224 }, size: [16, 5, 11], color: 0x8a4545, info: 'Fantassins · Lourds dès le niveau 2' },
+  stable:   { time: 45, base: 0, name: 'Écurie',       ico: '🐎', group: 'army', start: 0, cost: { wood: 120, stone: 40 }, pos: { x: 164, z: 224 }, size: [16, 5, 11], color: 0x7a5a3a, info: 'Cavaliers' },
+  range:    { time: 35, base: 0, name: 'Champ de tir', ico: '🎯', group: 'army', start: 0, cost: { wood: 90, stone: 30 },  pos: { x: 100, z: 224 }, size: [18, 3, 9],  color: 0x4a6f4a, info: 'Archers' },
+  forge:    { time: 50, base: 0, name: 'Forge',        ico: '🔨', group: 'army', start: 0, max: 1, cost: { wood: 80, stone: 80, iron: 40 }, pos: { x: 66, z: 236 }, size: [10, 6, 8], color: 0x5a4f58, info: 'Débloque les améliorations militaires' },
 };
-ARMY_BUILDINGS.workshop = { time: 55, base: 0, name: 'Atelier de siège', ico: '🛠', group: 'army', start: 0, max: 3, cost: { wood: 140, stone: 100, iron: 30 }, pos: { x: 150, z: 205 }, size: [14, 6, 10], color: 0x6a5a45, info: '2 armes déployables par niveau · Niv.1 baliste · Niv.2 catapulte · Niv.3 trébuchet' };
+ARMY_BUILDINGS.workshop = { time: 55, base: 0, name: 'Atelier de siège', ico: '🛠', group: 'army', start: 0, max: 3, cost: { wood: 140, stone: 100, iron: 30 }, pos: { x: 136, z: 236 }, size: [14, 6, 10], color: 0x6a5a45, info: '2 armes déployables par niveau · Niv.1 baliste · Niv.2 catapulte · Niv.3 trébuchet' };
 Object.assign(BUILDINGS, ARMY_BUILDINGS);
 // ——— Phase 6 : construction libre ———
 // Structures multiples (placées où l'on veut) : maisons et tours de défense. Les autres bâtiments existent en un seul exemplaire (niveaux).
@@ -97,7 +97,7 @@ export const MULTI = {
 };
 export const STRUCT = { ...BUILDINGS, ...MULTI };
 export const BUILD = {
-  minX: 5, maxX: 195, minZ: 176, towerMinZ: 154, maxZ: 312, gap: 1.2,
+  minX: 5, maxX: 195, minZ: 212, towerMinZ: 154, maxZ: 312, gap: 1.2,
   refund: 0.8, moveWork: 6, workerExp: 0.85, maxWorkers: 4, upgradeTime: 0.7,
   maxTowers: 14, houseCost: n => ({ wood: 40 + 4 * n, stone: 8 + 2 * n }), towerUpCost: lv => ({ wood: 50 * lv, stone: 90 * lv }),
   blockers: [{ x: 100, z: 298, r: 24 }, { x: 162, z: 292, r: 6.5 }],

@@ -99,3 +99,9 @@ h2,h3,.ptitle,.wave b,.tile b,.dk span { font-family:var(--serif); }
 #over { position:fixed; inset:0; background:#000a; display:none; align-items:center; justify-content:center; z-index:30; } #over.on { display:flex; }
 #over .box { background:var(--paper); border:1px solid var(--line); border-radius:18px; padding:22px 26px; text-align:center; box-shadow:var(--sh); } #over h2 { margin:0 0 8px; } #over .btn { margin-top:10px; width:100%; }
 @media (prefers-reduced-motion:reduce) { * { animation:none !important; transition:none !important; } }
+
+/* écran de lancement + version */
+#splash { position:absolute; inset:0; z-index:50; display:flex; align-items:center; justify-content:center; background:radial-gradient(circle at 50% 40%,#3b2a16,#17100a); color:#f3e3bf; transition:opacity .7s; text-align:center; }
+#splash.off { opacity:0; pointer-events:none; }
+#splash h1 { margin:0 0 8px; font-size:34px; letter-spacing:1px; } #splash .sp-v { margin:0; font-size:18px; opacity:.85; }
+.vtag { position:absolute; left:10px; bottom:calc(env(safe-area-inset-bottom) + 4px); z-index:3; font-size:11px; opacity:.55; color:#fff; text-shadow:0 1px 2px #000; pointer-events:none; }

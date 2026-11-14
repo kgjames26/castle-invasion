@@ -11,7 +11,9 @@ export const CASTLE = { x: 100, z: 298, r: 15, hp: 6000 };
 export const TICK = 1 / 20;                                      // simulation à 20 Hz
 export const MAX_Z = 4000;                                       // capacité d'agents zombies simulés
 export const ARCHER_SLOTS = 40;                                 // archers par secteur (2 rangées sur le chemin de ronde)
-export const ARCHER_Z = 146, GARRISON_Z = 156, GATE_X = 100;
+export const ARCHER_Z = 146, GARRISON_Z = 164, GATE_X = 100;     // disposition (nord → sud) : champ de bataille · muraille 142-150 · armée de garnison 160-185 · placette 188-208 · village
+export const WALK_H = 5.2;                                       // hauteur du chemin de ronde
+export const PLAZA = { x: 100, z: 198, hw: 28, hd: 10 };         // placette : point de ralliement par défaut des unités créées
 export const STORE_CAP = 600;
 export const sectorOfX = x => Math.max(0, Math.min(SECTORS - 1, (x / SECTOR_W) | 0));
 export const segOfX = x => Math.max(0, Math.min(SEGS - 1, (x / SEG_W) | 0));
