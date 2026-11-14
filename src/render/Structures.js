@@ -83,7 +83,7 @@ export class StructureView {
       // apparition du bâtiment terminé : petit rebond
       if (v.popT > 0) { v.popT += dt; const t = Math.min(1, v.popT / 0.7), sc = t < 1 ? 0.55 + 0.45 * ease(t) + 0.12 * Math.sin(t * Math.PI) : 1; v.inner.scale.set(sc, sc, sc); if (t >= 1) { v.popT = 0; v.inner.scale.set(1, 1, 1); } }
       // installations de niveau (scierie, carrière, mine, ferme… et bannières) : reconstruites quand le niveau change
-      if (v.model && v.lvl !== s.level && !s.fixed && s.type !== "house" && s.type !== "tower") { v.lvl = s.level; v.g.userData.sh = 0; if (v.extras) v.inner.remove(v.extras); v.extras = levelProps(s.type, s.level, v.hw, v.hd); v.inner.add(v.extras); if (v.lvl > 1) v.popT = 0.0001; }
+      if (v.model && v.lvl !== s.level && !s.fixed && s.type !== "house" && s.type !== "tower") { v.lvl = s.level; v.g.userData.sh = 0; if (v.extras) v.inner.remove(v.extras); v.extras = levelProps(s.type, s.level, v.hw, v.hd); v.inner.add(v.extras); if (s.type === 'mill') v.model.scale.setScalar(1 + 0.07 * (s.level - 1)); if (v.lvl > 1) v.popT = 0.0001; }   // le moulin grandit avec ses niveaux
       if (v.extras) v.extras.visible = !site;
       if (s.state === 'moving' && v.model) v.model.position.y = 0.15 * Math.sin(clock * 6);
       else if (v.model) v.model.position.y = 0;

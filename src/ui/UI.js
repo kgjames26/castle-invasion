@@ -2,8 +2,9 @@
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
 import { SECTORS, SECTOR_NAMES, SECTOR_SHORT, ARCHER_SLOTS, CASTLE } from '../sim/constants.js';
-import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, DIFFICULTY } from '../content/medieval.js';
+import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, DIFFICULTY, SMITH, INFIRMARY } from '../content/medieval.js';
 import { MAGE_TIERS } from '../render/Heroes.js';
+import { FORMATS, idealFormat } from '../render/config.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -11,7 +12,7 @@ const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls)
 const fmt = n => Math.floor(n).toString();
 const TASK_ORDER = ['wood', 'stone', 'iron', 'gold', 'food'];
 const TB = { sawmill: ['wood'], quarry: ['stone'], mine: ['iron', 'gold'], farm: ['food'] };       // bâtiment → tâches de récolte
-const GROUPS = [['Économie', ['sawmill', 'quarry', 'mine', 'farm', 'mill', 'granary', 'warehouse', 'house']], ['Armée', ['barracks', 'range', 'stable', 'workshop', 'forge', 'wizard']], ['Défense', ['tower']]];
+const GROUPS = [['Économie', ['sawmill', 'quarry', 'mine', 'farm', 'mill', 'granary', 'warehouse', 'university', 'house']], ['Armée', ['barracks', 'range', 'stable', 'workshop', 'forge', 'infirmary', 'wizard']], ['Défense', ['tower']]];
 import { VERSION } from '../version.js';
 // Réglages de l'interface : tutorial = astuces de premier lancement (aussi coupé par ?tuto=0) ; haptics = vibrations sur mobile.
 export const UI_FLAGS = { tutorial: !/[?&]tuto=0\b/.test(location.search), haptics: true };
@@ -42,7 +43,7 @@ export class UI {
     $('#b-skip').addEventListener('click', () => sim.skipPrep());
     $('#b-speed').addEventListener('click', e => { sim.speed = sim.speed === 1 ? 2 : sim.speed === 2 ? 4 : sim.speed === 4 ? 0 : 1; e.currentTarget.textContent = sim.speed ? '×' + sim.speed : '⏸'; });
     $('#b-menu').addEventListener('click', () => this.toggleSheet('menu'));
-    $('#over-btn').addEventListener('click', () => hooks.newGame());
+    $('#over-btn').addEventListener('click', () => { this.showOver(false); this.openSheet('newgame'); });
     this.dock.addEventListener('click', e => { const b = e.target.closest('[data-sheet]'); if (b) { this.buzz(12); b.classList.remove('tap'); void b.offsetWidth; b.classList.add('tap'); this.toggleSheet(b.dataset.sheet); } });
     this.dock.addEventListener('pointerdown', e => { const b = e.target.closest('.dk'); if (b) b.classList.add('down'); });
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) this.dock.addEventListener(ev, () => this.dock.querySelectorAll('.down').forEach(b => b.classList.remove('down')));
@@ -163,7 +164,9 @@ export class UI {
     switch (v) {
       case 'sheet': this.openSheet(x, y); break;
       case 'quality': this.rd.setQuality(x); this.html.sheet = ''; this.refresh(true); break;
-      case 'newgame': if (confirm('Commencer une nouvelle partie ? La partie en cours sera perdue.')) { this.closeSheet(); this.hooks.newGame(); } break;
+      case 'newgame': this.openSheet('newgame'); break;
+      case 'start': if (this.sim.over || confirm('Commencer une nouvelle partie ? La partie en cours sera perdue.')) { this.prefs.difficulty = this.newDiff || this.prefs.difficulty; this.closeSheet(); this.hooks.newGame(x); this.applyPrefs(); } break;
+      case 'ndiff': this.newDiff = x; this.html.sheet = ''; break;
       case 'rally': this.rallying = !this.rallying; if (this.rallying) { const r = this.sim.army.rally; this.cam.focusOn(r.x, r.z); } break;
       case 'close': this.card ? this.closeCard() : this.closeSheet(); break;
       case 'bld': this.startPlace(x); break;
@@ -181,6 +184,7 @@ export class UI {
       case 'vil': sim.recruitVillager(); break;
       case 'pro': if (!sim.prospect(x)) this.toast('Prospection impossible (villageois libre, 40 or, 30 vivres)'); break;
       case 'upg': sim.buyUpgrade(x); break;
+      case 'smith': if (!sim.eco.buySmith(x, y)) this.toast('Pas assez de ressources'); else this.buzz(10); break;
       case 'prio': sim.setRepairPriority(+x); break;
       case 'ua': sim.assignArchers(s, +y); break;
       case 'wall': sim.upgrade(s); break;
@@ -223,6 +227,7 @@ export class UI {
     else if (e.type === 'repair') this.toast(`🔧 Muraille réparée — ${SECTOR_NAMES[e.s]}`, 'ok');
     else if (e.type === 'waveStart') { const t = (sim.targets || []).map(s => SECTOR_SHORT[s]).join(' · '); this.toast(`🌊 Vague ${e.wave} — attaque : ${t || '?'}`, 'warn'); this.flashScreen('warn'); this.buzz(60); }
     else if (e.type === 'discovered') { this.toast(`🧭 Nouveau gisement de ${RES_INFO[e.res].name.toLowerCase()} découvert (${e.amount}) !`); this.cam.focusOn(e.x, e.z); }
+    else if (e.type === 'golem') { this.toast(`🗿 Un golem secoue la muraille : ${e.fell} archer${e.fell > 1 ? 's' : ''} tombé${e.fell > 1 ? 's' : ''}${e.dead ? ` (${e.dead} mort${e.dead > 1 ? 's' : ''})` : ''}`, 'danger'); this.buzz(40); }
     else if (e.type === 'autoRepair') this.toast(`🔧 Réparation automatique : ${e.n} villageois empruntés`, 'info');
     else if (e.type === 'autoRepairDone') this.toast(`🔧 Muraille réparée — ${e.n} villageois retournent à leur tâche`, 'ok');
     else if (e.type === 'mage') this.toast(e.what === 'summoned' ? '🔮 Le magicien est arrivé ! Il agit seul : soins, réparations, sorts.' : '💀 Le magicien est tombé — il reviendra dans 30 s', e.what === 'summoned' ? 'ok' : 'danger');
@@ -257,17 +262,24 @@ export class UI {
   setHtml(key, el0, html) { if (this.html[key] === html) return; const keep = el0.scrollTop; this.html[key] = html; el0.innerHTML = html; el0.scrollTop = keep; }
   renderSheet() {
     if (!this.sheet) return;
-    const body = this.sheet === 'menu' ? this.menuHtml() : this.sheet === 'build' ? this.buildSheet() : this.sheet === 'army' ? this.armyHtml() : this.sheet === 'folk' ? this.workHtml() : this.techHtml();
-    const html = `<div class="sh"><h2>${this.sheet === 'menu' ? MENU_TITLE : SHEETS[this.sheet]}</h2><button class="x" data-a="close">✕</button></div><div class="sb">${body}</div>`;
+    const body = this.sheet === 'newgame' ? this.newGameHtml() : this.sheet === 'menu' ? this.menuHtml() : this.sheet === 'build' ? this.buildSheet() : this.sheet === 'army' ? this.armyHtml() : this.sheet === 'folk' ? this.workHtml() : this.techHtml();
+    const html = `<div class="sh"><h2>${this.sheet === 'newgame' ? '🏰 Nouvelle partie' : this.sheet === 'menu' ? MENU_TITLE : SHEETS[this.sheet]}</h2><button class="x" data-a="close">✕</button></div><div class="sb">${body}</div>`;
     if (this.html.sheet === html) return;
     const old = $('.sb', this.sheetEl), keep = old ? old.scrollTop : 0; this.html.sheet = html; this.sheetEl.innerHTML = html; const nb = $('.sb', this.sheetEl); if (nb) nb.scrollTop = keep;
+  }
+  // nouvelle partie : format proposé selon l'appareil (modifiable ICI seulement) + difficulté
+  newGameHtml() {
+    const ideal = idealFormat(), d = this.newDiff || this.prefs.difficulty;
+    return `<div class="hint">Choisis le <b>format</b> de la partie. Celui qui convient le mieux à ton appareil est recommandé ; il ne pourra plus être changé pendant la partie.</div>
+      <div class="fmts">${Object.entries(FORMATS).map(([k, F]) => `<button class="fmt ${k === ideal ? 'rec' : ''}" data-a="start:${k}"><span class="fi">${F.ico}</span><b>${F.name}</b>${k === ideal ? '<em>recommandé</em>' : ''}<small>${F.info}</small></button>`).join('')}</div>
+      <div class="hint small"><b>Difficulté</b></div><div class="row">${Object.keys(DIFFICULTY).map(k => this.btn(DIFFICULTY[k].name, '', 'ndiff:' + k, false, 'act slim' + (k === d ? '' : ' sec'))).join('')}</div>`;
   }
   menuHtml() {
     // curseurs de volume : valeurs figées à l'ouverture du menu (pas de re-rendu pendant le glissement)
     const v = this.volSnap || {}, sl = (k, l) => `<label class="vrow"><span>${l}</span><input type="range" min="0" max="100" step="5" value="${Math.round((v[k] ?? 0) * 100)}" data-vol="${k}"></label>`;
     const audio = this.hooks.audio ? `<div class="vols"><div class="hint small"><b>Son</b></div>${sl('master', 'Général')}${sl('sfx', 'Effets')}${sl('music', 'Musique')}</div>` : '';
     const cq = this.hooks.rd.qualityName ? this.hooks.rd.qualityName() : '';
-    const qual = `<div class="vols"><div class="hint small"><b>Qualité graphique</b> (ombres, lueurs)</div><div class="row">${Object.keys(QUALITY_NAMES).map(k => this.btn(QUALITY_NAMES[k], '', 'quality:' + k, false, 'act slim' + (k === cq ? '' : ' sec'))).join('')}</div></div>`;
+    const F = FORMATS[this.sim.format] || FORMATS.tablet, qual = `<div class="vols"><div class="hint small"><b>Format de la partie</b> : ${F.ico} ${F.name} — ${F.info}. Choisi au début de la partie ; pour en changer, commence une nouvelle partie.</div></div>`;
     const p = this.prefs, tog = (k, l, sub) => this.btn(`${p[k] ? '✅' : '⬜'} ${l}`, sub, 'pref:' + k, false, 'act slim' + (p[k] ? '' : ' sec'));
     const game = `<div class="vols"><div class="hint small"><b>Difficulté</b> (vagues suivantes)</div><div class="row">${Object.keys(DIFFICULTY).map(k => this.btn(DIFFICULTY[k].name, k === 'easy' ? '−25 % zombies' : k === 'hard' ? '+30 % zombies, +15 % PV' : '', 'pref:difficulty:' + k, false, 'act slim' + (k === p.difficulty ? '' : ' sec'))).join('')}</div>
       <div class="row wrapr">${tog('autoRepair', 'Réparation auto', 'emprunte 2 villageois')}${tog('shake', 'Secousses', 'explosions')}${tog('fx', 'Effets', 'particules, feu')}</div></div>`;
@@ -368,6 +380,9 @@ export class UI {
     if (s.type === 'workshop') h += this.btn('🛠 Armes de siège', '', 'sheet:army:siege', false, 'act sec');
     if (s.type === 'forge') h += this.btn('🔨 Améliorations', '', 'sheet:army:forge', false, 'act sec');
     if (s.type === 'wizard') h += this.mageHtml(true);
+    if (s.type === 'infirmary' && s.level) h += `<div class="rank">🏥 Soins : <b>${(INFIRMARY.heal[s.level] * 100).toFixed(1)} %</b> des PV par seconde aux escouades en garnison hors combat · <b>${INFIRMARY.save[s.level] * 100} %</b> des combattants tombés sont sauvés (retour en réserve)${this.sim.army.saved ? ` · ${this.sim.army.saved} sauvés` : ''}</div>`;
+    if (s.type === 'university' && s.level) h += this.btn('🎓 Améliorations des villageois', '', 'sheet:tech', false, 'act sec');
+    if (s.type === 'forge' && s.level) h += `<div class="hint small">Plafond attaque/défense : ${this.sim.eco.smithMax()}</div>`;
     if (RANK_BUILDINGS.includes(s.type)) { const t = UNIT_ORDER.filter(u => UNITS[u].from === s.type), r = RANKS[Math.max(0, s.level - 1)], nx = RANKS[s.level]; h += `<div class="rank">⭐ Rang <b>${r.name}</b>${nx ? ` → <b>${nx.name}</b> au niv. ${s.level + 1} : force ×${nx.force}, résistance ×${nx.res}, tenue plus riche` : ' — rang maximum'}<small>${t.map(u => UNITS[u].ico).join(' ')} toutes les unités de ce bâtiment</small></div>`; }
     const uc = B.upCost(s), canMove = !s.fixed;
     h += `<div class="row">${uc ? this.btn(`⬆ Niv. ${s.level + 1}`, `${this.cost(uc)} · ⏱${Math.round(B.upTime(s))} s`, `up:${s.id}`, !E.afford(uc)) : (s.type === 'house' ? '' : '<span class="max">niveau max</span>')}${canMove ? this.btn('✥ Déplacer', 'gratuit', `mv:${s.id}`, false, 'act sec') : ''}</div>`;
@@ -519,16 +534,24 @@ export class UI {
     for (const w of S.weapons) h += `<div class="row step"><span class="lab">${SIEGE[w.type].ico} ${SIEGE[w.type].name}<small class="sub">${SECTOR_SHORT[w.sector]}${w.noAmmo ? ' · sans munitions' : ''}</small></span>${this.btn('Démonter', '+ ½ ressources', 'sdis:' + w.id, false, 'act slim sec')}</div>`;
     return h;
   }
+  // 🔨 Forge : attaque et défense de CHAQUE type d'unité, indépendantes du rang donné par son bâtiment
   forgeHtml() {
-    const E = this.sim.eco; let h = '';
-    const nb = this.needBuild('forge'); if (nb) return nb;
-    for (const id in UPGRADES) {
-      const U = UPGRADES[id]; if (U.group !== 'army') continue;
-      const l = E.up[id], c = E.upgradeCost(id), locked = U.req && E.level[U.req] < 1;
-      h += `<div class="card"><div class="ct"><b>${U.ico} ${U.name}</b> <span class="lvl">${l}/${U.max}</span><small>${locked ? `Requiert : ${STRUCT[U.req].name}` : U.info}</small></div>${c ? this.btn(`Niv. ${l + 1}`, this.cost(c), 'upg:' + id, locked || !E.afford(c), 'act slim') : '<span class="max">max</span>'}</div>`;
+    const E = this.sim.eco; const nb = this.needBuild('forge'); if (nb) return nb;
+    const mx = E.smithMax(), fl = E.level.forge;
+    let h = `<div class="hint small">Attaque <b>+${SMITH.atk * 100} %</b> et défense <b>−${SMITH.def * 100} %</b> de dégâts reçus par niveau, <b>pour chaque type</b>, en plus du rang. Plafond actuel : <b>${mx}</b>${fl < 3 ? ` (forge niv. ${fl + 1} → ${Math.min(SMITH.max, SMITH.perForge * (fl + 1))})` : ''}.</div>`;
+    h += '<div class="smith">';
+    for (const t in SMITH.types) {
+      const a = E.smith.atk[t], d = E.smith.def[t], ca = E.smithCost('atk', t), cd = E.smithCost('def', t);
+      h += `<div class="srow"><b>${SMITH.types[t]}</b>
+        <span class="sk">⚔ ${a}/${mx}</span>${ca ? this.btn('+1', this.cost(ca), `smith:atk:${t}`, !E.afford(ca), 'act slim sm') : '<span class="max">max</span>'}
+        <span class="sk">🛡 ${d}/${mx}</span>${cd ? this.btn('+1', this.cost(cd), `smith:def:${t}`, !E.afford(cd), 'act slim sm') : '<span class="max">max</span>'}</div>`;
     }
+    h += '</div>';
+    const ac = E.upgradeCost('arcana'), wl = E.level.wizard < 1;
+    h += `<div class="card"><div class="ct"><b>📖 Arcanes</b> <span class="lvl">${E.up.arcana}/${UPGRADES.arcana.max}</span><small>${wl ? 'Requiert : Maison du sorcier' : UPGRADES.arcana.info}</small></div>${ac ? this.btn(`Niv. ${E.up.arcana + 1}`, this.cost(ac), 'upg:arcana', wl || !E.afford(ac), 'act slim') : '<span class="max">max</span>'}</div>`;
     return h;
   }
+
   // ——— VILLAGEOIS ———
   workHtml() {
     const sim = this.sim, E = sim.eco, idle = E.idleCount(), pop = E.population(), cap = E.popCap(), builders = E.builderCount();
@@ -556,15 +579,17 @@ export class UI {
   damagedSegs() { const w = this.sim.wall; let n = 0; for (let i = 0; i < 40; i++) if (w.hp[i] < w.segMax(i) - 0.5) n++; return n; }
   techHtml() {
     const E = this.sim.eco; let h = '<div class="tgrp">Où améliorer quoi ?</div><div class="where">' + [
-      ['forge', '🔨 Forge', 'armes, armures, arcs longs, lames d\'acier (chevaliers)'], ['wizard', '🔮 Maison du sorcier', 'invoque le magicien ; son niveau = puissance du magicien ; Arcanes'],
+      ['forge', '🔨 Forge', 'attaque et défense de chaque type d\'unité (indépendantes du rang)'], ['university', '🎓 Université', 'outils, chariots, chemins pavés, charrue, maçonnerie, apprentissage'], ['infirmary', '🏥 Infirmerie', 'soigne les escouades au repos, sauve des blessés'], ['wizard', '🔮 Maison du sorcier', 'invoque le magicien ; son niveau = puissance du magicien ; Arcanes'],
       ['barracks', '🪖 Caserne · 🐎 Écurie · 🎯 Champ de tir', 'leur niveau = rang des unités (Recrue → Légende)'], ['workshop', '🛠 Atelier de siège', 'baliste, catapulte, trébuchet ; aspect des machines'],
       ['sawmill', '🪚 Scierie · ⛏ Carrière · ⛓ Mine · 🌾 Ferme', 'niveau = places et rendement ; de nouvelles installations apparaissent'],
     ].map(([b, n, d]) => `<button class="wrow" data-a="goto:${b}"><b>${n}</b><small>${d}</small></button>`).join('') + '<div class="wrow"><b>🧱 Muraille</b><small>touche un secteur pour le renforcer · 🗼 touche une tour pour l\'améliorer</small></div></div>';
     h += '<div class="tgrp">Village</div><div class="hint small">Les améliorations rendent les villageois plus rapides, plus chargés et plus efficaces — et se voient : outils plus beaux, brouettes puis charrettes, chemins pavés.</div>';
+    const nb = this.needBuild('university'); if (nb) return h + nb;
+    h += `<div class="hint small">🎓 Université niv. ${E.level.university} : améliorations jusqu'au niveau <b>${E.level.university + 1}</b>${E.level.university < 3 ? ' — améliore l\'université pour aller plus loin' : ''}.</div>`;
     for (const id in UPGRADES) {
-      if (UPGRADES[id].group === 'army') continue;
-      const U = UPGRADES[id], lv = E.up[id], c = E.upgradeCost(id);
-      h += `<div class="card"><div class="ct"><b>${U.ico} ${U.name}</b> <span class="lvl">${lv}/${U.max}</span><small>${U.info}</small></div>${c ? this.btn(`Niv. ${lv + 1}`, this.cost(c), 'upg:' + id, !E.afford(c), 'act slim') : '<span class="max">max</span>'}</div>`;
+      const U = UPGRADES[id]; if (U.group === 'army' || U.req !== 'university') continue;
+      const lv = E.up[id], c = E.upgradeCost(id), cap = E.upgradeCap(id);
+      h += `<div class="card"><div class="ct"><b>${U.ico} ${U.name}</b> <span class="lvl">${lv}/${U.max}</span><small>${U.info}</small></div>${c ? this.btn(`Niv. ${lv + 1}`, this.cost(c), 'upg:' + id, !E.afford(c), 'act slim') : `<span class="max">${lv >= U.max ? 'max' : '🎓 niv. ' + lv}</span>`}</div>`;
     }
     return h;
   }

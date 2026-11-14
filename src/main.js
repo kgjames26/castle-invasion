@@ -3,6 +3,7 @@ import { Simulation } from './sim/simulation.js';
 import { TICK } from './sim/constants.js';
 import { save, load, clearSave } from './sim/save.js';
 import { Renderer } from './render/Renderer.js';
+import { FORMATS, idealFormat } from './render/config.js';
 import { loadKit } from './render/Kit.js';
 import { loadWall } from './render/WallView.js';
 import { loadCharacters } from './render/Characters.js';
@@ -17,6 +18,8 @@ if (globalThis.caches) caches.keys().then(ks => ks.forEach(k => caches.delete(k)
 
 const sim = new Simulation();
 const resumed = load(sim);
+// format de la partie : figé dans la sauvegarde ; une partie neuve sans format prend celui qui convient à l'appareil
+if (!sim.format) sim.format = idealFormat();
 const view = document.getElementById('view');
 const rd = new Renderer(view, sim);
 loadCharacters().then(c => rd.useCharacters(c)).catch(e => console.warn('Personnages indisponibles, géométrie provisoire conservée', e));
@@ -25,12 +28,14 @@ loadItems().then(() => rd.useItems()).catch(e => console.warn('Objets indisponib
 loadKit().then(k => rd.useKit(k)).catch(e => console.warn('Décor du kit indisponible, géométrie provisoire conservée', e));
 loadWall('assets/wall/dungeon_wall.glb').then(w => rd.useWall(w)).catch(e => console.warn('Muraille GLB indisponible, muraille provisoire conservée', e));
 let ui;
+function applyFormat() { if (!/[?&]q=/.test(location.search)) rd.setQuality(FORMATS[sim.format]?.q || 'medium'); }
+applyFormat();
 const cam = new CameraController(rd.camera, rd.renderer.domElement, (x, z) => ui.onMapTap(x, z));
 const audio = new AudioManager();   // sons synthétisés (Web Audio) : lit l'état, ne le modifie pas
 addEventListener('pointerdown', () => audio.unlock()); addEventListener('keydown', () => audio.unlock());
 const hooks = {
   rd, cam, audio, resumed,
-  newGame: () => { clearSave(); sim.newGame(); ui.sel = -1; ui.cancelPlace(); ui.closeCard(); ui.closeSheet(); ui.showOver(false); ui.refresh(true); save(sim); },
+  newGame: (fmt) => { clearSave(); sim.newGame(); sim.format = fmt || idealFormat(); applyFormat(); ui.sel = -1; ui.cancelPlace(); ui.closeCard(); ui.closeSheet(); ui.showOver(false); ui.refresh(true); save(sim); },
 };
 ui = new UI(sim, hooks);
 { const v = document.createElement('div'); v.className = 'vtag'; v.textContent = 'v' + VERSION; document.getElementById('app').appendChild(v); const sp = document.getElementById('splash'); document.getElementById('sp-v').textContent = 'v' + VERSION; setTimeout(() => sp.classList.add('off'), 1800); setTimeout(() => sp.remove(), 2700); }
@@ -41,7 +46,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) save(
 
 let last = performance.now(), acc = 0, autosave = 0, wasOver = false, lastWave = sim.wave;
 // qualité adaptative : si l'appareil peine (moins de 24 images/s en moyenne sur 6 s), on baisse d'un cran (une fois par cran, jamais au-dessus du choix)
-const perf = { t: 0, n: 0, warm: 4, done: /[?&]q=/.test(location.search) };
+const perf = { t: 0, n: 0, warm: 4, done: true };   // v1.9 : le format est choisi à la création de la partie et ne change plus ensuite
 function adapt(dt) {
   if (perf.done || document.hidden) return; perf.warm -= dt; if (perf.warm > 0) return;
   perf.t += dt; perf.n++; if (perf.t < 6) return;

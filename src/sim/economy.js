@@ -1,6 +1,6 @@
 // Économie : villageois autonomes (aucun ordre individuel). Le joueur fixe seulement les EFFECTIFS par tâche.
 // Chaque villageois sait quoi faire : aller au site → récolter → TOUT rapporter au château → recommencer.
-import { TASKS, BUILDINGS, UPGRADES, ECON, START, RES, RES_INFO, PROSPECT, START_DEPOSITS, AUTO_REPAIR } from '../content/medieval.js';
+import { TASKS, BUILDINGS, UPGRADES, ECON, START, RES, RES_INFO, PROSPECT, START_DEPOSITS, AUTO_REPAIR, SMITH } from '../content/medieval.js';
 import { SEGS, SEG_W, SECTORS, SEGS_PER_SECTOR } from './constants.js';
 import { WALL } from '../content/medieval.js';
 
@@ -14,6 +14,7 @@ export class Economy {
     this.level = {}; for (const b in BUILDINGS) this.level[b] = BUILDINGS[b].start;
     this.houses = 0;
     this.up = {}; for (const u in UPGRADES) this.up[u] = 0;
+    this.smith = { atk: {}, def: {} }; for (const t in SMITH.types) { this.smith.atk[t] = 0; this.smith.def[t] = 0; }
     this.assign = {}; for (const t of TASK_IDS) this.assign[t] = START.assign[t] || 0;
     this.repairPriority = -1;
     this.deposit = {}; for (const t of GATHER) if (TASKS[t].deposit) this.deposit[t] = TASKS[t].deposit;
@@ -106,7 +107,15 @@ export class Economy {
   pay(c) { if (!this.afford(c)) return false; for (const r in c) this.res[r] -= c[r]; return true; }
   add(r, n) { const room = this.cap(r) - this.res[r], a = Math.max(0, Math.min(n, room)); this.res[r] += a; this.lost += n - a; return a; }
   scaled(base, mult) { const o = {}; for (const r in base) o[r] = Math.round(base[r] * mult); return o; }
-  upgradeCost(u) { return this.up[u] >= UPGRADES[u].max ? null : this.scaled(UPGRADES[u].cost, this.up[u] + 1); }
+  // plafond d'une amélioration : l'université limite celles des villageois (niveau + 1)
+  upgradeCap(u) { const U = UPGRADES[u]; return U.req === 'university' ? Math.min(U.max, this.level.university ? this.level.university + 1 : 0) : U.max; }
+  upgradeCost(u) { return this.up[u] >= UPGRADES[u].max || this.up[u] >= this.upgradeCap(u) ? null : this.scaled(UPGRADES[u].cost, this.up[u] + 1); }
+  // ——— forge : attaque / défense par type d'unité, indépendantes du rang ———
+  smithMax() { return Math.min(SMITH.max, SMITH.perForge * (this.level.forge || 0)); }
+  smithCost(kind, t) { const lv = this.smith[kind][t]; return lv >= this.smithMax() ? null : (kind === 'atk' ? SMITH.atkCost : SMITH.defCost)(lv); }
+  buySmith(kind, t) { const c = this.smithCost(kind, t); if (!c || !this.pay(c)) return false; this.smith[kind][t]++; return true; }
+  atkMult(t) { return 1 + SMITH.atk * (this.smith.atk[t] || 0); }
+  defMult(t) { return Math.max(0.4, 1 - SMITH.def * (this.smith.def[t] || 0)); }
   // ——— commandes ———
   // Effectifs d'une tâche. Sans villageois libre, on en EMPRUNTE un à la tâche la moins urgente (comme pour les chantiers) ;
   // l'emprunt est noté : quand on retire ce villageois (ou quand la réparation est finie), il retourne à sa tâche d'origine.
@@ -267,13 +276,18 @@ export class Economy {
   serialize() {
     return {
       res: { ...this.res }, houses: this.houses, level: { ...this.level }, up: { ...this.up }, assign: { ...this.assign }, repairPriority: this.repairPriority,
-      deposit: { ...this.deposit }, extra: JSON.parse(JSON.stringify(this.extra)), loans: this.loans.map(l => ({ ...l })), prospect: this.prospect ? { ...this.prospect } : null, lost: this.lost, famine: this.famine,
+      deposit: { ...this.deposit }, extra: JSON.parse(JSON.stringify(this.extra)), smith: JSON.parse(JSON.stringify(this.smith)), loans: this.loans.map(l => ({ ...l })), prospect: this.prospect ? { ...this.prospect } : null, lost: this.lost, famine: this.famine,
       villagers: this.villagers.map(v => ({ task: v.task, state: v.state, x: +v.x.toFixed(2), z: +v.z.toFixed(2), carry: v.carry, carryRes: v.carryRes, timer: v.timer, seg: v.seg, leaving: v.leaving, job: v.job, bx: v.bx, bz: v.bz, home: v.home || null })),
     };
   }
   restore(st) {
     this.reset();
     Object.assign(this.res, st.res); Object.assign(this.level, st.level); Object.assign(this.up, st.up); Object.assign(this.assign, st.assign);
+    if (st.smith) { Object.assign(this.smith.atk, st.smith.atk); Object.assign(this.smith.def, st.smith.def); }
+    else {   // anciennes sauvegardes : les améliorations globales de la forge deviennent des niveaux par type
+      for (const t in SMITH.types) { this.smith.atk[t] = this.up.weapons || 0; this.smith.def[t] = this.up.armor || 0; }
+      this.smith.atk.archer += this.up.archery || 0; this.smith.atk.knight += this.up.blades || 0; this.up.weapons = this.up.armor = this.up.archery = this.up.blades = 0;
+    }
     Object.assign(this.deposit, st.deposit); if (st.extra) this.extra = { stone: [], iron: [], gold: [], ...st.extra }; this.loans = (st.loans || []).map(l => ({ ...l })); this.prospect = st.prospect || null; this.repairPriority = st.repairPriority ?? -1; this.lost = st.lost || 0; this.famine = !!st.famine;
     this.villagers = []; this.nextId = 1;
     for (const o of st.villagers) { const v = this.addVillager(o.x, o.z); Object.assign(v, { task: o.task, state: o.state, carry: o.carry, carryRes: o.carryRes, timer: o.timer, seg: o.seg, leaving: o.leaving, job: o.job || 0, bx: o.bx || 0, bz: o.bz || 0, home: o.home || null }); }

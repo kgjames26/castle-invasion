@@ -183,6 +183,10 @@ export class Effects {
         case 'summon': this.summon(b.x, b.z); break;
         case 'mageDown': this.burst(b.x, 1, b.z, 30, 3, 3, 1.2, 0.6, -0.5, COL.magic, true); this.flash(b.x, 1.5, b.z, 4, 0.6, [0.7, 0.4, 1]); break;
         case 'cast': this.cast(b.x, b.z, b.spell); break;
+        case 'quake': {       // coup du golem : la muraille tremble — poussière tout du long, pierres qui tombent, secousse
+          for (let k = 0; k < 10; k++) { const x = b.x + (Math.random() - 0.5) * b.r * 2; this.burst(x, 5.5, b.z + 3, 2, 1.2, 0.5, 1.0, 0.45, 12, COL.debris); this.burst(x, 0.8, b.z - 0.5, 2, 2, 0.8, 1.8, 1.3, -0.3, COL.dust, false, 1.3); }
+          this.ring(b.x, b.z - 2, 10, 0.6, [0.55, 0.48, 0.4]); this.addShake(0.6); break;
+        }
         case 'meteorCall': this.ring(b.x, b.z, b.r, 1.4, [1, 0.4, 0.1]); break;
       }
     }

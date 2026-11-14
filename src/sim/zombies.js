@@ -1,7 +1,7 @@
 // Hordes : agents individuels en tableaux typés (SoA). Dans ce prototype tous les zombies sont simulés ;
 // l'architecture prévoit des cohortes agrégées au-delà (voir conception §6).
 import { MAX_Z, W, WALL_Z1, WALL_Z0, WALL_STAND_Z, GW, CELL, CASTLE, SECTORS, segOfX } from './constants.js';
-import { ZOMBIES, SQUAD } from '../content/medieval.js';
+import { GOLEM, ZOMBIES, SQUAD } from '../content/medieval.js';
 import { COST, T } from './terrain.js';
 
 const INSIDE_Z = WALL_Z1 + 0.8;
@@ -15,7 +15,7 @@ export class ZombieSwarm {
     this.hp = new Float32Array(n); this.type = new Uint8Array(n); this.sector = new Uint8Array(n); this.state = new Uint8Array(n);
     this.phase = new Float32Array(n);
     // hordes : chaque zombie garde sa place (ox, oz) autour du centre de son groupe → ils avancent en masse, pas à la file
-    this.grp = new Int32Array(n); this.ox = new Float32Array(n); this.oz = new Float32Array(n); this.slow = new Float32Array(n);
+    this.grp = new Int32Array(n); this.ox = new Float32Array(n); this.oz = new Float32Array(n); this.slow = new Float32Array(n); this.slam = new Float32Array(n); this.slams = [];
     this.gx = new Float32Array(GROUPS); this.gz = new Float32Array(GROUPS); this.gn = new Int32Array(GROUPS); this.hpMult = 1;
     this.n = 0; this.kills = 0;
     this.near = new Int16Array(SECTORS);      // zombies proches (z>95) par secteur ciblé
@@ -28,7 +28,7 @@ export class ZombieSwarm {
     const i = this.n++;
     this.x[i] = this.px[i] = x; this.z[i] = this.pz[i] = z;
     this.hp[i] = ZOMBIES[type].hp * this.hpMult; this.type[i] = type; this.sector[i] = sector; this.state[i] = 0;
-    this.grp[i] = grp; this.ox[i] = ox; this.oz[i] = oz; this.slow[i] = 0;
+    this.grp[i] = grp; this.ox[i] = ox; this.oz[i] = oz; this.slow[i] = 0; this.slam[i] = 1.5;
     this.phase[i] = rng() * 6.28;
     return true;
   }
@@ -41,7 +41,7 @@ export class ZombieSwarm {
     const l = --this.n; if (i === l) return;
     this.x[i] = this.x[l]; this.z[i] = this.z[l]; this.px[i] = this.px[l]; this.pz[i] = this.pz[l];
     this.hp[i] = this.hp[l]; this.type[i] = this.type[l]; this.sector[i] = this.sector[l]; this.state[i] = this.state[l]; this.phase[i] = this.phase[l];
-    this.grp[i] = this.grp[l]; this.ox[i] = this.ox[l]; this.oz[i] = this.oz[l]; this.slow[i] = this.slow[l];
+    this.grp[i] = this.grp[l]; this.ox[i] = this.ox[l]; this.oz[i] = this.oz[l]; this.slow[i] = this.slow[l]; this.slam[i] = this.slam[l];
   }
 
   update(dt, sim) {
@@ -133,6 +133,7 @@ export class ZombieSwarm {
       if (terrainType(terrain, Math.min(GW - 1, Math.max(0, (nx / CELL) | 0)), Math.min(159, Math.max(0, (nz / CELL) | 0))) === T.ROCK) nz = z;
       X[i] = nx < 0.5 ? 0.5 : nx > W - 0.5 ? W - 0.5 : nx; Z[i] = nz < 0.5 ? 0.5 : nz;
       this.state[i] = attacking ? 1 : 0;
+      if (attacking && this.type[i] === 6 && (this.slam[i] -= dt) <= 0) { this.slam[i] = GOLEM.every; this.slams.push({ x: X[i], seg: segOfX(X[i]) }); }   // coup sismique du golem
       if (attacking) this.attacking[s]++;
       if (Z[i] > 95) this.near[s]++;
     }

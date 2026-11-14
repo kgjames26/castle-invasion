@@ -1,7 +1,7 @@
 // Armée : réserve, archers de garnison (chemin de ronde), ESCOUADES avec formations (garnison ou sortie sur le champ de bataille),
 // files d'entraînement. Les escouades agissent comme une seule entité : points de vie en réserve commune, membres dessinés par formation.
 import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_XS, WALL_Z0, WALL_Z1, WALK_H, PLAZA, sectorOfX } from './constants.js';
-import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN, RANKS, UPGRADES } from '../content/medieval.js';
+import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN, RANKS, UPGRADES, INFIRMARY } from '../content/medieval.js';
 
 const tmp = new Int32Array(1024), tmp2 = new Int32Array(1024);
 export const MOVE_Z0 = WALL_Z1 + 4, MOVE_Z1 = 208;          // zone où l'on peut poster une escouade à l'intérieur (cour + placette)
@@ -166,8 +166,11 @@ export class Army {
   // dégâts reçus par une escouade (formation + armures)
   hurtSquad(sim, q, dmg) {
     if (q.hp <= 0) return;
-    q.hp -= dmg * FORMATIONS[q.form].def * (1 - 0.08 * sim.eco.up.armor) / this.rank(sim, q.type).res; q.hit = 0.3;
-    q.n = Math.max(0, Math.ceil(q.hp / this.unitHp(q.type)));
+    q.hp -= dmg * FORMATIONS[q.form].def * sim.eco.defMult(q.type) / this.rank(sim, q.type).res; q.hit = 0.3;
+    const n0 = q.n; q.n = Math.max(0, Math.ceil(q.hp / this.unitHp(q.type)));
+    // infirmerie : une partie des combattants tombés est relevée et retourne en réserve après soins
+    const save = INFIRMARY.save[Math.min(3, sim.eco.level.infirmary || 0)];
+    for (let k = q.n; k < n0; k++) if (save && sim.rng() < save) { this.reserve[q.type]++; this.saved = (this.saved || 0) + 1; }
   }
   // soin (magicien) : rend une part des PV maximum ; les membres tombés ne reviennent pas
   healSquad(q, frac) { const mx = q.n * this.unitHp(q.type), before = q.hp; q.hp = Math.min(mx, q.hp + frac * mx); q.healed = 1; return q.hp - before; }
@@ -177,7 +180,7 @@ export class Army {
     const Z = sim.zombies, hash = sim.hash, eco = sim.eco, w = eco.up.weapons, ar = eco.up.archery;
     this.trainTick(dt, sim); this.syncWalkers(sim); this.updateGate(dt);
     // archers
-    const AU = UNITS.archer, range = AU.range + 3 * ar, adm = AU.dmg * (1 + 0.1 * w) * (1 + 0.1 * ar) * this.rank(sim, 'archer').force;
+    const AU = UNITS.archer, range = AU.range + 3 * ar, adm = AU.dmg * eco.atkMult('archer') * this.rank(sim, 'archer').force;
     for (let s = 0; s < SECTORS; s++) {
       const a = this.archers[s];
       for (let k = 0; k < a.n; k++) {
@@ -193,6 +196,9 @@ export class Army {
     }
     // escouades
     for (const q of this.squads) this.updateSquad(q, dt, sim, w);
+    // infirmerie : les escouades en garnison, hors combat, regagnent des PV (jusqu'au maximum de leurs membres restants)
+    const ih = INFIRMARY.heal[Math.min(3, eco.level.infirmary || 0)];
+    if (ih) for (const q of this.squads) { if (q.mode !== 'garrison' || q.fight > 0 || q.way.length) continue; const mx = q.n * this.unitHp(q.type); if (q.hp < mx) { q.hp = Math.min(mx, q.hp + ih * mx * dt); q.infirm = 0.5; } }
     const before = this.squads.length;
     this.squads = this.squads.filter(q => q.hp > 0);
     if (this.squads.length !== before) this.layoutPosts();
@@ -202,7 +208,7 @@ export class Army {
   }
   updateSquad(q, dt, sim, weaponsLvl) {
     const Z = sim.zombies, hash = sim.hash, U = UNITS[q.type], F = FORMATIONS[q.form];
-    q.px = q.x; q.pz = q.z; if (q.hit > 0) q.hit -= dt; if (q.fight > 0) q.fight -= dt; if (q.healed > 0) q.healed -= dt; if (q.swing > 0) q.swing -= dt;
+    q.px = q.x; q.pz = q.z; if (q.hit > 0) q.hit -= dt; if (q.fight > 0) q.fight -= dt; if (q.healed > 0) q.healed -= dt; if (q.infirm > 0) q.infirm -= dt; if (q.swing > 0) q.swing -= dt;
     const L = formationLayout(q.form, Math.max(1, q.n), U.size), rad = L.radius; q.rad = rad;
     const rk = this.rank(sim, q.type), speed = U.speed * F.speed * rk.speed;
     let moving = false;
@@ -235,10 +241,10 @@ export class Army {
     q.mom = moving ? 1 : Math.max(0, q.mom - dt * 0.6);
     if (live > 0) {
       q.fight = 0.5;
-      const mult = F.atk * (1 + (F.charge + (U.charge || 0)) * q.mom) * (1 + 0.1 * weaponsLvl) * rk.force * (moving ? 0.5 : 1);
+      const mult = F.atk * (1 + (F.charge + (U.charge || 0)) * q.mom) * sim.eco.atkMult(q.type) * rk.force * (moving ? 0.5 : 1);
       q.atkAcc += q.n * F.engage * dt / U.rate;
       let hits = q.atkAcc | 0; q.atkAcc -= hits;
-      const cleave = (U.cleave || 1) + (q.type === 'knight' ? sim.eco.up.blades : 0), km = q.type === 'knight' ? 1 + UPGRADES.blades.per * sim.eco.up.blades : 1;
+      const cleave = (U.cleave || 1) + (q.type === 'knight' ? (sim.eco.smith.atk.knight / 2) | 0 : 0), km = 1;
       while (hits-- > 0) { for (let c = 0; c < Math.min(cleave, live); c++) { const i = tmp[q.rot++ % live]; Z.hit(i, U.dmg * mult * km * (c ? 0.6 : 1)); } if (cleave > 1) q.swing = 0.45; }
     }
   }

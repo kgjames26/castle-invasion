@@ -40,14 +40,30 @@ export function levelProps(type, level, hw, hd) {
       if (L >= 3) { for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) b.box(0.22, 6.4, 0.22, WOOD, hw - 2 + x * 0.8, 0, -hd + 2.2 + z * 0.8, 0, x * -0.06, z * 0.06); b.box(2, 0.25, 2, DARK, hw - 2, 6.2, -hd + 2.2); wheel(b, 0.9, hw - 2, 7.2, -hd + 2.2, Math.PI / 2); }   // chevalement à poulie
       if (L >= 4) { lantern(b, -hw + 0.4, hd); lantern(b, hw - 0.4, hd + 1.2); b.box(2.8, 2.0, 2.0, 0x6b4a2c, -hw + 1.6, 0, hd - 1.2); b.gable(3.2, 2.4, 1, 0x4a3426, -hw + 1.6, 2, hd - 1.2); for (let k = 0; k < 3; k++) b.ball(0.32, k % 2 ? GOLD : 0x5b8fd8, -hw + 0.9 + k * 0.6, 2.15, hd - 0.1); }
       break;
-    case 'farm': {
+    case 'farm': {      // ferme : 6 niveaux — champs, potager + poulailler, verger + foin, silo + grange, pâture avec bêtes
       const field = (x0, z0, cols, rows, c) => { for (let r = 0; r < rows; r++) for (let c2 = 0; c2 < cols; c2++) b.box(0.22, 0.8 + ((r * 3 + c2) % 3) * 0.2, 0.22, (r + c2) % 2 ? c : 0xd0aa38, x0 + c2 * 0.7, 0, z0 + r * 1.2); };
+      const fence = (x0, z0, x1, z1) => { const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 1.5); for (let k = 0; k <= n; k++) b.box(0.14, 1.0, 0.14, 0x7a5a3a, x0 + (x1 - x0) * k / n, 0, z0 + (z1 - z0) * k / n); const len = Math.hypot(x1 - x0, z1 - z0), a = Math.atan2(x1 - x0, z1 - z0); b.box(0.08, 0.1, len, 0x8a6a4a, (x0 + x1) / 2, 0.7, (z0 + z1) / 2, a); b.box(0.08, 0.1, len, 0x8a6a4a, (x0 + x1) / 2, 0.35, (z0 + z1) / 2, a); };
       field(-hw + 0.6, hd + 0.6, 10, 2, 0xe2c04a);
-      if (L >= 3) { field(hw - 3.6, -hd - 1.6, 6, 1, 0x7ab84a); const g = new B(); g.box(1.6, 1.0, 1.2, 0xb08a4a, 0, 0, 0); g.gable(1.8, 1.4, 0.6, 0x6b3a22, 0, 1.0, 0); for (let k = 0; k < 4; k++) g.ball(0.18, 0xf4f0e6, -0.6 + k * 0.4, 0.15, 0.9); g.g.position.set(-hw - 0.4, 0, -1); b.g.add(g.g); }   // potager + poulailler
-      if (L >= 4) { for (let k = 0; k < 4; k++) { b.cyl(0.14, 1.1, WOOD, hw + 0.6, 0, -hd + 1 + k * 2.2, 5); b.ball(0.8, k % 2 ? 0x4f8a3c : 0x5f9a44, hw + 0.6, 1.6, -hd + 1 + k * 2.2); b.ball(0.12, 0xd03a2a, hw + 1.1, 1.6, -hd + 1.3 + k * 2.2); } cart(b, 0, hd + 3.4, 0xe5c25a, 1.4); }   // verger + charrette de foin
+      if (L >= 3) { field(hw - 3.6, -hd - 1.6, 6, 1, 0x7ab84a); const g = new B(); g.box(1.6, 1.0, 1.2, 0xb08a4a, 0, 0, 0); g.gable(1.8, 1.4, 0.6, 0x6b3a22, 0, 1.0, 0); for (let k = 0; k < 4; k++) g.ball(0.18, 0xf4f0e6, -0.6 + k * 0.4, 0.15, 0.9); g.g.position.set(-hw - 0.4, 0, -1); b.g.add(g.g); }
+      if (L >= 4) { for (let k = 0; k < 4; k++) { b.cyl(0.14, 1.1, WOOD, hw + 0.6, 0, -hd + 1 + k * 2.2, 5); b.ball(0.8, k % 2 ? 0x4f8a3c : 0x5f9a44, hw + 0.6, 1.6, -hd + 1 + k * 2.2); b.ball(0.12, 0xd03a2a, hw + 1.1, 1.6, -hd + 1.3 + k * 2.2); } cart(b, 0, hd + 3.4, 0xe5c25a, 1.4); }
+      if (L >= 5) { b.cyl(1.3, 5.2, 0xc9c2b0, hw - 1.2, 0, -hd - 0.6, 12); b.add(new THREE.ConeGeometry(1.45, 1.4, 12), 0x8a3a2a, hw - 1.2, 5.9, -hd - 0.6); for (let k = 0; k < 3; k++) b.add(new THREE.TorusGeometry(1.32, 0.06, 4, 16), 0x6b6f74, hw - 1.2, 1.2 + k * 1.6, -hd - 0.6, Math.PI / 2); b.box(3.2, 2.4, 2.8, 0xa8402e, -hw + 2.2, 0, -hd - 1.8); b.gable(3.6, 3.2, 1.3, 0x5a3a24, -hw + 2.2, 2.4, -hd - 1.8); b.box(1.2, 1.6, 0.1, 0xf4ecdc, -hw + 2.2, 0.2, -hd - 0.38); }   // silo + grange
+      if (L >= 6) {       // pâture clôturée : vaches et moutons, épouvantail, éolienne de pompage
+        fence(-hw - 3.6, hd + 3.4, -hw - 3.6, -hd); fence(-hw - 3.6, -hd, -hw - 0.8, -hd); fence(-hw - 3.6, hd + 3.4, -hw + 2, hd + 3.4);
+        for (const [x, z, cow] of [[-hw - 2.2, 0, 1], [-hw - 1.6, 2.6, 1], [-hw - 2.6, -2.6, 0], [-hw - 1.2, -1.4, 0], [-hw - 2.8, 1.6, 0]]) { const c1 = cow ? 0xf2f0ea : 0xeceae2, c2 = cow ? 0x3a3a3a : 0x2a2a2a; b.box(cow ? 1.4 : 0.9, cow ? 0.8 : 0.6, cow ? 0.7 : 0.6, c1, x, cow ? 0.55 : 0.35, z); b.box(0.4, 0.4, 0.45, c2, x + (cow ? 0.85 : 0.55), cow ? 1.05 : 0.65, z); if (cow) b.box(0.5, 0.4, 0.72, c2, x - 0.2, 0.8, z); for (const dx of [-0.4, 0.4]) for (const dz of [-0.2, 0.2]) b.box(0.12, cow ? 0.55 : 0.35, 0.12, c2, x + dx * (cow ? 1 : 0.7), 0, z + dz); }
+        b.cyl(0.07, 2.2, WOOD, 1.5, 0, hd + 2.0, 4); b.box(1.4, 0.08, 0.08, WOOD, 1.5, 1.7, hd + 2.0); b.ball(0.25, 0xe5c25a, 1.5, 2.35, hd + 2.0); b.box(0.5, 0.7, 0.3, 0x8a3a2a, 1.5, 1.2, hd + 2.0);   // épouvantail
+        for (const [x, z] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) b.box(0.1, 5.5, 0.1, 0x7a7e84, hw + 2.6 + x * 0.6, 0, hd + 1.2 + z * 0.6); wheel(b, 1.1, hw + 2.6, 5.8, hd + 1.7); b.box(1.2, 0.5, 0.05, 0xc0392b, hw + 2.6, 5.8, hd + 0.8);
+      }
       break;
     }
-    case 'mill': case 'granary': case 'warehouse': {
+    case 'mill': {      // moulin : 5 niveaux — sacs, charrette, fournil fumant, socle de pierre + bannières, roue à aubes et girouette dorée
+      for (let k = 0; k < Math.min(4, L); k++) b.box(0.9, 0.8, 0.7, k % 2 ? 0xe6dcb0 : 0xd8c890, -hw + 0.4 + k * 1.0, 0, hd + 0.6);
+      if (L >= 2) cart(b, hw + 1.0, hd + 0.8, 0xe6dcb0, -0.4);
+      if (L >= 3) { b.box(3.2, 2.4, 2.6, 0xd8cdb0, -hw - 2.0, 0, 0); b.gable(3.6, 3.0, 1.2, 0x8a3a2a, -hw - 2.0, 2.4, 0); b.box(0.7, 2.6, 0.7, 0x8a8a8e, -hw - 3.0, 2.0, -0.6); b.box(1.0, 0.8, 0.12, 0xff8a3a, -hw - 2.0, 0.6, 1.32); for (let k = 0; k < 3; k++) b.ball(0.22, 0xc98a3a, -hw - 1.2 + k * 0.4, 1.0, 1.5); }   // fournil : four allumé, pains
+      if (L >= 4) { b.add(new THREE.CylinderGeometry(hw + 0.9, hw + 1.3, 1.0, 10), 0x9a9690, 0, 0.5, 0); flag(b, hw + 0.4, -hd - 0.4, 0xe5c25a, 5.4, false); flag(b, -hw - 0.2, -hd - 0.4, 0xc0392b, 5.4, false); }
+      if (L >= 5) { wheel(b, 1.8, hw + 1.6, 1.9, 0, Math.PI / 2); for (let k = 0; k < 8; k++) b.box(0.08, 0.5, 0.7, WOOD, hw + 1.6, 1.9 + Math.sin(k * 0.785) * 1.7, Math.cos(k * 0.785) * 1.7); b.box(0.7, 0.5, 5.0, 0x4f7aa8, hw + 1.6, 0, 0); flag(b, 0, -0.2, 0xf2c94a, 10.5, true); lantern(b, hw + 0.4, hd + 1.4); lantern(b, -hw - 0.4, hd + 1.4); }
+      break;
+    }
+    case 'granary': case 'warehouse': {
       for (let k = 0; k < L - 1; k++) b.box(1.2, 1.0, 1.2, 0xa8793e, -hw + 0.8 + k * 1.4, 0, hd + 0.6);
       if (L >= 3) cart(b, hw + 0.4, hd + 0.4, type === 'warehouse' ? 0x9aa0a6 : 0xe5c25a, -0.5);
       if (L >= 4) flag(b, -hw + 0.3, -hd + 0.3, BANNER[2], 5, true);
@@ -95,3 +111,38 @@ export function carrierGeometry(level) {
   return { geo: mergeGeometries(parts, false), load: [0, -0.15, 0.6, 1.1, 0.55, 1.3] };
 }
 export const TOOL_TINT = [0x9a7a55, 0x8e949c, 0xd8e0e8, 0xf2d65e, 0xffe08a];     // Outils niv. 0 → 4 : bois/pierre → fer → acier → doré
+
+// ——— INFIRMERIE : longue salle chaulée, toit de tuiles, grande croix rouge, lits de camp sous l'auvent, jardin de simples ———
+export function infirmaryModel() {
+  const b = new B(), W2 = 0xf0ece2, ROOF = 0xa04a32, RED = 0xc62828;
+  b.box(12, 0.3, 9, 0x9a958a, 0, 0, 0);
+  b.box(10, 3.6, 5.4, W2, 0, 0.3, -1.2); b.gable(10.6, 6.0, 2.2, ROOF, 0, 3.9, -1.2);
+  for (const x of [-4.6, -1.5, 1.5, 4.6]) b.box(0.3, 3.6, 0.3, 0x8a6a4a, x, 0.3, -1.2 + 2.75);   // colombages
+  for (const x of [-3, 0, 3]) { b.box(1.0, 1.1, 0.12, 0x6fa0c8, x, 1.6, 1.58); b.box(1.2, 0.12, 0.16, 0x8a6a4a, x, 1.5, 1.6); }
+  b.box(1.4, 2.4, 0.15, 0x6b4a2c, -4.0, 0.3, 1.6);
+  // grande croix rouge sur fond blanc (pignon + bannière)
+  b.box(2.2, 2.2, 0.1, 0xffffff, 0, 4.6, 1.75); b.box(1.6, 0.5, 0.12, RED, 0, 5.45, 1.8); b.box(0.5, 1.6, 0.12, RED, 0, 5.15, 1.8);
+  b.cyl(0.08, 5.2, 0x5a4030, 5.4, 0, 3.6); b.box(1.4, 1.0, 0.06, 0xffffff, 6.1, 4.2, 3.6); b.box(1.0, 0.28, 0.08, RED, 6.1, 4.55, 3.62); b.box(0.28, 0.8, 0.08, RED, 6.1, 4.36, 3.62);
+  // auvent + lits de camp
+  b.box(9, 0.15, 2.6, 0xe6dcc8, -0.5, 2.6, 2.9); for (const x of [-4.6, 3.6]) b.cyl(0.1, 2.6, 0x6b4a2c, x, 0, 4.1);
+  for (const x of [-3.4, -1.4, 0.6, 2.6]) { b.box(1.6, 0.4, 0.8, 0x7a5a3a, x, 0.3, 3.2); b.box(1.5, 0.15, 0.75, 0xfafafa, x, 0.7, 3.2); b.box(0.4, 0.18, 0.6, 0xdfe6f0, x - 0.55, 0.85, 3.2); }
+  // jardin de simples + puits
+  for (let k = 0; k < 3; k++) { b.box(1.4, 0.3, 1.0, 0x6b4a2c, -4.6 + k * 1.7, 0.3, -4.6); for (let j = 0; j < 3; j++) b.ball(0.25, j % 2 ? 0x5f9a44 : 0x8ac06a, -5.1 + k * 1.7 + j * 0.5, 0.75, -4.6); }
+  b.cyl(0.7, 0.9, 0x8a8a8e, 4.3, 0.3, -4.2, 10); b.box(1.6, 0.12, 0.12, 0x5a4030, 4.3, 2.2, -4.2); for (const x of [3.6, 5.0]) b.box(0.12, 1.9, 0.12, 0x5a4030, x, 0.3, -4.2);
+  return { g: b.g, top: 7.5 };
+}
+// ——— UNIVERSITÉ : grande salle de pierre, tour centrale à horloge, fenêtres en arc, bibliothèque, statue du savant ———
+export function universityModel() {
+  const b = new B(), ST = 0xc4b896, STD = 0x9c9070, SLATE = 0x3f5a78, GLASS = 0x8fb4d6;
+  b.box(14, 0.3, 10, 0x8c8a86, 0, 0, 0);
+  b.box(11, 4.2, 5.6, ST, 0, 0.3, -1.4); b.gable(11.6, 6.2, 2.4, SLATE, 0, 4.5, -1.4);
+  for (const x of [-4, -2, 2, 4]) { b.box(0.9, 2.0, 0.12, GLASS, x, 1.4, 1.42); b.add(new THREE.CylinderGeometry(0.45, 0.45, 0.12, 10, 1, false, 0, Math.PI), GLASS, x, 3.4, 1.42, Math.PI / 2, 0, Math.PI / 2); }
+  b.box(2.6, 7.4, 2.6, STD, 0, 0.3, 0.6); b.box(3.0, 0.4, 3.0, ST, 0, 7.7, 0.6); b.add(new THREE.ConeGeometry(2.1, 3.0, 4), SLATE, 0, 9.6, 0.6, 0, Math.PI / 4);
+  b.add(new THREE.CylinderGeometry(0.8, 0.8, 0.12, 16), 0xf4f0e6, 0, 6.3, 1.95, Math.PI / 2); b.box(0.06, 0.6, 0.06, 0x222222, 0, 6.5, 2.03); b.box(0.45, 0.06, 0.06, 0x222222, 0.18, 6.3, 2.03);   // horloge
+  b.box(1.6, 2.6, 0.2, 0x5a3a24, 0, 0.3, 1.95); b.box(3.2, 0.3, 1.4, STD, 0, 0.3, 2.6);
+  b.box(4.2, 3.0, 3.4, ST, -4.6, 0.3, 2.9); b.gable(4.6, 3.8, 1.6, SLATE, -4.6, 3.3, 2.9);                           // bibliothèque
+  for (let k = 0; k < 4; k++) b.box(0.25, 0.9, 0.6, [0xa83232, 0x3a6aa8, 0x3a8a4a, 0xc9a23a][k], -5.6 + k * 0.4, 0.8, 4.65);
+  b.box(1.0, 1.2, 1.0, STD, 4.6, 0.3, 3.4); b.box(0.5, 1.4, 0.5, 0xd8d2c0, 4.6, 1.5, 3.4); b.ball(0.32, 0xd8d2c0, 4.6, 3.2, 3.4);   // statue
+  b.cyl(0.08, 4.8, 0x4a3426, 6.2, 0, -4.2); b.box(1.4, 0.9, 0.06, 0x2f5fb0, 6.9, 3.6, -4.2); b.box(0.4, 0.4, 0.07, 0xf2c94a, 6.9, 3.85, -4.18);
+  return { g: b.g, top: 11.5 };
+}

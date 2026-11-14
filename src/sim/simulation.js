@@ -1,14 +1,14 @@
 // Simulation : 100 % indépendante du rendu (aucune dépendance à Three.js ni au DOM). Pas fixe de 20 Hz.
-import { TICK, SECTORS, SECTOR_W, W, CASTLE } from './constants.js';
+import { TICK, SECTORS, SECTOR_W, W, CASTLE, SEGS, SEG_W, WALL_Z0, ARCHER_Z, sectorOfX } from './constants.js';
 import { makeRng } from './rng.js';
 import { SpatialHash } from './spatial.js';
 import { generateTerrain } from './terrain.js';
 import { FlowFields } from './flowfield.js';
 import { Wall } from './wall.js';
 import { ZombieSwarm } from './zombies.js';
-import { Army } from './army.js';
+import { Army, archerPos } from './army.js';
 import { Siege } from './siege.js';
-import { START, UNITS, TIMING, waveSpec, giantsFor, PACK, FIRE, DIFFICULTY } from '../content/medieval.js';
+import { START, UNITS, TIMING, waveSpec, giantsFor, golemsFor, GOLEM, PACK, FIRE, DIFFICULTY } from '../content/medieval.js';
 import { Mages } from './mage.js';
 import { Economy } from './economy.js';
 import { Build } from './build.js';
@@ -33,7 +33,7 @@ export class Simulation {
   newGame() {
     this.rng = makeRng(this.seed);
     this.wall.reset(); this.zombies.clear(); this.zombies.kills = 0;
-    this.army = new Army(); this.siege = new Siege(); this.mages = new Mages(); this.blasts = []; this.blastId = 0; this.fires = [];
+    this.army = new Army(); this.siege = new Siege(); this.mages = new Mages(); this.blasts = []; this.blastId = 0; this.fires = []; this.fallers = [];
     this.eco.reset(); this.build.reset();
     this.army.reserve = { ...START.reserve };
     for (let s = 0; s < SECTORS; s++) { this.army.reserve.archer += START.perSector.archer; this.army.assignArchers(s, START.perSector.archer); }
@@ -92,6 +92,26 @@ export class Simulation {
       for (let q = 0; q < k; q++) { const i = this.scratch[q]; if (Z.hp[i] > 0 && (Z.x[i] - F.x) ** 2 + (Z.z[i] - F.z) ** 2 <= F.r * F.r) Z.hit(i, FIRE.dps * dt); }
     }
   }
+  // coups sismiques des golems : la muraille voisine tremble, des archers tombent du chemin de ronde
+  golemSlams(dt) {
+    const Z = this.zombies;
+    for (const sl of Z.slams) {
+      for (let d = -GOLEM.reach; d <= GOLEM.reach; d++) { const k = sl.seg + d; if (k < 0 || k >= SEGS || this.wall.hp[k] <= 0) continue; if (this.wall.damage(k, GOLEM.quake * (d ? 0.45 : 1))) this.onBreach(k); }
+      const s = sectorOfX(sl.x), a = this.army.archers[s]; let fell = 0, dead = 0;
+      const n = Math.min(a.n, 1 + ((this.rng() * GOLEM.fall) | 0));
+      for (let q = 0; q < n; q++) {
+        let best = -1, bd = GOLEM.fallReach; for (let k = 0; k < a.n; k++) { const p = archerPos(s, k), dd = Math.abs(p.x - sl.x); if (dd < bd && a.prog[k] > 1e8) { bd = dd; best = k; } }
+        if (best < 0) break; const p = archerPos(s, best);
+        a.n--; a.cd[best] = a.cd[a.n]; fell++;
+        const lives = this.rng() < GOLEM.survive; if (lives) this.army.reserve.archer++; else dead++;
+        this.fallers.push({ x: p.x, z: p.z, t: 0, dead: !lives, rot: this.rng() * 6.28 });
+      }
+      this.blast('quake', sl.x, WALL_Z0, SEG_W * (GOLEM.reach + 0.5));
+      if (fell) this.events.push({ type: 'golem', fell, dead });
+    }
+    Z.slams.length = 0;
+    for (let i = this.fallers.length - 1; i >= 0; i--) if ((this.fallers[i].t += dt) > 3.5) this.fallers.splice(i, 1);
+  }
   skipPrep() { if (this.phase === 'prep') this.timer = 0; }
 
   // ——— événements internes ———
@@ -112,8 +132,8 @@ export class Simulation {
     const spec = waveSpec(this.wave), D = DIFFICULTY[this.difficulty] || DIFFICULTY.normal; spec.n = Math.round(spec.n * D.n); this.zombies.hpMult = D.hp;
     const counts = spec.frac.map(f => Math.round(f * spec.n));
     counts[0] += spec.n - counts.reduce((a, b) => a + b, 0);
-    const giants = giantsFor(this.wave, this.rng()); counts[5] = giants;
-    this.spawn = { counts, left: spec.n + giants, total: spec.n + giants, rate: spec.n / spec.duration, acc: 0, next: this.packSize(spec.n) };
+    const giants = giantsFor(this.wave, this.rng()), golems = golemsFor(this.wave); counts[5] = giants; counts[6] = golems;
+    this.spawn = { counts, left: spec.n + giants + golems, total: spec.n + giants + golems, rate: spec.n / spec.duration, acc: 0, next: this.packSize(spec.n) };
     this.assaultTime = 0; this.events.push({ type: 'waveStart', wave: this.wave });
   }
   updateWaves(dt) {
@@ -145,7 +165,8 @@ export class Simulation {
     let primary = this.pickType(sp), done = 0; if (primary < 0) return 0;
     const grp = this.nextGroup = (this.nextGroup || 0) % 1000000 + 1;
     for (let i = 0; i < size && sp.left > 0; i++) {
-      let t = i === 0 && primary === 5 ? 5 : (primary === 5 ? 0 : (rng() < 0.2 ? this.pickType(sp) : primary));
+      const big = primary >= 5;      // colosse ou golem : il mène une horde de zombies ordinaires
+      let t = i === 0 && big ? primary : (big ? 0 : (rng() < 0.2 ? this.pickType(sp) : primary));
       if (t < 0 || sp.counts[t] <= 0) t = this.pickType(sp); if (t < 0) break;
       // horde en front large (plus large que profonde) : elle arrive sur plusieurs tronçons à la fois
       const r = rad * Math.sqrt(rng()), a = rng() * Math.PI * 2, ox = Math.cos(a) * r * 1.5, oz = Math.sin(a) * r * 0.6, x = Math.min(W - 1, Math.max(1, gx + ox)), z = Math.max(1, gz + oz);
@@ -170,6 +191,7 @@ export class Simulation {
     this.army.update(dt, this);
     this.siege.update(dt, this);
     this.mages.update(dt, this);
+    this.golemSlams(dt);
     this.burn(dt);
     this.build.update(dt);
     this.eco.update(dt);

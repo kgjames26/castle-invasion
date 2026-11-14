@@ -38,7 +38,7 @@ export class Mages {
     m.mana = Math.min(st.mana, m.mana + st.regen * dt); m.hp = Math.min(st.hp, m.hp + 2 * dt);
     for (const k in m.cd) m.cd[k] -= dt;
     // coups reçus : zombies au contact
-    const nm = hash.query(m.x, m.z, 1.6, Z.x, Z.z, tmp); for (let k = 0; k < nm; k++) { const i = tmp[k]; if (Z.hp[i] > 0) { m.hp -= 8 * dt; m.hurt = 0.3; } }
+    const nm = hash.query(m.x, m.z, 1.6, Z.x, Z.z, tmp); for (let k = 0; k < nm; k++) { const i = tmp[k]; if (Z.hp[i] > 0) { m.hp -= 8 * dt * sim.eco.defMult('mage'); m.hurt = 0.3; } }
     // ——— incantation en cours ———
     if (m.cast) { m.cast.t -= dt; if (m.cast.t <= 0) { this.release(m, m.cast, sim, st); m.cast = null; } return; }
     // ——— sécurité : garder ses distances avec le zombie le plus proche ———
@@ -102,7 +102,7 @@ export class Mages {
   }
   begin(m, p, sim) { const S = MAGE.spells[p.k]; m.plan = null; if (m.mana < S.mana || (m.cd[p.k] || 0) > 0) return; m.mana -= S.mana; m.cd[p.k] = S.cd; m.cast = { ...p, t: p.k === 'meteor' ? 1.2 : 0.55, full: p.k === 'meteor' ? 1.2 : 0.55 }; m.face = Math.atan2(p.tx - m.x, p.tz - m.z) || m.face; m.action = p.label; sim.blast('cast', m.x, m.z, 1, { spell: p.k }); }
   release(m, c, sim, st) {
-    const S = MAGE.spells[c.k], lv = st.lv, Z = sim.zombies, mult = 1 + (S.dmgPerLevel || 0) * (lv - 1);
+    const S = MAGE.spells[c.k], lv = st.lv, Z = sim.zombies, mult = (1 + (S.dmgPerLevel || 0) * (lv - 1)) * sim.eco.atkMult('mage');
     if (c.k === 'fireball') { const d = Math.hypot(c.tx - m.x, c.tz - m.z); this.shots.push({ x0: m.x, z0: m.z, x1: c.tx, z1: c.tz, t: 0, dur: Math.max(0.25, d / S.speed), dmg: S.dmg * mult, aoe: S.aoe }); sim.blast('fireballLaunch', m.x, m.z, 1, { x2: c.tx, z2: c.tz, dur: Math.max(0.25, d / S.speed) }); }
     else if (c.k === 'lightning') {
       let x = m.x, z = m.z, i = c.zi; const hit = new Set(), pts = [[m.x, m.z]];

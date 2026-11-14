@@ -8,7 +8,21 @@ export const ZOMBIES = [
   { id: 3, name: 'Lourd',       hp: 400, speed: 1.3, wall: 10, unit: 18, size: 1.7, color: 0x8a4f3a },
   { id: 4, name: 'Briseur',     hp: 150, speed: 1.8, wall: 45, unit: 8,  size: 1.25, color: 0xd9822b },
   { id: 5, name: 'Colosse',     hp: 1400, speed: 1.2, wall: 40, unit: 40, size: 4.4, color: 0x9a6f5c },   // géant : au moins 4× la taille d'un zombie normal, apparaît « parfois »
+  { id: 6, name: 'Golem',       hp: 850, speed: 1.4, wall: 22, unit: 30, size: 2.4, color: 0x7d7a74 },    // golem de pierre : ses coups font trembler la muraille et tomber les archers
 ];
+// Forge v1.9 : attaque et défense PROPRES à chaque type, indépendantes du rang (bâtiment d'origine).
+//  attaque +12 %/niveau ; défense : dégâts reçus −8 %/niveau ; plafond = 2 × niveau de la forge (max 6).
+export const SMITH = {
+  types: { archer: '🏹 Archers', soldier: '⚔ Fantassins', heavy: '🛡 Lourds', knight: '🗡 Chevaliers', cavalry: '🐎 Cavaliers', siege: '🛠 Tours et machines', mage: '🧙 Magicien' },
+  atk: 0.12, def: 0.08, max: 6, perForge: 2,
+  atkCost: lv => ({ iron: 30 + 25 * lv, gold: 20 + 15 * lv }), defCost: lv => ({ iron: 35 + 30 * lv, wood: 20 + 15 * lv }),
+};
+// Infirmerie : PV rendus par seconde (part des PV max) aux escouades en garnison hors combat ; part des tombés sauvés (retour en réserve)
+export const INFIRMARY = { heal: [0, 0.012, 0.022, 0.035], save: [0, 0.1, 0.2, 0.3] };
+// Golem : toutes les `every` secondes au contact de la muraille, un coup de poing sismique : dégâts aux tronçons voisins,
+// secousse, et jusqu'à `fall` archers du secteur proche tombent du chemin de ronde (une partie survit et retourne en réserve).
+export const GOLEM = { every: 3.5, quake: 40, reach: 2, fall: 2, fallReach: 12, survive: 0.5, from: 5 };
+export const golemsFor = v => v < GOLEM.from ? 0 : 1 + ((v - GOLEM.from) / 3 | 0);
 // Unités : `pop` = places occupées dans la population PARTAGÉE (villageois + militaires), plafonnée par les maisons.
 export const UNITS = {
   archer:  { name: 'Archer',   ico: '🏹', hp: 60,  dmg: 14, rate: 1.2, range: 34, pop: 1, cost: { gold: 14, wood: 15 },           train: 7,  from: 'range',    color: 0x2fae6a, size: 1 },
@@ -68,7 +82,7 @@ export const ECON = {
   upkeep: { villager: 0.02, unit: 0.03 },    // nourriture / personne / seconde
   famineMult: 0.5, levelGather: 0.15, millBonus: 0.2,
   repairHpPerSec: 14, villagerCost: { food: 40 },
-  popBase: 14, popPerHouse: 8, housesStart: 0, housesMax: 60,      // population max PARTAGÉE = base + maisons × 8
+  popBase: 40, popPerHouse: 15, housesStart: 0, housesMax: 70,     // population max PARTAGÉE = château 40 + maisons × 15 (grosse population, v1.9)
   drop: { x: 100, z: 284 },                  // point de dépôt : le château
   restock: { gold: 25, stone: 20, iron: 10 },
 };
@@ -90,8 +104,8 @@ export const BUILDINGS = {   // group: 'eco' (onglet Village) ou 'army' (onglet 
   sawmill:   { time: 25, base: 3, name: 'Scierie',   ico: '🪚', group: 'eco', start: 0, cost: { wood: 60 },             pos: { x: 40,  z: 262 }, size: [9, 5, 7],  color: 0x9b6a3a, info: 'Emplacements bûcherons · +15 % de rendement par niveau' },
   quarry:    { time: 25, base: 3, name: 'Carrière',  ico: '⛏', group: 'eco', start: 0, cost: { wood: 60 },             pos: { x: 160, z: 262 }, size: [9, 5, 7],  color: 0x8a8d92, info: 'Emplacements carriers · +15 % de rendement par niveau' },
   mine:      { time: 40, base: 0, name: 'Mine',      ico: '⛓', group: 'eco', start: 0, cost: { wood: 100, stone: 60 }, pos: { x: 182, z: 243 }, size: [8, 6, 8],  color: 0x4f5a72, info: 'Emplacements fer + or (partagés) · +15 %/niveau' },
-  farm:      { time: 30, base: 3, name: 'Ferme',     ico: '🌾', group: 'eco', start: 0, cost: { wood: 70 },             pos: { x: 100, z: 244 }, size: [16, 1.2, 10], color: 0xc9b24a, info: 'Emplacements fermiers · +15 % de rendement par niveau' },
-  mill:      { time: 30, base: 0, name: 'Moulin',    ico: '🌀', group: 'eco', start: 0, cost: { wood: 90, stone: 40 },  pos: { x: 128, z: 258 }, size: [6, 9, 6],  color: 0xcfc3a1, info: 'Nourriture +20 % par niveau' },
+  farm:      { time: 30, base: 3, name: 'Ferme',     ico: '🌾', group: 'eco', start: 0, cost: { wood: 70 },             pos: { x: 100, z: 244 }, size: [16, 1.2, 10], color: 0xc9b24a, max: 6, info: 'Emplacements fermiers · +15 % de rendement par niveau · s\'agrandit (champs, poulailler, verger, silo, pâture)' },
+  mill:      { time: 30, base: 0, name: 'Moulin',    ico: '🌀', group: 'eco', start: 0, cost: { wood: 90, stone: 40 },  pos: { x: 128, z: 258 }, size: [6, 9, 6],  color: 0xcfc3a1, max: 5, info: 'Nourriture +20 % par niveau · s\'agrandit (fournil, socle de pierre, roue à aubes)' },
   granary:   { time: 28, base: 0, name: 'Grenier',   ico: '🏚', group: 'eco', start: 0, cost: { wood: 80, stone: 30 },  pos: { x: 66,  z: 270 }, size: [9, 6, 7],  color: 0xb08a4a, info: 'Stock de nourriture +400 par niveau' },
   warehouse: { time: 32, base: 0, name: 'Entrepôt',  ico: '📦', group: 'eco', start: 0, cost: { wood: 80, stone: 40 },  pos: { x: 134, z: 272 }, size: [10, 6, 8], color: 0x7a6a55, info: 'Stock bois/pierre/fer/or +400 par niveau' },
 };
@@ -100,7 +114,9 @@ export const ARMY_BUILDINGS = {
   barracks: { time: 45, base: 0, name: 'Caserne',      ico: '🪖', group: 'army', start: 0, cost: { wood: 100, stone: 50 }, max: 5, pos: { x: 36,  z: 224 }, size: [16, 5, 11], color: 0x8a4545, info: 'Fantassins · Lourds dès le niveau 2 · Chevaliers dès le niveau 3' },
   stable:   { time: 45, base: 0, name: 'Écurie',       ico: '🐎', group: 'army', start: 0, cost: { wood: 120, stone: 40 }, max: 5, pos: { x: 164, z: 224 }, size: [16, 5, 11], color: 0x7a5a3a, info: 'Cavaliers' },
   range:    { time: 35, base: 0, name: 'Champ de tir', ico: '🎯', group: 'army', start: 0, cost: { wood: 90, stone: 30 },  max: 5, pos: { x: 100, z: 224 }, size: [18, 3, 9],  color: 0x4a6f4a, info: 'Archers' },
-  forge:    { time: 50, base: 0, name: 'Forge',        ico: '🔨', group: 'army', start: 0, max: 1, cost: { wood: 80, stone: 80, iron: 40 }, pos: { x: 66, z: 236 }, size: [10, 6, 8], color: 0x5a4f58, info: 'Débloque les améliorations militaires' },
+  forge:    { time: 50, base: 0, name: 'Forge',        ico: '🔨', group: 'army', start: 0, max: 3, cost: { wood: 80, stone: 80, iron: 40 }, pos: { x: 66, z: 236 }, size: [10, 6, 8], color: 0x5a4f58, info: 'Attaque et défense de chaque type d\'unité, indépendamment de son rang · niveau = plafond (2/4/6)' },
+  infirmary: { time: 40, base: 0, name: 'Infirmerie',  ico: '🏥', group: 'army', start: 0, max: 3, cost: { wood: 90, stone: 60, food: 60 }, pos: { x: 140, z: 290 }, size: [12, 6, 9], color: 0xe8e2d6, info: 'Soigne les escouades au repos · sauve une partie des blessés graves' },
+  university: { time: 60, base: 0, name: 'Université', ico: '🎓', group: 'eco', start: 0, max: 3, cost: { wood: 140, stone: 120, gold: 40 }, pos: { x: 60, z: 286 }, size: [14, 9, 10], color: 0xb8a88a, info: 'Améliore les villageois · niveau = plafond des améliorations (2/3/4)' },
 };
 // Maison du sorcier : invoque UN magicien autonome (il choisit seul de soigner ou d'attaquer). Le niveau du bâtiment = niveau du magicien.
 ARMY_BUILDINGS.wizard = { time: 60, base: 0, name: 'Maison du sorcier', ico: '🔮', group: 'army', start: 0, max: 5, cost: { wood: 120, stone: 140, gold: 80 }, pos: { x: 100, z: 280 }, size: [10, 14, 10], color: 0x5a4a8a, info: 'Invoque un magicien autonome · chaque niveau le rend plus puissant' };
@@ -109,7 +125,7 @@ Object.assign(BUILDINGS, ARMY_BUILDINGS);
 // ——— Phase 6 : construction libre ———
 // Structures multiples (placées où l'on veut) : maisons et tours de défense. Les autres bâtiments existent en un seul exemplaire (niveaux).
 export const MULTI = {
-  house: { name: 'Maison', ico: '🏠', group: 'eco', time: 16, size: [6, 4.6, 6], info: `+8 places de population (villageois + armée)` },
+  house: { name: 'Maison', ico: '🏠', group: 'eco', time: 16, size: [6, 4.6, 6], info: `+15 places de population (villageois + armée)` },
   tower: { name: 'Tour de défense', ico: '🗼', group: 'def', time: 30, size: [5, 14, 5], cost: { wood: 70, stone: 110 }, max: 5, info: 'Tire seule sur les zombies à portée · améliorable' },
 };
 export const STRUCT = { ...BUILDINGS, ...MULTI };
@@ -154,12 +170,13 @@ export const SIEGE_ORDER = ['ballista', 'catapult', 'trebuchet'];
 export const SIEGE_RULES = { perLevel: 2, slotsPerSector: 3, queueMax: 4, speedPerLevel: 0.25, refund: 0.5 };
 // Améliorations : effets mesurables, coût du niveau N+1 = base × (N+1).
 export const UPGRADES = {
-  tools:   { name: 'Outils',            ico: '🛠', max: 4, cost: { wood: 60, iron: 20 }, per: 0.20, info: 'Récolte +20 % par niveau' },
-  carts:   { name: 'Chariots',          ico: '🛒', max: 3, cost: { wood: 80, iron: 25 }, per: 0.50, info: 'Charge portée +50 % par niveau' },
-  boots:   { name: 'Chemins pavés',     ico: '👢', max: 3, cost: { stone: 70, wood: 40 }, per: 0.20, info: 'Vitesse de marche +20 % par niveau' },
-  plow:    { name: 'Charrue',           ico: '🚜', max: 3, cost: { wood: 70, iron: 20 }, per: 0.25, info: 'Rendement des fermes +25 % par niveau' },
-  masonry: { name: 'Maçonnerie',        ico: '🧱', max: 3, cost: { stone: 80, iron: 30 }, per: 0.30, info: 'Réparation +30 % vitesse, −10 % pierre par niveau' },
-  // — Forge (onglet Armée) —
+  tools:   { name: 'Outils',            ico: '🛠', req: 'university', max: 4, cost: { wood: 60, iron: 20 }, per: 0.20, info: 'Récolte +20 % par niveau' },
+  carts:   { name: 'Chariots',          ico: '🛒', req: 'university', max: 3, cost: { wood: 80, iron: 25 }, per: 0.50, info: 'Charge portée +50 % par niveau' },
+  boots:   { name: 'Chemins pavés',     ico: '👢', req: 'university', max: 3, cost: { stone: 70, wood: 40 }, per: 0.20, info: 'Vitesse de marche +20 % par niveau' },
+  plow:    { name: 'Charrue',           ico: '🚜', req: 'university', max: 3, cost: { wood: 70, iron: 20 }, per: 0.25, info: 'Rendement des fermes +25 % par niveau' },
+  masonry: { name: 'Maçonnerie',        ico: '🧱', req: 'university', max: 3, cost: { stone: 80, iron: 30 }, per: 0.30, info: 'Réparation +30 % vitesse, −10 % pierre par niveau' },
+  apprentice: { name: 'Apprentissage', ico: '📐', req: 'university', max: 3, cost: { wood: 70, stone: 40, gold: 20 }, per: 0.25, info: 'Construction +25 % plus rapide par niveau' },
+  // — Forge (onglet Armée) : anciennes améliorations globales, remplacées par SMITH (gardées pour les vieilles sauvegardes) —
   weapons: { name: 'Armes affûtées',    ico: '🗡', group: 'army', req: 'forge', max: 4, cost: { iron: 40, gold: 40 }, per: 0.10, info: 'Dégâts de toutes les unités +10 % par niveau' },
   blades:  { name: 'Lames d\'acier',    ico: '⚔', group: 'army', req: 'forge', max: 3, cost: { iron: 70, gold: 50 }, per: 0.15, info: 'Chevaliers : frappe +1 cible et +15 % de dégâts par niveau' },
   arcana:  { name: 'Arcanes',           ico: '📖', group: 'army', req: 'wizard', max: 3, cost: { gold: 90, food: 40 }, per: 0.20, info: 'Magicien : mana +20 % et récupération +20 % par niveau' },

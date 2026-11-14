@@ -21,4 +21,13 @@ function initial() {
   try { return matchMedia('(pointer: coarse)').matches ? 'low' : 'high'; } catch { return 'medium'; }
 }
 export const quality = { name: initial(), ...PRESETS[initial()] };
+// FORMAT de partie : choisi à la création d'une partie (proposé selon l'appareil), puis figé pour toute la partie.
+export const FORMATS = { phone: { name: 'Téléphone', ico: '📱', q: 'low', info: 'léger : sans ombres ni lueurs, moins de particules' }, tablet: { name: 'Tablette', ico: '📟', q: 'medium', info: 'ombres et lueurs, effets modérés' }, desktop: { name: 'Ordinateur', ico: '🖥', q: 'high', info: 'tous les effets, ombres fines, herbe dense' } };
+export function idealFormat() {
+  try {
+    const touch = matchMedia('(pointer: coarse)').matches, side = Math.min(screen.width, screen.height), weak = (navigator.deviceMemory || 8) <= 3 || (navigator.hardwareConcurrency || 8) <= 4;
+    if (touch) return side < 600 || weak ? 'phone' : 'tablet';
+    return weak ? 'tablet' : 'desktop';
+  } catch { return 'tablet'; }
+}
 export function setQualityName(n) { if (!PRESETS[n]) return false; quality.name = n; Object.assign(quality, PRESETS[n]); try { localStorage.setItem(KEY, n); } catch { /* ignoré */ } return true; }

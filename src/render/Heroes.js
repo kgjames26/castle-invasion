@@ -213,3 +213,23 @@ export function wizardModel() {
   g.userData.spin = orbit;
   return { g, top: 20 };
 }
+
+// ——— GOLEM ZOMBIE : corps de blocs de pierre liés par de la chair verdâtre, yeux braisés, poings énormes ———
+//  regarde vers +z, ≈ 2,6 m à l'échelle 1 ; pièces : corps, jambes, bras gauche et droit (coup de poing sismique à deux mains)
+export function golemParts() {
+  const ST = 0x8a857c, STD = 0x6a665f, MOSS = 0x5d7a3a, FLESH = 0x6f8a5a, EYE = 0xff7a20;
+  const body = [
+    bx(1.5, 1.1, 1.0, ST, 0, 1.55, 0, 0.08, 0.05), bx(1.2, 0.7, 0.9, STD, 0, 0.95, 0.02, -0.06), bx(1.7, 0.45, 1.05, ST, 0, 2.2, -0.02, 0, 0.04),   // torse en blocs
+    bx(0.9, 0.5, 0.7, FLESH, 0, 1.3, 0.38), bx(0.5, 0.3, 0.2, MOSS, -0.4, 2.3, 0.45), bx(0.6, 0.2, 0.3, MOSS, 0.5, 1.9, -0.45),                     // chair à vif, mousse
+    bx(0.62, 0.55, 0.6, STD, 0, 2.62, 0.18, 0.1), bx(0.16, 0.1, 0.06, EYE, -0.15, 2.66, 0.49), bx(0.16, 0.1, 0.06, EYE, 0.15, 2.66, 0.49),         // tête + yeux braisés
+    bx(0.5, 0.14, 0.12, 0x2a2622, 0, 2.47, 0.48), bx(0.35, 0.5, 0.35, ST, -0.55, 2.55, -0.25, 0.3), bx(0.3, 0.45, 0.3, ST, 0.6, 2.5, -0.2, -0.25),   // mâchoire, pics dorsaux
+  ];
+  const leg = () => [bx(0.6, 0.95, 0.65, STD, 0, -0.48, 0), bx(0.75, 0.3, 0.85, ST, 0, -0.85, 0.08)];
+  const arm = sx => [bx(0.65, 0.6, 0.65, ST, 0, -0.1, 0), bx(0.5, 0.8, 0.5, FLESH, 0, -0.65, 0), bx(0.5, 0.7, 0.55, STD, 0, -1.2, 0.05), bx(0.95, 0.85, 0.95, ST, 0, -1.85, 0.1), bx(0.25, 0.25, 0.2, MOSS, sx * 0.3, -1.6, 0.5)];
+  return [
+    part('body', [0, 0, 0], body),
+    part('legL', [-0.42, 0.95, 0], leg(), 'rot', true), part('legR', [0.42, 0.95, 0], leg(), 'rot', true),
+    part('armL', [-1.0, 2.15, 0], arm(-1), 'rot', true), part('armR', [1.0, 2.15, 0], arm(1), 'rot', true),
+  ];
+}
+export function golemRig(scene) { return new Rig(scene, golemParts(), 32); }

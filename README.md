@@ -158,3 +158,16 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Muraille** : châtelets (tours, salle de herse, bannières) et herses de fer qui montent ; créneaux et contreforts.
 - **Jouabilité** : emprunt de villageois pour toute tâche (retour automatique), réparation automatique, difficulté (facile/normal/difficile), ordres directs aux escouades (toucher la carte), onglets ⭐ Rangs et 🔮 Magie, « Où améliorer quoi ? » dans Savoir, échelles harmonisées (humains ≈ 2,3 m), herbe masquée sous les bâtiments, qualité adaptative (`?fps=1` affiche les images/s).
 - Sauvegarde v5 (structures mal placées replacées au chargement). Test : `tests/magie.mjs`.
+
+## Phase 19 — Golems, infirmerie, université, forge par type, grosse population
+- Bug corrigé : le château et les tours de la muraille n'apparaissaient plus (un commentaire avalait une déclaration dans `Renderer.useKit`).
+- Herbe : mini-touffes immobiles (3 brins, sans animation).
+- **Format de partie** (`FORMATS` dans config.js : Téléphone / Tablette / Ordinateur) : proposé selon l'appareil à la création d'une partie, modifiable seulement à cet écran, enregistré dans la sauvegarde ; plus de changement de qualité en cours de partie.
+- **Population** : château 40 places, maisons +15 (70 maisons max) ; jusqu'à 720 villageois affichés.
+- **Golem** (zombie de type 6, dès la vague 5, `GOLEM`) : ses coups font trembler les tronçons voisins et font tomber des archers du chemin de ronde (la moitié survit et retourne en réserve) ; modèle de pierre articulé (`golemParts`), chute des archers animée.
+- **Infirmerie** (🏥, 3 niveaux, `INFIRMARY`) : soigne les escouades en garnison hors combat, sauve une partie des combattants tombés.
+- **Forge** (3 niveaux, `SMITH`) : attaque et défense propres à chaque type (archers, fantassins, lourds, chevaliers, cavaliers, tours et machines, magicien), indépendantes du rang ; plafond 2/4/6. Les anciennes améliorations globales sont converties.
+- **Université** (🎓, 3 niveaux) : toutes les améliorations des villageois en dépendent (plafond = niveau + 1) ; nouvelle amélioration Apprentissage (construction plus rapide).
+- **Ferme** 6 niveaux (champs, potager et poulailler, verger, silo et grange, pâture avec bêtes) et **moulin** 5 niveaux (fournil, socle de pierre, roue à aubes ; le moulin grandit).
+- **Minerais en 3D** (`Ores.js`) : affleurements de pierre, de fer (rouille, cristaux d'hématite) et d'or (filons, pépites), taille selon la réserve.
+- Test : `tests/golem.mjs`.

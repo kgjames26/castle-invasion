@@ -1,7 +1,7 @@
 // Rendu Three.js : lit l'état de la simulation, ne le modifie jamais. Géométrie provisoire (low-poly basique).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, GATE_SEGS, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT, PLAZA } from '../sim/constants.js';
+import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, GATE_SEGS, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT, PLAZA, WALK_H } from '../sim/constants.js';
 import { T } from '../sim/terrain.js';
 import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/medieval.js';
 import { archerPos, formationLayout, archerPose, rallySlot } from '../sim/army.js';
@@ -13,16 +13,19 @@ import { Effects, EFFECTS } from './Effects.js';
 import { ATMOS, CAMERA, quality, setQualityName } from './config.js';
 import { fogUniforms, patchNorthFog } from './fog.js';
 import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry, troopRig, siegeRig, bx } from './Troops.js';
-import { buildKnightRigs, makeMage, poseMage, knightRig } from './Heroes.js';
+import { buildKnightRigs, makeMage, poseMage, knightRig, golemRig } from './Heroes.js';
 import { Paving, carrierGeometry, TOOL_TINT } from './Village.js';
+import { OreView } from './Ores.js';
 import { RANKS } from '../content/medieval.js';
-const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1]];      // variantes de modèle par type de zombie
+const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1], [1]];      // le golem (6) a son propre modèle articulé ; [1] ne sert que de repli
+const _v1 = [];      // variantes de modèle par type de zombie
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
 
 const lam = (color, opts = {}) => applyNorthFog(new THREE.MeshLambertMaterial({ color, flatShading: true, ...opts }));
 // Échelles (v1.8) : tous les humains mesurent ≈ 2,3 m (un peu plus grands que nature pour rester lisibles de haut) ;
 // zombie classique = humain ; colosse ≈ 10 m. Muraille 6,4 m, porte 4,4 m : un cavalier passe sous la herse.
 export const HUMAN_H = 2.3;
+const VCAP = 720;     // villageois affichables (grosse population, v1.9)
 const ASC = HUMAN_H / 1.69;
 const ZSCALE = 1.45, USCALE = 1.75;   // personnages à l'échelle des bâtiments (v3.1 : réduits d'environ 35 % pour éviter l'effet « maquette »)
 
@@ -64,15 +67,12 @@ export class Renderer {
   // ——— touffes d'herbe : une seule maille instanciée (3 lames croisées par touffe), balancée par le vent dans le shader ———
   buildGrass() {
     const MAXN = 4200, blades = [], pos = [], nor = [];
-    for (let b = 0; b < 5; b++) {   // 5 lames : triangle effilé, inclinées et orientées différemment
-      const a = b * 1.256 + 0.3, h = 0.8 + 0.5 * ((b * 37) % 5) / 4, lean = 0.12 + 0.1 * (b % 3), w = 0.09, ox = Math.cos(a) * 0.12, oz = Math.sin(a) * 0.12, cx = Math.cos(a + 1.57), cz = Math.sin(a + 1.57);
+    for (let b = 0; b < 3; b++) {   // mini-herbe immobile (v1.9) : 3 petites lames, aucune animation
+      const a = b * 2.09 + 0.3, h = 0.32 + 0.12 * (b % 2), lean = 0.06, w = 0.06, ox = Math.cos(a) * 0.12, oz = Math.sin(a) * 0.12, cx = Math.cos(a + 1.57), cz = Math.sin(a + 1.57);
       pos.push(ox - cx * w, 0, oz - cz * w, ox + cx * w, 0, oz + cz * w, ox + Math.cos(a) * lean, h, oz + Math.sin(a) * lean); for (let i = 0; i < 3; i++) nor.push(0, 1, 0);
     }
     const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }); this.grassTime = { value: 0 };
-    mat.onBeforeCompile = sh => { patchNorthFog(sh); sh.uniforms.uTime = this.grassTime; sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTime;').replace('#include <begin_vertex>', `#include <begin_vertex>
-      { float ph = instanceMatrix[3][0] * 0.7 + instanceMatrix[3][2] * 0.5; transformed.x += sin( uTime * 1.7 + ph ) * 0.16 * position.y; transformed.z += cos( uTime * 1.3 + ph ) * 0.1 * position.y; }`); };
-    mat.customProgramCacheKey = () => 'grass-wind';
+    const mat = applyNorthFog(new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
     const im = new THREE.InstancedMesh(geo, mat, MAXN); im.frustumCulled = false; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAXN * 3), 3);
     const type = this.sim.terrain.type; let seed = 4242; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647, d = this.dummy, c = this.tmpColor; let n = 0, tries = 0;
     const cols = { south: [[0.32, 0.5, 0.22], [0.42, 0.55, 0.26], [0.55, 0.55, 0.28]], north: [[0.66, 0.66, 0.6], [0.58, 0.6, 0.55], [0.74, 0.74, 0.7]] };   // herbe givrée, claire sur la neige
@@ -81,7 +81,7 @@ export class Renderer {
       if (Math.hypot((x - CASTLE.x) / 38, (z - CASTLE.z) / 28) < 1) continue;                                        // pas sur les pavés du château
       if (Math.abs(x - PLAZA.x) < PLAZA.hw + 2 && Math.abs(z - PLAZA.z) < PLAZA.hd + 2) continue;                       // ni sur la placette
       const t = type[((z / CELL) | 0) * GW + ((x / CELL) | 0)]; if (t === T.ROAD || t === T.ROCK) continue;
-      const k = r() < 0.5 ? 0.8 + r() * 0.6 : 0.5 + r() * 0.4, pal = south ? cols.south : cols.north, col = pal[(r() * pal.length) | 0], v = 1.45 + r() * 0.5;
+      const k = 0.7 + r() * 0.6, pal = south ? cols.south : cols.north, col = pal[(r() * pal.length) | 0], v = 1.45 + r() * 0.5;
       d.position.set(x, 0, z); d.rotation.set(0, r() * 6.28, 0); d.scale.set(k, k * (0.8 + r() * 0.5), k); d.updateMatrix(); im.setMatrixAt(n, d.matrix); im.setColorAt(n, c.setRGB(col[0] * v, col[1] * v, col[2] * v)); n++;
     }
     im.userData.max = n; im.count = n; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; this.scene.add(im); this.grass = im;
@@ -301,7 +301,7 @@ export class Renderer {
     // points de récolte (gisements) : pastilles colorées au sol
     for (const t in TASKS) {
       const T = TASKS[t]; if (!T.res || t === 'food') continue;
-      const d = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 0.3, 14), new THREE.MeshBasicMaterial({ color: RES_INFO[T.res].color, transparent: true, opacity: 0.55 }));
+      const d = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.6, 0.12, 20), new THREE.MeshBasicMaterial({ color: RES_INFO[T.res].color, transparent: true, opacity: 0.25 }));
       d.position.set(T.site.x, 0.2, T.site.z); this.scene.add(d);
     }
     // forêt des bûcherons : les arbres s'éclaircissent quand on coupe et REPOUSSENT tout seuls (échelle = bois restant)
@@ -315,11 +315,12 @@ export class Renderer {
     { const cap = 14; this.exDisc = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 0.3, 16), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55 }), cap); this.exDisc.frustumCulled = false; this.exDisc.count = 0; this.exDisc.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); this.scene.add(this.exDisc);
       this.exRock = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), lam(0xffffff), cap * 6); this.exRock.frustumCulled = false; this.exRock.count = 0; this.exRock.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 6 * 3), 3); this.scene.add(this.exRock);
       const rg = new THREE.RingGeometry(4, 5.4, 28); rg.rotateX(-Math.PI / 2); this.pRing = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0x4fd1c5, transparent: true, opacity: 0.85, depthWrite: false })); this.pRing.visible = false; this.scene.add(this.pRing); }
+    this.ores = new OreView(this.scene);   // affleurements de minerai en 3D
     const vg = new THREE.BoxGeometry(0.7, 1.5, 0.7); vg.translate(0, 0.75, 0);
-    this.vMesh = new THREE.InstancedMesh(vg, lam(0xffffff), 160); this.vMesh.frustumCulled = false; this.vMesh.count = 0;
-    this.vMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(160 * 3), 3); this.scene.add(this.vMesh);
-    const cg = new THREE.BoxGeometry(0.7, 0.7, 0.7); this.cMesh = new THREE.InstancedMesh(cg, lam(0xffffff), 160); this.cMesh.frustumCulled = false; this.cMesh.count = 0;
-    this.cMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(160 * 3), 3); this.scene.add(this.cMesh);
+    this.vMesh = new THREE.InstancedMesh(vg, lam(0xffffff), VCAP); this.vMesh.frustumCulled = false; this.vMesh.count = 0;
+    this.vMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(VCAP * 3), 3); this.scene.add(this.vMesh);
+    const cg = new THREE.BoxGeometry(0.7, 0.7, 0.7); this.cMesh = new THREE.InstancedMesh(cg, lam(0xffffff), VCAP); this.cMesh.frustumCulled = false; this.cMesh.count = 0;
+    this.cMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(VCAP * 3), 3); this.scene.add(this.cMesh);
     this.vCol = { idle: new THREE.Color(0xd8b48a), repair: new THREE.Color(0xe67e22) };
   }
   updateEconomy(alpha) {
@@ -335,11 +336,11 @@ export class Renderer {
       let nd = 0, nr = 0;
       for (const r of ['stone', 'iron', 'gold']) for (const e of E.extra[r]) {
         if (nd >= 14) break; const f = Math.max(0, e.amount / e.max), rad = 3 + 3 * f;
-        d.position.set(e.x, 0.2, e.z); d.rotation.set(0, 0, 0); d.scale.set(rad, 1, rad); d.updateMatrix(); this.exDisc.setMatrixAt(nd, d.matrix); this.exDisc.setColorAt(nd, this.tmpColor.setHex(RES_INFO[r].color)); nd++;
+        d.position.set(e.x, 0.1, e.z); d.rotation.set(0, 0, 0); d.scale.set(rad, 0.4, rad); d.updateMatrix(); this.exDisc.setMatrixAt(nd, d.matrix); this.exDisc.setColorAt(nd, this.tmpColor.setHex(RES_INFO[r].color)); nd++;
         if (e.amount <= 0) continue;
         for (let j = 0; j < 6; j++) { const a = j * 1.05 + e.x, rr = rad * 0.55 * (j % 2 ? 0.6 : 1), s2 = 0.7 + 0.5 * ((j * 7) % 3) / 2; d.position.set(e.x + Math.cos(a) * rr, s2 * 0.5, e.z + Math.sin(a) * rr); d.rotation.set(j, j * 2, 0); d.scale.set(s2, s2 * 0.8, s2); d.updateMatrix(); this.exRock.setMatrixAt(nr, d.matrix); this.exRock.setColorAt(nr, this.tmpColor.setHex(RES_INFO[r].color).lerp(this.white, 0.15)); nr++; }
       }
-      this.exDisc.count = nd; this.exRock.count = nr; this.exDisc.instanceMatrix.needsUpdate = this.exRock.instanceMatrix.needsUpdate = true; if (nd) { this.exDisc.instanceColor.needsUpdate = true; this.exRock.instanceColor.needsUpdate = true; }
+      this.exDisc.count = nd; this.exRock.count = 0; this.ores.update(this.sim, this.clock); this.exDisc.instanceMatrix.needsUpdate = this.exRock.instanceMatrix.needsUpdate = true; if (nd) { this.exDisc.instanceColor.needsUpdate = true; this.exRock.instanceColor.needsUpdate = true; }
       const P = E.prospect; this.pRing.visible = !!P; if (P) { const pu = 1 + 0.12 * Math.sin(this.clock * 5) + 0.25 * (1 - P.t / P.dur); this.pRing.position.set(P.x, 0.4, P.z); this.pRing.scale.set(pu, pu, pu); }
     }
     if (this.vv) return this.updateVillagersVAT(alpha);
@@ -547,7 +548,8 @@ export class Renderer {
     this.wallMesh.visible = false; this.towers.visible = false; this.keepBoxes.visible = false;
     this.kw = { Wall1: mk('Wall1', SEGS), Wall2: mk('Wall2', SEGS), Wall3: mk('Wall3', SEGS), Wall4: mk('Wall4', 4) };
     this.kitWalls = true; this.put = put; if (this.wv) for (const k in this.kw) this.kw[k].visible = false;
-    const tw = [mk('Tower1', 2), mk('Tower2', 6)]; for (const t of tw) t.material = kitMaterial(kit.material.map, 0x4a5f80, 0xb8b2a6);   // tours : ardoise et pierre grise let a = 0, b = 0;
+    const tw = [mk('Tower1', 2), mk('Tower2', 6)]; for (const t of tw) t.material = kitMaterial(kit.material.map, 0x4a5f80, 0xb8b2a6);
+    let a = 0, b = 0;   // tours : ardoise et pierre grise
     for (let i = 0; i <= SECTORS; i++) { const x = Math.min(W - 3, Math.max(3, i * SECTOR_W)); if (i === 0 || i === SECTORS) put(tw[0], a++, x, 146, 0, 1.15, 1.15, 1.15); else put(tw[1], b++, x, 146, 0, 1.1, 1.1, 1.1); }
     tw[0].count = a; tw[1].count = b; for (const t of tw) { t.instanceMatrix.needsUpdate = true; this.shadowize(t); }
     for (const k in this.kw) this.shadowize(this.kw[k]);
@@ -600,7 +602,7 @@ export class Renderer {
   // ——— villageois (modèle GLB cuit en VAT) : une variante de couleur par métier + outil et chapeau attachés à la main / la tête ———
   useVillagerGLB(vg) {
     const GEAR = { idle: [null, 'cap'], wood: ['axe', 'cap'], stone: ['pick', 'hardGrey'], iron: ['pick', 'hard'], gold: ['pick', 'hard'], food: ['hoe', 'straw'], repair: ['hammer', 'hardOrange'], build: ['hammer', 'hard'] };
-    const cap = 160, gm = applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide })), vv = { vg, meshes: {}, tools: {}, hats: {}, cnt: {}, gcnt: {} };
+    const cap = VCAP, gm = applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide })), vv = { vg, meshes: {}, tools: {}, hats: {}, cnt: {}, gcnt: {} };
     for (const k of vg.tints) {
       const im = new THREE.InstancedMesh(vg.geos[k], vg.mat, cap); im.frustumCulled = false; im.count = 0;
       im.anim = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); im.anim.setUsage(THREE.DynamicDrawUsage); vg.geos[k].setAttribute('aAnim', im.anim); this.scene.add(im); vv.meshes[k] = im;
@@ -615,7 +617,7 @@ export class Renderer {
     const up = this.sim.eco.up; this.paving.set(up.boots);
     if (this.cartLevel !== up.carts) {
       this.cartLevel = up.carts; if (this.cart) { this.scene.remove(this.cart.mesh); this.cart = null; }
-      if (up.carts > 0) { const c = carrierGeometry(up.carts), m = new THREE.InstancedMesh(c.geo, this.chars ? this.chars.archerMat : lam(0xffffff), 160); m.frustumCulled = false; m.count = 0; this.scene.add(m); this.cart = { mesh: m, load: c.load }; }
+      if (up.carts > 0) { const c = carrierGeometry(up.carts), m = new THREE.InstancedMesh(c.geo, this.chars ? this.chars.archerMat : lam(0xffffff), VCAP); m.frustumCulled = false; m.count = 0; this.scene.add(m); this.cart = { mesh: m, load: c.load }; }
     }
     if (this.vv && this.toolLevel !== up.tools) { this.toolLevel = up.tools; const c = new THREE.Color(TOOL_TINT[Math.min(4, up.tools)]); for (const k in this.vv.tools) { const g = this.vv.tools[k]; if (!g) continue; if (!g.userData.base) g.userData.base = g.geometry.attributes.color.array.slice(); const a = g.geometry.attributes.color.array, b0 = g.userData.base; for (let i = 0; i < a.length; i += 3) { const grey = Math.abs(b0[i] - b0[i + 2]) < 0.08 && b0[i] > 0.35; if (grey) { a[i] = c.r; a[i + 1] = c.g; a[i + 2] = c.b; } } g.geometry.attributes.color.needsUpdate = true; } }
   }
@@ -658,7 +660,16 @@ export class Renderer {
   }
   renderZombies(alpha) {
     const Z = this.sim.zombies, n = Z.n, cnt = this.zvCount.fill(0), clock = this.clock, tc = this.tmpColor;
+    const G = this.golems || (this.golems = golemRig(this.scene)), d = this.dummy; G.begin();
     for (let i = 0; i < n; i++) {
+      if (Z.type[i] === 6) {     // golem : pièces animées ; coup de poing à deux mains quand il frappe la muraille
+        const x = Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, z = Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, dx = Z.x[i] - Z.px[i], dz = Z.z[i] - Z.pz[i], mv = dx * dx + dz * dz > 4e-6;
+        const rot = mv ? Math.atan2(dx, dz) : 0, sc = ZOMBIES[6].size * HUMAN_H / 2.6, ph = clock * 2.2 + Z.phase[i], sw = mv ? Math.sin(ph) * 0.45 : 0;
+        const atk = Z.state[i] === 1, f = atk ? 1 - Math.max(0, Z.slam[i]) / 3.2 : 0, raise = atk ? (f < 0.8 ? -2.9 * (f / 0.8) : -2.9 + 3.4 * ((f - 0.8) / 0.2)) : -0.2 + sw * 0.6;
+        d.position.set(x, Math.abs(Math.sin(ph)) * 0.12 * (mv ? 1 : 0), z); d.rotation.set(atk ? 0.12 * Math.sin(f * 3.14) : 0, rot, 0); d.scale.setScalar(sc); d.updateMatrix();
+        const hurt = Z.hp[i] / ZOMBIES[6].hp < 0.5 ? 0.75 : 1; tc.setRGB(hurt, hurt * 0.95, hurt * 0.92); if (Z.slow[i] > 0) tc.setRGB(0.7, 0.9, 1.3);
+        G.push(d.matrix, tc, [0, sw, -sw, atk ? raise : raise, atk ? raise : -raise]); continue;
+      }
       const t = Z.type[i], Zt = ZOMBIES[t], pool = ZVAR[t], vi = pool[((Z.phase[i] * 1000) | 0) % pool.length], im = this.zv[vi], k = cnt[vi]++;
       const x = Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, z = Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, dx = Z.x[i] - Z.px[i], dz = Z.z[i] - Z.pz[i];
       const rot = dx * dx + dz * dz > 4e-6 ? Math.atan2(dx, dz) : 0, c = Math.cos(rot), s2 = Math.sin(rot), sc = Zt.size * HUMAN_H / 1.6, o = k * 16, m = im.instanceMatrix.array;
@@ -668,6 +679,7 @@ export class Renderer {
       const hurt = Z.hp[i] / Zt.hp < 0.5 ? 0.72 : 1, tt = this.zTint[t], ca = im.instanceColor.array; if (Z.slow[i] > 0) { ca[k * 3] = 0.6; ca[k * 3 + 1] = 0.85; ca[k * 3 + 2] = 1.3; } else { ca[k * 3] = tt.r * hurt + (1 - hurt) * 0.5; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt; }   // gelé : bleuté   // blessé : plus sombre, rougeâtre
     }
     this.zv.forEach((im, v) => { im.count = cnt[v]; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.anim.needsUpdate = true; });
+    G.end();
   }
   // équipement des archers selon leur rang : capuche → calotte d'acier → cape → heaume doré à cimier et cape pourpre
   archerGear(tier) {
@@ -692,6 +704,14 @@ export class Renderer {
       this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); if (gear) gear.setMatrixAt(ai, d.matrix); ai++;
     } }
     this.renderWalkers(alpha, 'archer', (x, z, rot, mv) => { d.position.set(x, mv ? Math.abs(Math.sin(this.clock * 9 + ai)) * 0.08 : 0, z); d.scale.set(ASC, ASC, ASC); d.rotation.set(0, rot, 0); d.updateMatrix(); this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); if (gear) gear.setMatrixAt(ai, d.matrix); ai++; });
+    // archers projetés du chemin de ronde par un golem : chute en vrille vers la cour, puis restent au sol (morts) ou se relèvent
+    for (const f of sim.fallers || []) {
+      if (ai >= this.ab.instanceMatrix.count) break;
+      const k = Math.min(1, f.t / 0.9), y = WALK_H * (1 - k * k), zz = f.z + 7 * k, roll = Math.min(1.5, f.t * 3);
+      if (!f.dead && f.t > 2) { d.position.set(f.x, 0, zz); d.rotation.set(0, f.rot, 0); }
+      else { d.position.set(f.x, y + (k >= 1 ? 0.25 : 0), zz); d.rotation.set(-roll, f.rot + f.t * (k < 1 ? 6 : 0), 0); }
+      d.scale.setScalar(ASC); d.updateMatrix(); this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); if (gear) gear.setMatrixAt(ai, d.matrix); ai++;
+    }
     this.ab.count = this.abow.count = ai; this.ab.instanceMatrix.needsUpdate = this.abow.instanceMatrix.needsUpdate = true; if (gear) { gear.count = ai; gear.instanceMatrix.needsUpdate = true; }
   }
   // recrues : chaque unité créée marche de son bâtiment au point de ralliement ; draw(x, z, rotY, enMarche, indexDansLaListe)

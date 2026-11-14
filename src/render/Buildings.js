@@ -7,6 +7,7 @@ import { STRUCT } from '../content/medieval.js';
 
 import { kitMaterial } from './Stone.js';
 import { wizardModel } from './Heroes.js';
+import { infirmaryModel, universityModel } from './Village.js';
 // toits : tuile rouge, chaume, ardoise, tuile brune, vert-de-gris ; crépis : crème, ocre clair, chaux
 const ROOFS = [0xa8432c, 0xb98a3e, 0x4a5f80, 0x7a3f2a, 0x4f7a64], PLASTERS = [0xecdcbc, 0xe2c99a, 0xf0e8d8];
 const kitModel = (kit, name, sc, seed = 0) => { const g = new THREE.Group(), m = new THREE.Mesh(kit.geo[name], kitMaterial(kit.material.map, ROOFS[seed % ROOFS.length], PLASTERS[(seed >> 2) % PLASTERS.length])); m.scale.setScalar(sc); g.add(m); return g; };
@@ -124,6 +125,8 @@ const HOUSE_SC = [0.85, 0.85, 1.0, 0.8, 1.0];
 // Fabrique le modèle d'une structure. `seed` varie l'aspect des maisons. Renvoie { g, top } ; les pastilles de niveau sont ajoutées par le vue.
 export function makeModel(type, kit, seed = 0) {
   if (type === 'wizard') return wizardModel();
+  if (type === 'infirmary') return infirmaryModel();
+  if (type === 'university') return universityModel();
   if (militaryModels[type]) { const m = militaryModels[type](); return { g: m.g, top: m.pips[1] }; }
   if (kit) {
     if (type === 'mill') return withProps({ g: kitModel(kit, 'Windmill', 1.05, 1), top: 8 }, millProps);

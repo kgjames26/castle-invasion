@@ -2,7 +2,7 @@
 // Cycle de vie : 'site' (chantier initial) → 'built' ; 'upgrading' (amélioration, le bâtiment reste visible) ; 'moving' (déplacé : bloqué
 // jusqu'au passage d'un ouvrier). Les ouvriers sont des villageois LIBRES (sans tâche) : le joueur règle leur nombre par chantier.
 // La simulation ignore tout du rendu ; `eco.level` et `eco.houses` sont recalculés à partir des structures (source de vérité = ici).
-import { STRUCT, BUILDINGS, BUILD, TOWER, ECON, TASKS, RANK_BUILDINGS, RANK_UP } from '../content/medieval.js';
+import { STRUCT, BUILDINGS, BUILD, TOWER, ECON, TASKS, RANK_BUILDINGS, RANK_UP , UPGRADES } from '../content/medieval.js';
 
 const tmp = new Int32Array(512);
 const WORKING = s => s.state === 'site' || s.state === 'upgrading' || s.state === 'moving';
@@ -122,8 +122,8 @@ export class Build {
   }
   towerLevel(s) { return ACTIVE(s) ? s.level : 0; }
   towerStats(s, sim) {
-    const lv = s.level, w = sim.eco.up.weapons;
-    return { range: TOWER.range + TOWER.rangePerLevel * (lv - 1), dmg: TOWER.dmg * (1 + TOWER.dmgPerLevel * (lv - 1)) * (1 + 0.1 * w), rate: TOWER.rate / (1 + TOWER.ratePerLevel * (lv - 1)) };
+    const lv = s.level;
+    return { range: TOWER.range + TOWER.rangePerLevel * (lv - 1), dmg: TOWER.dmg * (1 + TOWER.dmgPerLevel * (lv - 1)) * sim.eco.atkMult('siege'), rate: TOWER.rate / (1 + TOWER.ratePerLevel * (lv - 1)) };
   }
   // ——— ouvriers ———
   // un ouvrier quitte son chantier : il retourne à sa tâche d'origine s'il en manque une (emprunt), sinon il devient libre
@@ -160,7 +160,7 @@ export class Build {
       let n = 0; for (const v of crew) if (v.state === 'building') n++;
       s.crew = n;
       if (n > 0) {
-        s.progress += dt * Math.pow(n, BUILD.workerExp) / s.work;
+        s.progress += dt * Math.pow(n, BUILD.workerExp) * (1 + UPGRADES.apprentice.per * (this.sim.eco.up.apprentice || 0)) / s.work;
         if (s.progress >= 1) this.finish(s);
       }
     }

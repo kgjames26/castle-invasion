@@ -27,11 +27,12 @@ function bot() {
   for (const t of Object.keys(W)) { const want = Math.round(W[t] * free); if (E.assign[t] > want + 1) E.setAssign(t, -1); }
   for (const t of Object.keys(W)) { const want = Math.round(W[t] * free); if (E.assign[t] < want && E.idleCount() > keep) E.setAssign(t, 1); }
   for (const t of ['food', 'wood', 'stone', 'gold', 'iron']) if (E.idleCount() > keep) E.setAssign(t, 1);
+  if (!B.of('university') && sim.wave >= 2) sim.place('university', 60, 286, 0, 2);
   for (const u of ['tools', 'carts', 'boots', 'plow', 'masonry']) E.buyUpgrade(u);
   if (!E.famine && E.res.food > 80) for (const [t, n] of [['archer', 3], ['soldier', 3], ['heavy', 1]]) sim.train(t, n);
   const A = sim.army;
   if (sim.wave >= 3) { const wl = ['trebuchet', 'catapult', 'ballista']; for (const t of wl) if (sim.siege.canBuild(sim, t, 2)) { sim.buildSiege(t, [2, 1, 3, 0, 4][sim.siege.weapons.length % 5]); break; } }
-  for (const u of ['weapons', 'armor', 'archery']) E.buyUpgrade(u);
+  for (const t of ['archer', 'soldier', 'siege']) { E.buySmith('atk', t); E.buySmith('def', t); }
   for (const t of ['soldier', 'heavy']) { const sec = Math.floor(sim.rng() * 5); if (A.reserve[t] >= 6 && A.squads.length < 12) sim.formSquad(t, Math.min(A.reserve[t], 10), sec); }
   for (const q of A.squads) if (q.n < 10) sim.squadReinforce(q.id);
   const order = sim.phase === 'assault' || sim.phase === 'alert' ? sim.targets : [0, 1, 2, 3, 4];

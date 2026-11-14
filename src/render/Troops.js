@@ -169,7 +169,7 @@ export const VILLAGER_STYLES = {
   repair: { tunic: 0xe67e22, apron: 0xb35f14, legs: 0x4a3b2a, hat: hard(0xf2d65e), tool: 'hammer' },
   build: { tunic: 0xf0a24a, apron: 0xc0792a, legs: 0x4a3b2a, hat: hard(0xe8e0c8), tool: 'hammer' },
 };
-export function buildVillagerRigs(scene) { const o = {}; for (const k in VILLAGER_STYLES) o[k] = new Rig(scene, villagerParts(VILLAGER_STYLES[k]), 160); return o; }
+export function buildVillagerRigs(scene) { const o = {}; for (const k in VILLAGER_STYLES) o[k] = new Rig(scene, villagerParts(VILLAGER_STYLES[k]), 720); return o; }
 
 export const PALETTES = {
   soldier: { cloth: 0x3d7bd6, legs: 0x3a3f52, helm: STEEL, plume: 0xc0392b, shield: 0x2f5fb0, trim: 0xf2d65e },

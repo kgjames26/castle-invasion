@@ -45,7 +45,7 @@ export class Siege {
       const q = this.queue[0]; q.t -= dt;
       if (q.t <= 0) { const slot = this.freeSlot(q.sector); if (slot >= 0) this.place(q.type, q.sector, slot); this.queue.shift(); }
     }
-    const Z = sim.zombies, hash = sim.hash, eco = sim.eco, dm = 1 + 0.1 * eco.up.weapons;
+    const Z = sim.zombies, hash = sim.hash, eco = sim.eco, dm = eco.atkMult('siege');
     for (const w of this.weapons) {
       if (w.rec > 0) w.rec -= dt;
       w.cd -= dt; if (w.cd > 0) continue;
