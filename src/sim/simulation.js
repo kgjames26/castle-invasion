@@ -8,7 +8,7 @@ import { Wall } from './wall.js';
 import { ZombieSwarm } from './zombies.js';
 import { Army } from './army.js';
 import { Siege } from './siege.js';
-import { START, UNITS, TIMING, waveSpec } from '../content/medieval.js';
+import { START, UNITS, TIMING, waveSpec, giantsFor, PACK } from '../content/medieval.js';
 import { Economy } from './economy.js';
 import { Build } from './build.js';
 
@@ -68,6 +68,7 @@ export class Simulation {
   moveStruct(id, x, z, rot) { return this.build.move(id, x, z, rot); }
   upgrade(s) { const c = this.wall.upgradeCost(s); if (!c || !this.eco.pay(c)) return false; return this.wall.upgrade(s); }
   assignVillagers(task, delta) { return this.eco.setAssign(task, delta); }
+  prospect(r) { return this.eco.startProspect(r); }
   recruitVillager() { return this.eco.recruitVillager(); }
   buyUpgrade(u) { return this.eco.buyUpgrade(u); }
   setRepairPriority(s) { this.eco.setRepairPriority(s); }
@@ -90,7 +91,8 @@ export class Simulation {
   startAssault() {
     const spec = waveSpec(this.wave), counts = spec.frac.map(f => Math.round(f * spec.n));
     counts[0] += spec.n - counts.reduce((a, b) => a + b, 0);
-    this.spawn = { counts, left: spec.n, total: spec.n, rate: spec.n / spec.duration, acc: 0 };
+    const giants = giantsFor(this.wave, this.rng()); counts[5] = giants;
+    this.spawn = { counts, left: spec.n + giants, total: spec.n + giants, rate: spec.n / spec.duration, acc: 0, next: this.packSize(spec.n) };
     this.assaultTime = 0; this.events.push({ type: 'waveStart', wave: this.wave });
   }
   updateWaves(dt) {
@@ -102,13 +104,9 @@ export class Simulation {
       const sp = this.spawn;
       if (sp && sp.left > 0) {
         sp.acc += sp.rate * dt;
-        while (sp.acc >= 1 && sp.left > 0) {
-          sp.acc -= 1;
-          const type = this.pickType(sp); if (type < 0) break;
-          const s = this.targets[(this.rng() * this.targets.length) | 0], cx = s * SECTOR_W + SECTOR_W / 2;
-          const x = Math.min(W - 2, Math.max(2, cx + (this.rng() - 0.5) * 90)), z = 1.5 + this.rng() * 28;
-          if (!this.zombies.spawn(type, x, z, s, this.rng)) { sp.acc += 1; break; }
-          sp.counts[type]--; sp.left--;
+        if (sp.acc >= Math.min(sp.next, sp.left) && sp.left > 0) {      // ils arrivent par GROUPES (hordes compactes), pas à la file
+          const k = this.spawnPack(sp, Math.min(sp.next, sp.left)); sp.acc = Math.max(0, sp.acc - k); sp.next = this.packSize(sp.total);
+          if (!k) sp.acc = Math.min(sp.acc, sp.next);
         }
       } else if (this.zombies.n === 0) {
         const spec = waveSpec(this.wave);
@@ -117,6 +115,21 @@ export class Simulation {
         this.phase = 'calm'; this.timer = TIMING.calm; this.spawn = null;
       }
     } else if (this.phase === 'calm' && this.timer <= 0) { this.wave++; this.phase = 'prep'; this.timer = TIMING.prep; this.targets = []; }
+  }
+  packSize(n) { return Math.max(4, Math.round(PACK.base + this.wave * PACK.perWave + this.rng() * PACK.jitter)); }
+  // Un groupe : même secteur cible, même type dominant (ils avancent à la même allure), placés en masse serrée
+  spawnPack(sp, size) {
+    const rng = this.rng, s = this.targets[(rng() * this.targets.length) | 0], cx = s * SECTOR_W + SECTOR_W / 2;
+    const gx = Math.min(W - 6, Math.max(6, cx + (rng() - 0.5) * 70)), gz = 3 + rng() * 22, rad = 2 + Math.sqrt(size) * PACK.spread;
+    let primary = this.pickType(sp), done = 0; if (primary < 0) return 0;
+    for (let i = 0; i < size && sp.left > 0; i++) {
+      let t = i === 0 && primary === 5 ? 5 : (primary === 5 ? 0 : (rng() < 0.2 ? this.pickType(sp) : primary));
+      if (t < 0 || sp.counts[t] <= 0) t = this.pickType(sp); if (t < 0) break;
+      const r = rad * Math.sqrt(rng()), a = rng() * Math.PI * 2, x = Math.min(W - 1, Math.max(1, gx + Math.cos(a) * r)), z = Math.max(1, gz + Math.sin(a) * r * 0.8);
+      if (!this.zombies.spawn(t, x, z, s, rng)) break;
+      sp.counts[t]--; sp.left--; done++;
+    }
+    return done;
   }
   pickType(sp) {
     let tot = 0; for (const c of sp.counts) tot += c; if (tot <= 0) return -1;

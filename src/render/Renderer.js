@@ -6,7 +6,8 @@ import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/me
 import { archerPos, formationLayout } from '../sim/army.js';
 import { applyNorthFog } from './fog.js';
 import { StructureView } from './Structures.js';
-const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4]];      // variantes de modèle par type de zombie
+import { buildTroopRigs, throwAngle } from './Troops.js';
+const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1]];      // variantes de modèle par type de zombie
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
 
 const lam = (color, opts = {}) => applyNorthFog(new THREE.MeshLambertMaterial({ color, flatShading: true, ...opts }));
@@ -24,7 +25,7 @@ export class Renderer {
     this.scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x4a4030, 1.55));
     const sun = new THREE.DirectionalLight(0xfff1d0, 1.5); sun.position.set(-60, 120, 80); this.scene.add(sun);
     this.dummy = new THREE.Object3D(); this.tmpColor = new THREE.Color();
-    this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildSiege(); this.buildHighlight();
+    this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildSiege(); this.rigs = buildTroopRigs(this.scene); this.buildHighlight();
     this.selected = -1; this.clock = 0; this.selSquad = 0; this.targetMode = false; this.tmpC2 = new THREE.Color(); this.white = new THREE.Color(1, 1, 1);
   }
   resize(w, h) { this.renderer.setSize(w, h, false); this.renderer.domElement.style.width = w + 'px'; this.renderer.domElement.style.height = h + 'px'; this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
@@ -145,6 +146,17 @@ export class Renderer {
       const d = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 0.3, 14), new THREE.MeshBasicMaterial({ color: RES_INFO[T.res].color, transparent: true, opacity: 0.55 }));
       d.position.set(T.site.x, 0.2, T.site.z); this.scene.add(d);
     }
+    // forêt des bûcherons : les arbres s'éclaircissent quand on coupe et REPOUSSENT tout seuls (échelle = bois restant)
+    { const N = 18, ws = TASKS.wood.site; this.treePos = []; let sd = 31; const rn = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < N; i++) { const a = rn() * 6.283, r = 2 + 8 * Math.sqrt(rn()); this.treePos.push([ws.x + Math.cos(a) * r, ws.z + Math.sin(a) * r * 0.8, 0.8 + rn() * 0.5, rn()]); }
+      this.treePos.sort((a, b) => a[3] - b[3]);
+      const mk = (geo, mat) => { const im = new THREE.InstancedMesh(geo, mat, N); im.frustumCulled = false; im.count = N; this.scene.add(im); return im; };
+      const trunk = new THREE.CylinderGeometry(0.25, 0.35, 1.6, 6); trunk.translate(0, 0.8, 0); const fol = new THREE.ConeGeometry(1.5, 3.8, 6); fol.translate(0, 3.2, 0); const snow = new THREE.ConeGeometry(1.0, 1.4, 6); snow.translate(0, 4.7, 0);
+      this.treeT = mk(trunk, lam(0x6b4a2c)); this.treeF = mk(fol, lam(0x2f5d3c)); this.treeS = mk(snow, lam(0xf2f6fa)); }
+    // gisements découverts par prospection : disque coloré + blocs de minerai ; anneau pulsant pendant l'exploration
+    { const cap = 9; this.exDisc = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 0.3, 16), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55 }), cap); this.exDisc.frustumCulled = false; this.exDisc.count = 0; this.exDisc.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); this.scene.add(this.exDisc);
+      this.exRock = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), lam(0xffffff), cap * 6); this.exRock.frustumCulled = false; this.exRock.count = 0; this.exRock.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 6 * 3), 3); this.scene.add(this.exRock);
+      const rg = new THREE.RingGeometry(4, 5.4, 28); rg.rotateX(-Math.PI / 2); this.pRing = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0x4fd1c5, transparent: true, opacity: 0.85, depthWrite: false })); this.pRing.visible = false; this.scene.add(this.pRing); }
     const vg = new THREE.BoxGeometry(0.7, 1.5, 0.7); vg.translate(0, 0.75, 0);
     this.vMesh = new THREE.InstancedMesh(vg, lam(0xffffff), 160); this.vMesh.frustumCulled = false; this.vMesh.count = 0;
     this.vMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(160 * 3), 3); this.scene.add(this.vMesh);
@@ -154,6 +166,24 @@ export class Renderer {
   }
   updateEconomy(alpha) {
     const E = this.sim.eco, d = this.dummy;
+    { // arbres : taille = bois restant (repousse visible) ; chaque arbre a son seuil
+      const ratio = Math.min(1, E.deposit.wood / TASKS.wood.deposit), N = this.treePos.length;
+      for (let i = 0; i < N; i++) {
+        const [x, z, k] = this.treePos[i], g = Math.min(1, Math.max(0, (ratio * 1.15 - i / N) * 5)), sc = k * (0.18 + 0.82 * g);
+        d.position.set(x, 0, z); d.rotation.set(0, i, 0); d.scale.set(k, k, k); d.updateMatrix(); this.treeT.setMatrixAt(i, d.matrix);
+        d.scale.set(sc, sc * (g > 0.05 ? 1 : 0.02), sc); d.updateMatrix(); this.treeF.setMatrixAt(i, d.matrix); this.treeS.setMatrixAt(i, d.matrix);
+      }
+      this.treeT.instanceMatrix.needsUpdate = this.treeF.instanceMatrix.needsUpdate = this.treeS.instanceMatrix.needsUpdate = true;
+      let nd = 0, nr = 0;
+      for (const r of ['stone', 'iron', 'gold']) for (const e of E.extra[r]) {
+        if (nd >= 9) break; const f = Math.max(0, e.amount / e.max), rad = 3 + 3 * f;
+        d.position.set(e.x, 0.2, e.z); d.rotation.set(0, 0, 0); d.scale.set(rad, 1, rad); d.updateMatrix(); this.exDisc.setMatrixAt(nd, d.matrix); this.exDisc.setColorAt(nd, this.tmpColor.setHex(RES_INFO[r].color)); nd++;
+        if (e.amount <= 0) continue;
+        for (let j = 0; j < 6; j++) { const a = j * 1.05 + e.x, rr = rad * 0.55 * (j % 2 ? 0.6 : 1), s2 = 0.7 + 0.5 * ((j * 7) % 3) / 2; d.position.set(e.x + Math.cos(a) * rr, s2 * 0.5, e.z + Math.sin(a) * rr); d.rotation.set(j, j * 2, 0); d.scale.set(s2, s2 * 0.8, s2); d.updateMatrix(); this.exRock.setMatrixAt(nr, d.matrix); this.exRock.setColorAt(nr, this.tmpColor.setHex(RES_INFO[r].color).lerp(this.white, 0.15)); nr++; }
+      }
+      this.exDisc.count = nd; this.exRock.count = nr; this.exDisc.instanceMatrix.needsUpdate = this.exRock.instanceMatrix.needsUpdate = true; if (nd) { this.exDisc.instanceColor.needsUpdate = true; this.exRock.instanceColor.needsUpdate = true; }
+      const P = E.prospect; this.pRing.visible = !!P; if (P) { const pu = 1 + 0.12 * Math.sin(this.clock * 5) + 0.25 * (1 - P.t / P.dur); this.pRing.position.set(P.x, 0.4, P.z); this.pRing.scale.set(pu, pu, pu); }
+    }
     if (this.kit) this.updateKitEconomy();
     const vs = E.villagers, VS = 2.8; this.vMesh.count = vs.length; let nc = 0;
     for (let i = 0; i < vs.length; i++) {
@@ -193,14 +223,7 @@ export class Renderer {
   }
   updateSiege(alpha) {
     const S = this.sim.siege, d = this.dummy, c = this.tmpColor; let n = 0;
-    for (const w of S.weapons) {
-      const D = SIEGE[w.type], sc = D.size * 1.8, recoil = Math.max(0, w.rec) / 0.35;
-      d.position.set(w.x, 0, w.z); d.scale.set(sc, sc, sc); d.rotation.set(0, 0, 0); d.updateMatrix(); this.wBase.setMatrixAt(n, d.matrix);
-      c.setHex(D.color); if (w.noAmmo) c.lerp(this.tmpC2.setRGB(0.9, 0.15, 0.1), 0.6); this.wBase.setColorAt(n, c);
-      d.position.set(w.x, 1.8 * sc, w.z - 1 * sc); d.scale.set(sc, sc, sc); d.rotation.set(-0.7 + recoil * 0.9, 0, 0); d.updateMatrix(); this.wArm.setMatrixAt(n, d.matrix);
-      this.wArm.setColorAt(n, c.setHex(0x3a2a18)); n++;
-    }
-    this.wBase.count = this.wArm.count = n; for (const m of [this.wBase, this.wArm]) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; }
+    this.renderMachines(S);
     n = 0;
     for (const p of S.shots) {
       if (n >= 64) break; const f = Math.min(1, p.t / p.dur), x = p.x0 + (p.x1 - p.x0) * f, z = p.z0 + (p.z1 - p.z0) * f, arc = p.type === 'ballista' ? 3 : 14;
@@ -215,6 +238,39 @@ export class Renderer {
       this.iMesh.setColorAt(n, c.setRGB(1, 0.55 - 0.3 * f, 0.15)); n++;
     }
     this.iMesh.count = n; this.iMesh.instanceMatrix.needsUpdate = true; this.iMesh.instanceColor.needsUpdate = true;
+  }
+  // ——— troupes : fantassins, lourds, cavaliers (pièces animées : jambes, bras, bras d'épée) ———
+  renderSquads(alpha) {
+    const R = this.rigs, d = this.dummy, t = this.clock, sel = this.selSquad, tint = this.tmpColor, SCALE = { soldier: 2.4, heavy: 2.7, cavalry: 2.0 };
+    R.soldier.begin(); R.heavy.begin(); R.cavalry.begin();
+    const lerpAng = (a, b, k) => { let dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
+    for (const q of this.sim.army.squads) {
+      const U = UNITS[q.type], rig = R[q.type] || R.soldier, horse = q.type === 'cavalry', L = formationLayout(q.form, Math.max(1, q.n), U.size);
+      const cx = q.px + (q.x - q.px) * alpha, cz = q.pz + (q.z - q.pz) * alpha, dx = q.x - q.px, dz = q.z - q.pz, mv = dx * dx + dz * dz > 1e-4, fight = q.fight > 0;
+      q.rmv = (q.rmv || 0) + ((mv ? 1 : 0) - (q.rmv || 0)) * 0.2;
+      q.rrot = mv ? lerpAng(q.rrot ?? Math.PI, Math.atan2(dx, dz), 0.25) : lerpAng(q.rrot ?? Math.PI, Math.PI, 0.05);   // à l'arrêt : face au nord (zombies)
+      const sc = SCALE[q.type] || 2.4, mvs = q.rmv, flash = q.hit > 0, isSel = q.id === sel;
+      if (flash) tint.setRGB(1.9, 1.2, 1.2); else if (isSel) tint.setRGB(1.3, 1.3, 1.0); else tint.setRGB(1, 1, 1);
+      for (let k = 0; k < q.n; k++) {
+        const ph = t * (horse ? 11 : 9) + k * 1.7, ph2 = t * 8 + k * 2.3, sw = Math.sin(ph) * (horse ? 0.8 : 0.75) * mvs;
+        d.position.set(cx + L.xs[k], Math.abs(Math.sin(ph)) * (horse ? 0.1 : 0.06) * mvs * sc, cz + L.zs[k]); d.scale.set(sc, sc, sc); d.rotation.set(0, q.rrot, 0); d.updateMatrix();
+        if (horse) { const arm = fight ? 0.5 + (Math.sin(ph2) * 0.5 + 0.5) * 1.8 : 0.35 + 0.12 * Math.sin(ph); rig.push(d.matrix, tint, [0, sw, Math.sin(ph + 1.1) * 0.8 * mvs, arm]); }
+        else { const arm = fight ? -1.1 + Math.sin(ph2) * 0.8 : -0.35 - 0.3 * mvs + 0.3 * Math.sin(ph + Math.PI) * mvs; rig.push(d.matrix, tint, [0, sw, -sw, arm]); }
+      }
+    }
+    R.soldier.end(); R.heavy.end(); R.cavalry.end();
+  }
+  // ——— machines de siège : le bras de lancer suit le cycle de tir (armé → détente → remontée) ———
+  renderMachines(S) {
+    const R = this.rigs, d = this.dummy, tint = this.tmpColor, SC = { ballista: 1.4, catapult: 1.5, trebuchet: 1.4 };
+    for (const k of ['ballista', 'catapult', 'trebuchet']) R[k].begin();
+    for (const w of S.weapons) {
+      const D = SIEGE[w.type], sc = SC[w.type], e = D.reload - w.cd; d.position.set(w.x, 0, w.z); d.scale.set(sc, sc, sc); d.rotation.set(0, 0, 0); d.updateMatrix();
+      if (w.noAmmo) tint.setRGB(1.6, 0.6, 0.55); else tint.setRGB(1, 1, 1);
+      if (w.type === 'ballista') R.ballista.push(d.matrix, tint, [0, w.rec > 0 ? -1.2 * (1 - w.rec / 0.35) : 0.7 * Math.min(1, Math.max(0, e - 0.3))]);
+      else R[w.type].push(d.matrix, tint, [0, throwAngle(w.type, e, D.reload, w.noAmmo)]);
+    }
+    for (const k of ['ballista', 'catapult', 'trebuchet']) R[k].end();
   }
   buildHighlight() {
     this.hl = new THREE.Mesh(new THREE.PlaneGeometry(SECTOR_W, 60), new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.16, depthWrite: false }));
@@ -299,7 +355,7 @@ export class Renderer {
   renderArchers() {
     const sim = this.sim, d = this.dummy; let ai = 0;
     for (let s = 0; s < SECTORS; s++) for (let k = 0; k < sim.army.archers[s].n; k++) {
-      const p = archerPos(s, k), a = sim.siege ? 0 : 0; d.position.set(p.x, this.kitWalls ? 4.9 : 4, p.z); d.scale.set(2.0, 2.0, 2.0); d.rotation.set(0, Math.PI, 0); d.updateMatrix();
+      const p = archerPos(s, k), a = sim.siege ? 0 : 0; d.position.set(p.x, this.kitWalls ? 4.9 : 4, p.z); d.scale.set(2.3, 2.3, 2.3); d.rotation.set(0, Math.PI, 0); d.updateMatrix();
       this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); ai++;
     }
     this.ab.count = this.abow.count = ai; this.ab.instanceMatrix.needsUpdate = this.abow.instanceMatrix.needsUpdate = true;
@@ -324,19 +380,7 @@ export class Renderer {
     }
     zm.count = n; zm.instanceMatrix.needsUpdate = true; zm.instanceColor.needsUpdate = true;
     }
-    // escouades : chaque membre est dessiné selon la formation (la simulation ne connaît que l'escouade)
-    let si = 0; const sm = this.sMesh, sel = this.selSquad;
-    for (const q of sim.army.squads) {
-      const U = UNITS[q.type], L = formationLayout(q.form, Math.max(1, q.n), U.size), cx = q.px + (q.x - q.px) * alpha, cz = q.pz + (q.z - q.pz) * alpha;
-      const sc = USCALE * U.size, flash = q.hit > 0 ? 0.55 : 0, isSel = q.id === sel;
-      this.tmpColor.setHex(U.color);
-      for (let k = 0; k < q.n && si < 900; k++, si++) {
-        const bob = 1 + 0.06 * Math.sin(this.clock * 10 + k * 1.7) * (q.mom > 0.5 ? 1 : 0.3);
-        d.position.set(cx + L.xs[k], 0, cz + L.zs[k]); d.scale.set(sc * .8, sc * bob, sc * .8); d.rotation.set(0, 0, 0); d.updateMatrix(); sm.setMatrixAt(si, d.matrix);
-        sm.setColorAt(si, this.tmpC2.copy(this.tmpColor).lerp(this.white, flash + (isSel ? 0.25 : 0)));
-      }
-    }
-    sm.count = si; sm.instanceMatrix.needsUpdate = true; if (sm.instanceColor) sm.instanceColor.needsUpdate = true;
+    this.renderSquads(alpha); const sel = this.selSquad;
     // anneau de l'escouade choisie + marqueur de sortie
     const sq = sel ? sim.army.squads.find(q => q.id === sel) : null;
     this.ring.visible = !!sq;

@@ -7,6 +7,7 @@ export const ZOMBIES = [
   { id: 2, name: 'Résistant',   hp: 120, speed: 2.0, wall: 3,  unit: 8,  size: 1.15, color: 0x4f7f7a },
   { id: 3, name: 'Lourd',       hp: 400, speed: 1.3, wall: 10, unit: 18, size: 1.7, color: 0x8a4f3a },
   { id: 4, name: 'Briseur',     hp: 150, speed: 1.8, wall: 45, unit: 8,  size: 1.25, color: 0xd9822b },
+  { id: 5, name: 'Colosse',     hp: 1400, speed: 1.2, wall: 40, unit: 40, size: 4.4, color: 0x9a6f5c },   // géant : au moins 4× la taille d'un zombie normal, apparaît « parfois »
 ];
 // Unités : `pop` = places occupées dans la population PARTAGÉE (villageois + militaires), plafonnée par les maisons.
 export const UNITS = {
@@ -58,9 +59,11 @@ export const ECON = {
   drop: { x: 100, z: 284 },                  // point de dépôt : le château
   restock: { gold: 25, stone: 20, iron: 10 },
 };
+// Prospection : un villageois libre explore la campagne ; au bout de `time` secondes il découvre un NOUVEAU gisement (pierre, fer ou or) ailleurs sur la carte.
+export const PROSPECT = { cost: { gold: 40, food: 30 }, time: 45, amount: [2200, 3800], maxPerRes: 3, res: ['stone', 'iron', 'gold'], zone: { x0: 12, x1: 188, z0: 206, z1: 292 }, clear: 16 };
 // Tâches : chaque villageois sait quoi faire ; le joueur ne règle que les effectifs.
 export const TASKS = {
-  wood:   { name: 'Bûcherons',      ico: '🪵', res: 'wood',  building: 'sawmill', site: { x: 40,  z: 255 }, rate: 1.3,  deposit: 9000 },
+  wood:   { name: 'Bûcherons',      ico: '🪵', res: 'wood',  building: 'sawmill', site: { x: 40,  z: 255 }, rate: 1.3,  deposit: 9000, regen: 3.2 },
   stone:  { name: 'Carriers',       ico: '🪨', res: 'stone', building: 'quarry',  site: { x: 160, z: 255 }, rate: 1.0,  deposit: 7000 },
   iron:   { name: 'Mineurs (fer)',  ico: '⛓', res: 'iron',  building: 'mine',    site: { x: 182, z: 236 }, rate: 0.9, deposit: 3500 },
   gold:   { name: 'Mineurs (or)',   ico: '🪙', res: 'gold',  building: 'mine',    site: { x: 18,  z: 236 }, rate: 0.8,  deposit: 2500 },
@@ -127,6 +130,9 @@ export const PHASES = { prep: 'Préparation', alert: 'Alerte', assault: 'Assaut'
 export const TIMING = { firstPrep: 60, prep: 30, alert: 10, calm: 15 };
 
 // Composition d'une vague (indicatif, équilibrable sans toucher au moteur)
+// Colosses : à partir de la vague 4, une chance sur deux d'en voir un (un de plus tous les 6 vagues)
+export const giantsFor = (v, r) => v >= 4 && r < 0.55 ? 1 + ((v - 4) / 6 | 0) : 0;
+export const PACK = { base: 5, perWave: 1.6, jitter: 6, spread: 0.9 };
 export function waveSpec(v) {
   const n = Math.round(30 * Math.pow(1.18, v - 1));
   const frac = [0, 0, 0, 0, 0];

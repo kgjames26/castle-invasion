@@ -145,7 +145,7 @@ export class Army {
   }
   updateSquad(q, dt, sim, weaponsLvl) {
     const Z = sim.zombies, hash = sim.hash, U = UNITS[q.type], F = FORMATIONS[q.form];
-    q.px = q.x; q.pz = q.z; if (q.hit > 0) q.hit -= dt;
+    q.px = q.x; q.pz = q.z; if (q.hit > 0) q.hit -= dt; if (q.fight > 0) q.fight -= dt;
     const L = formationLayout(q.form, Math.max(1, q.n), U.size), rad = L.radius; q.rad = rad;
     const speed = U.speed * F.speed;
     let moving = false;
@@ -174,6 +174,7 @@ export class Army {
     // élan (charge) : actif tant que l'escouade vient de se déplacer
     q.mom = moving ? 1 : Math.max(0, q.mom - dt * 0.6);
     if (live > 0) {
+      q.fight = 0.5;
       const mult = F.atk * (1 + (F.charge + (U.charge || 0)) * q.mom) * (1 + 0.1 * weaponsLvl) * (moving ? 0.5 : 1);
       q.atkAcc += q.n * F.engage * dt / U.rate;
       let hits = q.atkAcc | 0; q.atkAcc -= hits;

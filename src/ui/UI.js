@@ -2,7 +2,7 @@
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
 import { SECTORS, SECTOR_NAMES, SECTOR_SHORT, ARCHER_SLOTS, CASTLE } from '../sim/constants.js';
-import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, waveSpec } from '../content/medieval.js';
+import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec } from '../content/medieval.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -142,6 +142,7 @@ export class UI {
       case 'sub': this.sub = x; break;
       case 'as': sim.assignVillagers(x, +y); break;
       case 'vil': sim.recruitVillager(); break;
+      case 'pro': if (!sim.prospect(x)) this.toast('Prospection impossible (villageois libre, 40 or, 30 vivres)'); break;
       case 'upg': sim.buyUpgrade(x); break;
       case 'prio': sim.setRepairPriority(+x); break;
       case 'ua': sim.assignArchers(s, +y); break;
@@ -169,6 +170,7 @@ export class UI {
     const sim = this.sim;
     if (e.type === 'built') { const d = STRUCT[e.what]; this.toast(e.kind === 'site' ? `${d.ico} ${d.name} terminé !` : e.kind === 'upgrading' ? `⬆ ${d.name} amélioré` : `✥ ${d.name} remis en service`); }
     else if (e.type === 'breach') this.toast(`💥 Brèche — ${SECTOR_NAMES[e.s]} !`);
+    else if (e.type === 'discovered') { this.toast(`🧭 Nouveau gisement de ${RES_INFO[e.res].name.toLowerCase()} découvert (${e.amount}) !`); this.cam.focusOn(e.x, e.z); }
     else if (e.type === 'waveEnd') this.toast(`🏆 Vague ${e.wave} repoussée`);
   }
   // ——— mise à jour de l'affichage ———
@@ -395,8 +397,13 @@ export class UI {
     for (const t of TASK_ORDER) {
       const T = TASKS[t], n = E.assign[t], capT = E.taskCap(t), B = BUILDINGS[T.building], hasSlots = E.slots(T.building) > 0;
       let sub = `<i class="no">Construis : ${B.name}</i>`;
-      if (hasSlots) { const left = T.deposit ? E.deposit[t] : null; sub = `+${E.rate[t].toFixed(2)}/s · places ${n}/${n + capT}` + (left !== null ? ` · gisement ${fmt(left)}` + (left <= 0 ? ' ⚠ épuisé' : '') : ''); }
+      if (hasSlots) { const left = T.deposit ? E.totalDeposit(t) : null, nx = E.extra[t] ? E.extra[t].filter(e => e.amount > 0).length : 0; sub = `+${E.rate[t].toFixed(2)}/s · places ${n}/${n + capT}` + (left !== null ? ` · gisement ${fmt(left)}` + (nx ? ` (+${nx} découvert${nx > 1 ? 's' : ''})` : '') + (t === 'wood' ? ' · 🌲 repousse' : '') + (left <= 0 ? ' ⚠ épuisé' : '') : ''); }
       h += `<div class="row step task"><span class="lab">${T.ico} ${T.name}<small class="sub">${sub}</small></span>${this.btn('−', '', `as:${t}:-1`, n <= 0, 'sq')}<b class="val">${n}</b>${this.btn('+', '', `as:${t}:1`, idle <= 0 || n >= capT, 'sq')}</div>`;
+    }
+    {
+      const P = E.prospect;
+      h += `<div class="card"><div class="ct"><b>🧭 Prospection</b><small>${P ? `Un villageois explore la campagne… ${Math.round(100 * P.t / P.dur)} %` : `Un villageois libre part ${PROSPECT.time} s et découvre un nouveau gisement ailleurs sur la carte.`}</small></div></div>`;
+      if (!P) h += `<div class="row">${PROSPECT.res.map(r => this.btn(`${RES_INFO[r].ico || ''} ${RES_INFO[r].name}`, this.cost(PROSPECT.cost), 'pro:' + r, !E.canProspect(r), 'act slim')).join('')}</div>`;
     }
     const dmg = this.damagedSegs(), n = E.assign.repair;
     h += `<div class="row step task"><span class="lab">🔧 Réparation muraille<small class="sub">${dmg ? dmg + ' tronçon(s) à réparer' : 'muraille intacte'} · pierre</small></span>${this.btn('−', '', 'as:repair:-1', n <= 0, 'sq')}<b class="val">${n}</b>${this.btn('+', '', 'as:repair:1', idle <= 0 || n >= TASKS.repair.slots, 'sq')}</div>`;

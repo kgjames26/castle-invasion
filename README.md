@@ -84,3 +84,10 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Carte plein écran, barre de ressources/vague en haut, dock (Bâtir / Armée / Villageois / Savoir), fiches contextuelles ancrées, barre de placement, interactions tactiles directement sur la carte.
 - Nouveau sol : texture unique 6 px/m (zones, chemins, mares, grain).
 - Équilibrage des vagues 7+ non retravaillé (le bot de test perd à la vague 7).
+
+## Phase 8 — Troupes animées, hordes, prospection
+- `src/render/Troops.js` : fantassin, lourd, cavalier (cheval + épée), baliste, catapulte, trébuchet — modèles en boîtes, animés par pièces (marche/galop, coups d'épée en combat, bras de lancer synchronisé sur le rechargement).
+- Zombies : arrivée par **groupes** compacts (même secteur, même type dominant) ; **Colosse** (×4,4 la taille d'un classique, dès la vague 4, « parfois »).
+- Bois : la forêt des bûcherons **repousse** (3,2/s) et les arbres rapetissent/regrandissent visiblement.
+- **Prospection** (onglet Villageois) : 40 or + 30 vivres, un villageois libre explore 45 s puis un nouveau gisement de pierre/fer/or apparaît ailleurs (max 3 par ressource) ; les récolteurs se répartissent entre gisements.
+- Zoom max augmenté (min 0,1) ; archers agrandis pour s'accorder aux fantassins.
