@@ -1,7 +1,7 @@
 // Armée : réserve, archers de garnison (chemin de ronde), ESCOUADES avec formations (garnison ou sortie sur le champ de bataille),
 // files d'entraînement. Les escouades agissent comme une seule entité : points de vie en réserve commune, membres dessinés par formation.
 import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_XS, WALL_Z0, WALL_Z1, WALK_H, PLAZA } from './constants.js';
-import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN } from '../content/medieval.js';
+import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN, RANKS } from '../content/medieval.js';
 
 const tmp = new Int32Array(1024), tmp2 = new Int32Array(1024);
 export const archerPos = (s, k) => ({ x: s * SECTOR_W + ((k >> 1) + 0.5) * SECTOR_W / (ARCHER_SLOTS / 2), z: ARCHER_Z + (k & 1) * 2.4 - 1.2 });
@@ -68,6 +68,9 @@ export class Army {
     return moved;
   }
   // ——— entraînement ———
+  // rang d'un type d'unité = niveau de son bâtiment d'entraînement (1 à 5) ; coût de production multiplié en conséquence
+  rank(sim, type) { return RANKS[Math.max(0, Math.min(RANKS.length, sim.eco.level[UNITS[type].from]) - 1)]; }
+  unitCost(sim, type) { const k = this.rank(sim, type).cost, o = {}; for (const r in UNITS[type].cost) o[r] = Math.round(UNITS[type].cost[r] * k); return o; }
   queueMax(sim, b) { return TRAIN.baseQueue + TRAIN.queuePerLevel * (sim.eco.level[b] - 1); }
   trainTime(sim, b, type) { return UNITS[type].train / (1 + TRAIN.speedPerLevel * (sim.eco.level[b] - 1)); }
   canTrain(sim, type) {
@@ -77,14 +80,15 @@ export class Army {
   enqueue(sim, type, count = 1) {
     const U = UNITS[type], b = U.from; let ok = 0;
     for (let k = 0; k < count; k++) {
-      if (!this.canTrain(sim, type) || this.queues[b].length >= this.queueMax(sim, b) || sim.eco.popRoom() < U.pop || !sim.eco.pay(U.cost)) break;
-      this.queues[b].push({ type, t: this.trainTime(sim, b, type), full: this.trainTime(sim, b, type) }); ok++;
+      const cost = this.unitCost(sim, type);
+      if (!this.canTrain(sim, type) || this.queues[b].length >= this.queueMax(sim, b) || sim.eco.popRoom() < U.pop || !sim.eco.pay(cost)) break;
+      this.queues[b].push({ type, t: this.trainTime(sim, b, type), full: this.trainTime(sim, b, type), paid: cost }); ok++;
     }
     return ok;
   }
   cancel(sim, b) {
     const it = this.queues[b].pop(); if (!it) return false;
-    for (const r in UNITS[it.type].cost) sim.eco.add(r, UNITS[it.type].cost[r]); return true;
+    const paid = it.paid || UNITS[it.type].cost; for (const r in paid) sim.eco.add(r, paid[r]); return true;
   }
   // la file attend tant que le bâtiment est bloqué (déplacé) ou en cours de construction
   trainTick(dt, sim) {
@@ -154,7 +158,7 @@ export class Army {
   // dégâts reçus par une escouade (formation + armures)
   hurtSquad(sim, q, dmg) {
     if (q.hp <= 0) return;
-    q.hp -= dmg * FORMATIONS[q.form].def * (1 - 0.08 * sim.eco.up.armor); q.hit = 0.3;
+    q.hp -= dmg * FORMATIONS[q.form].def * (1 - 0.08 * sim.eco.up.armor) / this.rank(sim, q.type).res; q.hit = 0.3;
     q.n = Math.max(0, Math.ceil(q.hp / this.unitHp(q.type)));
   }
   // ——— tick ———
@@ -162,7 +166,7 @@ export class Army {
     const Z = sim.zombies, hash = sim.hash, eco = sim.eco, w = eco.up.weapons, ar = eco.up.archery;
     this.trainTick(dt, sim); this.syncWalkers(sim); this.updateGate(dt);
     // archers
-    const AU = UNITS.archer, range = AU.range + 3 * ar, adm = AU.dmg * (1 + 0.1 * w) * (1 + 0.1 * ar);
+    const AU = UNITS.archer, range = AU.range + 3 * ar, adm = AU.dmg * (1 + 0.1 * w) * (1 + 0.1 * ar) * this.rank(sim, 'archer').force;
     for (let s = 0; s < SECTORS; s++) {
       const a = this.archers[s];
       for (let k = 0; k < a.n; k++) {
@@ -189,7 +193,7 @@ export class Army {
     const Z = sim.zombies, hash = sim.hash, U = UNITS[q.type], F = FORMATIONS[q.form];
     q.px = q.x; q.pz = q.z; if (q.hit > 0) q.hit -= dt; if (q.fight > 0) q.fight -= dt;
     const L = formationLayout(q.form, Math.max(1, q.n), U.size), rad = L.radius; q.rad = rad;
-    const speed = U.speed * F.speed;
+    const rk = this.rank(sim, q.type), speed = U.speed * F.speed * rk.speed;
     let moving = false;
     const step = (tx, tz) => { const dx = tx - q.x, dz = tz - q.z, d = Math.hypot(dx, dz); if (d < 0.05) return true; const st = Math.min(d, speed * dt); q.x += dx / d * st; q.z += dz / d * st; moving = true; return d <= st + 0.01; };
     // ordre explicite : suivre le trajet ; devant la porte, on attend qu'elle soit ouverte
@@ -220,7 +224,7 @@ export class Army {
     q.mom = moving ? 1 : Math.max(0, q.mom - dt * 0.6);
     if (live > 0) {
       q.fight = 0.5;
-      const mult = F.atk * (1 + (F.charge + (U.charge || 0)) * q.mom) * (1 + 0.1 * weaponsLvl) * (moving ? 0.5 : 1);
+      const mult = F.atk * (1 + (F.charge + (U.charge || 0)) * q.mom) * (1 + 0.1 * weaponsLvl) * rk.force * (moving ? 0.5 : 1);
       q.atkAcc += q.n * F.engage * dt / U.rate;
       let hits = q.atkAcc | 0; q.atkAcc -= hits;
       while (hits-- > 0) { let i = tmp[q.rot++ % live]; Z.hit(i, U.dmg * mult); }

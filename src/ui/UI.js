@@ -367,11 +367,11 @@ export class UI {
       const nb = this.needBuild(b); if (nb) { h += nb; continue; }
       const B = BUILDINGS[b], lv = E.level[b], q = army.queues[b], ex = sim.build.of(b);
       if (lv < 1) { h += `<div class="card"><div class="ct"><b>${B.ico} ${B.name}</b><small>Bloqué — un ouvrier doit repasser</small></div>${this.btn('Voir', '', 'go:' + ex.id, false, 'act slim sec')}</div>`; continue; }
-      h += `<div class="card col"><div class="ct"><b>${B.ico} ${B.name}</b> <span class="lvl">Niv. ${lv} · file ${q.length}/${army.queueMax(sim, b)}</span></div>`;
+      h += `<div class="card col"><div class="ct"><b>${B.ico} ${B.name}</b> <span class="lvl">${army.rank(sim, UNIT_ORDER.find(t => UNITS[t].from === b)).name} · niv. ${lv} · file ${q.length}/${army.queueMax(sim, b)}</span></div>`;
       if (q.length) h += `<div class="queue">${q.map((it, i) => `<span class="qi">${UNITS[it.type].ico}${i === 0 ? `<i style="width:${100 * (1 - it.t / it.full)}%"></i>` : ''}</span>`).join('')}<button class="chipb" data-a="cancel:${b}">↩ annuler</button></div>`;
       h += `<div class="row wrapr">` + UNIT_ORDER.filter(t => UNITS[t].from === b).map(t => {
-        const U = UNITS[t], ok = army.canTrain(sim, t);
-        return this.btn(`${U.ico} ${U.name}`, ok ? `${this.cost(U.cost)} · ${army.trainTime(sim, b, t).toFixed(0)}s · 👥${U.pop}` : `Niv. ${U.minLevel} requis`, `train:${t}:1`, !ok || !E.afford(U.cost) || E.popRoom() < U.pop || q.length >= army.queueMax(sim, b)) + (ok ? this.btn('×5', '', `train:${t}:5`, !E.afford(U.cost) || E.popRoom() < U.pop * 2, 'sq wide') : '');
+        const U = UNITS[t], ok = army.canTrain(sim, t), uc = army.unitCost(sim, t);
+        return this.btn(`${U.ico} ${U.name}`, ok ? `${this.cost(uc)} · ${army.trainTime(sim, b, t).toFixed(0)}s · 👥${U.pop}` : `Niv. ${U.minLevel} requis`, `train:${t}:1`, !ok || !E.afford(uc) || E.popRoom() < U.pop || q.length >= army.queueMax(sim, b)) + (ok ? this.btn('×5', '', `train:${t}:5`, !E.afford(uc) || E.popRoom() < U.pop * 2, 'sq wide') : '');
       }).join('') + '</div>';
       h += `<div class="hint small">Réserve : ${UNIT_ORDER.filter(t => UNITS[t].from === b).map(t => `${UNITS[t].ico}${army.reserve[t]}`).join(' ')}</div></div>`;
     }

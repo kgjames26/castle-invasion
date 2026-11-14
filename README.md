@@ -129,3 +129,8 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Ressources** : forêt plus dense, arbres plus grands (environ 55 % de hauteur en plus, 46 arbres repoussants au bûcheron) ; gisements de départ (`START_DEPOSITS`) : 2 fer, 1 or, 1 pierre sur les bords de la zone constructible.
 - **Château** : échelle 0,8 → 0,96 (+20 %) ; matériau `Stone.js` (pierre grise procédurale projetée sur les faces verticales et horizontales), à la place du blanc neige du kit.
 - Tests : `tests/chantiers.mjs` (file, emprunt et retour, portes). `tests/build.mjs` tient compte des gisements de départ.
+
+## Phase 15 — Rangs militaires
+- Le niveau de la caserne, de l'écurie et du champ de tir (1 à 5) est le rang de ses unités : Recrue, Régulier, Vétéran, Élite, Légende (`RANKS` dans medieval.js : coût, force, résistance, vitesse ; le moral est noté mais pas encore simulé).
+- Passage au rang suivant payant et de plus en plus cher (`RANK_UP`). Le coût d'une unité est fixé à l'entraînement (`army.unitCost`), la force et la vitesse suivent le rang courant du bâtiment, la résistance divise les dégâts reçus.
+- Test : `tests/rangs.mjs`.

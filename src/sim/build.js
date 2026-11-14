@@ -2,7 +2,7 @@
 // Cycle de vie : 'site' (chantier initial) → 'built' ; 'upgrading' (amélioration, le bâtiment reste visible) ; 'moving' (déplacé : bloqué
 // jusqu'au passage d'un ouvrier). Les ouvriers sont des villageois LIBRES (sans tâche) : le joueur règle leur nombre par chantier.
 // La simulation ignore tout du rendu ; `eco.level` et `eco.houses` sont recalculés à partir des structures (source de vérité = ici).
-import { STRUCT, BUILDINGS, BUILD, TOWER, ECON, TASKS } from '../content/medieval.js';
+import { STRUCT, BUILDINGS, BUILD, TOWER, ECON, TASKS, RANK_BUILDINGS, RANK_UP } from '../content/medieval.js';
 
 const tmp = new Int32Array(512);
 const WORKING = s => s.state === 'site' || s.state === 'upgrading' || s.state === 'moving';
@@ -33,6 +33,7 @@ export class Build {
   upCost(s) {
     if (s.level >= this.maxLevel(s) || s.type === 'house') return null;
     if (s.type === 'tower') return BUILD.towerUpCost(s.level);
+    if (RANK_BUILDINGS.includes(s.type)) { const c = { ...STRUCT[s.type].cost }; for (const r in RANK_UP.extra) c[r] = (c[r] || 0) + RANK_UP.extra[r]; return this.sim.eco.scaled(c, RANK_UP.mult[s.level + 1]); }   // rang suivant
     return this.sim.eco.scaled(STRUCT[s.type].cost, s.level + 1);
   }
   buildTime(type) { return STRUCT[type].time; }

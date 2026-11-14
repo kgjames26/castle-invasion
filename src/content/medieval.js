@@ -16,6 +16,18 @@ export const UNITS = {
   heavy:   { name: 'Lourd',    ico: '🛡', hp: 380, dmg: 22, rate: 1.1, reach: 2.0, speed: 2.6, pop: 2, cost: { gold: 33, iron: 50 },           train: 16, from: 'barracks', color: 0x7d8cab, size: 1.3, squad: 8,  form: 'phalanx', minLevel: 2 },
   cavalry: { name: 'Cavalier', ico: '🐎', hp: 200, dmg: 18, rate: 0.9, reach: 2.2, speed: 6.5, pop: 2, cost: { gold: 28, food: 30, iron: 10 }, train: 14, from: 'stable',   color: 0xa855c9, size: 1.3, squad: 8,  form: 'wedge', charge: 0.8 },
 };
+// Rangs militaires : le NIVEAU du bâtiment d'entraînement (caserne, écurie, champ de tir) est le rang de toutes ses unités.
+// cost = multiplicateur du coût d'une unité ; force = dégâts ; res = résistance (dégâts reçus divisés) ; speed = vitesse de marche.
+// (le moral n'existe pas encore dans le moteur : il est noté ici pour mémoire.)
+export const RANKS = [
+  { name: 'Recrue',   cost: 1.00, force: 1.00, res: 1.00, speed: 1.00, moral: -0.20 },
+  { name: 'Régulier', cost: 1.35, force: 1.20, res: 1.25, speed: 1.10, moral: 0 },
+  { name: 'Vétéran',  cost: 1.80, force: 1.50, res: 1.60, speed: 1.25, moral: 0.25 },
+  { name: 'Élite',    cost: 2.50, force: 1.95, res: 2.10, speed: 1.45, moral: 0.50 },
+  { name: 'Légende',  cost: 3.50, force: 2.60, res: 2.80, speed: 1.70, moral: 1 },
+];
+export const RANK_BUILDINGS = ['barracks', 'stable', 'range'];
+export const RANK_UP = { mult: [0, 0, 2, 3.5, 6, 10], extra: { iron: 20, gold: 20 } };   // coût de passage au niveau N = (coût de base + extra) × mult[N]
 export const UNIT_ORDER = ['soldier', 'heavy', 'cavalry', 'archer'];
 // Formations d'escouade : effets mesurables (engage = part des membres qui combattent, contact = attaquants max par membre,
 // def = multiplicateur de dégâts reçus, atk = multiplicateur de dégâts infligés, speed = vitesse, charge = bonus d'élan).
@@ -84,9 +96,9 @@ export const BUILDINGS = {   // group: 'eco' (onglet Village) ou 'army' (onglet 
 };
 // Bâtiments militaires (onglet Armée) : le niveau accélère l'entraînement (+25 %/niveau) et agrandit la file.
 export const ARMY_BUILDINGS = {
-  barracks: { time: 45, base: 0, name: 'Caserne',      ico: '🪖', group: 'army', start: 0, cost: { wood: 100, stone: 50 }, pos: { x: 36,  z: 224 }, size: [16, 5, 11], color: 0x8a4545, info: 'Fantassins · Lourds dès le niveau 2' },
-  stable:   { time: 45, base: 0, name: 'Écurie',       ico: '🐎', group: 'army', start: 0, cost: { wood: 120, stone: 40 }, pos: { x: 164, z: 224 }, size: [16, 5, 11], color: 0x7a5a3a, info: 'Cavaliers' },
-  range:    { time: 35, base: 0, name: 'Champ de tir', ico: '🎯', group: 'army', start: 0, cost: { wood: 90, stone: 30 },  pos: { x: 100, z: 224 }, size: [18, 3, 9],  color: 0x4a6f4a, info: 'Archers' },
+  barracks: { time: 45, base: 0, name: 'Caserne',      ico: '🪖', group: 'army', start: 0, cost: { wood: 100, stone: 50 }, max: 5, pos: { x: 36,  z: 224 }, size: [16, 5, 11], color: 0x8a4545, info: 'Fantassins · Lourds dès le niveau 2' },
+  stable:   { time: 45, base: 0, name: 'Écurie',       ico: '🐎', group: 'army', start: 0, cost: { wood: 120, stone: 40 }, max: 5, pos: { x: 164, z: 224 }, size: [16, 5, 11], color: 0x7a5a3a, info: 'Cavaliers' },
+  range:    { time: 35, base: 0, name: 'Champ de tir', ico: '🎯', group: 'army', start: 0, cost: { wood: 90, stone: 30 },  max: 5, pos: { x: 100, z: 224 }, size: [18, 3, 9],  color: 0x4a6f4a, info: 'Archers' },
   forge:    { time: 50, base: 0, name: 'Forge',        ico: '🔨', group: 'army', start: 0, max: 1, cost: { wood: 80, stone: 80, iron: 40 }, pos: { x: 66, z: 236 }, size: [10, 6, 8], color: 0x5a4f58, info: 'Débloque les améliorations militaires' },
 };
 ARMY_BUILDINGS.workshop = { time: 55, base: 0, name: 'Atelier de siège', ico: '🛠', group: 'army', start: 0, max: 3, cost: { wood: 140, stone: 100, iron: 30 }, pos: { x: 136, z: 236 }, size: [14, 6, 10], color: 0x6a5a45, info: '2 armes déployables par niveau · Niv.1 baliste · Niv.2 catapulte · Niv.3 trébuchet' };
