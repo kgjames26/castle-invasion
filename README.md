@@ -53,3 +53,6 @@ Three.js (MIT, `lib/THREE_LICENSE`). Packs assetfactory archivés dans `assets/a
 - **Sauvegarde v3** avec migration depuis v2 (soldats → escouades de 10 max).
 - Tests : `npm test` (bot sur plusieurs vagues + sauvegarde) et `node tests/sortie.mjs` (sortie + comparaison des formations).
 - Reporté : ingénieurs / armes de siège, villageois attaquables, équilibrage fin (Phase 5).
+
+## Ancien jeu (v2)
+Sauvegardé dans `legacy/` (ressource de développement : animations, muraille, zombies, archers, villageois…) et intégralement dans la branche `claude/legacy-v2`. Voir `legacy/README.md`.
