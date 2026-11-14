@@ -182,7 +182,7 @@ export class Army {
     // archers
     const AU = UNITS.archer, range = AU.range + 3 * ar, adm = AU.dmg * eco.atkMult('archer') * this.rank(sim, 'archer').force;
     for (let s = 0; s < SECTORS; s++) {
-      const a = this.archers[s], nightR = sim.night ? sim.night.rangeMult(s) : 1;
+      const a = this.archers[s], nightR = sim.night ? sim.night.rangeMult(s) : 1, bless = sim.priest ? sim.priest.blessMult(sim, s) : 1;   // bénédiction du prêtre
       for (let k = 0; k < a.n; k++) {
         if (a.prog[k] < 1e8) { const len = archerPose(s, k, a.prog[k]).len; a.prog[k] += ARCHER_SPEED * dt; if (a.prog[k] >= len) a.prog[k] = 1e9; continue; }   // encore en train de monter
         a.cd[k] -= dt; if (a.cd[k] > 0) continue;
@@ -191,7 +191,7 @@ export class Army {
         for (let q = 0; q < m; q++) { const i = tmp[q]; if (Z.hp[i] <= 0) continue; const d = (Z.x[i] - p.x) ** 2 + (Z.z[i] - p.z) ** 2; if (d < bd) { bd = d; best = i; } }
         if (best < 0) { a.cd[k] = 0.25; continue; }
         const fire = eco.up.fireArrows && sim.rng() < UPGRADES.fireArrows.per * eco.up.fireArrows;      // flèche enflammée : le sol prend feu à l'impact
-        Z.hit(best, adm * (fire ? 1.25 : 1)); if (sim.arrows.length < 220) sim.arrows.push({ x0: p.x, z0: p.z, x1: Z.x[best], z1: Z.z[best], t: 0, fire });
+        Z.hit(best, adm * bless * (fire ? 1.25 : 1)); if (sim.arrows.length < 220) sim.arrows.push({ x0: p.x, z0: p.z, x1: Z.x[best], z1: Z.z[best], t: 0, fire });
         if (fire && sim.fires.length < 60) sim.fires.push({ x: Z.x[best], z: Z.z[best], r: 1.8, t: 2.6, small: true });
         a.cd[k] = AU.rate * (0.9 + sim.rng() * 0.2);
       }

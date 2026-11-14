@@ -2,9 +2,9 @@
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
 import { SECTORS, SECTOR_NAMES, SECTOR_SHORT, ARCHER_SLOTS, CASTLE, wallOff } from '../sim/constants.js';
-import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP } from '../content/medieval.js';
+import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP } from '../content/medieval.js';
 import { MAGE_TIERS } from '../render/Heroes.js';
-import { FORMATS, idealFormat } from '../render/config.js';
+import { FORMATS, idealFormat, quality } from '../render/config.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -231,6 +231,9 @@ export class UI {
       case 'unclear': sim.cancelClear(+x); break;
       case 'road': this.roadMode = {}; this.closeCard(); this.toast('🛤 Touche le point de départ de la route', 'info'); break;
       case 'summon': if (!sim.summonMage()) this.toast('Invocation impossible (or, vivres, une place de population)'); else this.toast('🔮 Invocation du magicien…', 'ok'); break;
+      case 'gfx': { const q = quality, H = this.hooks; if (!H.setGfx) break;
+        if (x === 'fmt') H.setGfx(y); else H.setGfx(null, x === 'shadows' ? { shadows: !q.shadows } : x === 'glow' ? { glow: !q.glow } : x === 'grass' ? { grass: q.grass >= 0.7 ? 0.35 : 1 } : { pixelRatio: q.pixelRatio >= 1.5 ? 1 : 2 });
+        this.html.sheet = ''; break; }
       case 'pref': { const p = this.prefs; if (x === 'difficulty') p.difficulty = y; else p[x] = !p[x]; this.applyPrefs(); this.html.sheet = ''; break; }
       case 'goto': { const t = sim.build.of(x); if (t) { this.cam.focusOn(t.x, t.z); this.openCard({ kind: 'struct', id: t.id }); } else this.startPlace(x); break; }
     }
@@ -247,6 +250,7 @@ export class UI {
   buzz(p) { if (UI_FLAGS.haptics && navigator.vibrate) try { navigator.vibrate(p); } catch { /* non supporté */ } }
   onEvent(e) {
     const sim = this.sim;
+    if (e.type === 'priestArrived') { this.toast('⛪ Un prêtre s\'installe à l\'église : il bénira les défenseurs pendant les assauts', 'ok'); }
     if (e.type === 'built') { const d = STRUCT[e.what]; this.toast(e.kind === 'site' ? `${d.ico} ${d.name} terminé !` : e.kind === 'upgrading' ? `⬆ ${d.name} amélioré` : `✥ ${d.name} remis en service`); }
     else if (e.type === 'breach') { this.toast(`💥 Brèche — ${SECTOR_NAMES[e.s]} ! Envoyez des renforts`, 'danger'); this.flashScreen('danger') }
     else if (e.type === 'repair') this.toast(`🔧 Muraille réparée — ${SECTOR_NAMES[e.s]}`, 'ok');
@@ -299,10 +303,10 @@ export class UI {
     if (this.html.sheet === html) return;
     const old = $('.sb', this.sheetEl), keep = old ? old.scrollTop : 0; this.html.sheet = html; this.sheetEl.innerHTML = html; const nb = $('.sb', this.sheetEl); if (nb) nb.scrollTop = keep;
   }
-  // nouvelle partie : format proposé selon l'appareil (modifiable ICI seulement) + difficulté
+  // nouvelle partie : format proposé selon l'appareil (réglages graphiques ajustables ensuite dans ☰) + difficulté
   newGameHtml() {
     const ideal = idealFormat(), d = this.newDiff || this.prefs.difficulty;
-    return `<div class="hint">Choisis le <b>format</b> de la partie. Celui qui convient le mieux à ton appareil est recommandé ; il ne pourra plus être changé pendant la partie.</div>
+    return `<div class="hint">Choisis le <b>format</b> de la partie. Celui qui convient le mieux à ton appareil est recommandé ; tu pourras l'ajuster ensuite à tout moment dans ☰ Paramètres → Graphismes.</div>
       <div class="fmts">${Object.entries(FORMATS).map(([k, F]) => `<button class="fmt ${k === ideal ? 'rec' : ''}" data-a="start:${k}"><span class="fi">${F.ico}</span><b>${F.name}</b>${k === ideal ? '<em>recommandé</em>' : ''}<small>${F.info}</small></button>`).join('')}</div>
       <div class="hint small"><b>Difficulté</b></div><div class="row">${Object.keys(DIFFICULTY).map(k => this.btn(DIFFICULTY[k].name, '', 'ndiff:' + k, false, 'act slim' + (k === d ? '' : ' sec'))).join('')}</div>`;
   }
@@ -311,7 +315,10 @@ export class UI {
     const v = this.volSnap || {}, sl = (k, l) => `<label class="vrow"><span>${l}</span><input type="range" min="0" max="100" step="5" value="${Math.round((v[k] ?? 0) * 100)}" data-vol="${k}"></label>`;
     const audio = this.hooks.audio ? `<div class="vols"><div class="hint small"><b>Son</b></div>${sl('master', 'Général')}${sl('sfx', 'Effets')}${sl('music', 'Musique')}</div>` : '';
     const cq = this.hooks.rd.qualityName ? this.hooks.rd.qualityName() : '';
-    const F = FORMATS[this.sim.format] || FORMATS.tablet, qual = `<div class="vols"><div class="hint small"><b>Format de la partie</b> : ${F.ico} ${F.name} — ${F.info}. Choisi au début de la partie ; pour en changer, commence une nouvelle partie.</div></div>`;
+    const fmt = this.sim.format || 'tablet', q = quality, gt = (k, on, l, sub) => this.btn(`${on ? '✅' : '⬜'} ${l}`, sub, 'gfx:' + k, false, 'act slim' + (on ? '' : ' sec'));
+    const qual = `<div class="vols"><div class="hint small"><b>Graphismes</b> — préréglage, puis ajuste à ton goût (enregistré avec la partie)</div>
+      <div class="row">${Object.entries(FORMATS).map(([k, F]) => this.btn(`${F.ico} ${F.name}`, k === fmt && !this.sim.gfx ? 'actuel' : k === fmt ? 'actuel, modifié' : '', 'gfx:fmt:' + k, false, 'act slim' + (k === fmt ? '' : ' sec'))).join('')}</div>
+      <div class="row wrapr">${gt('shadows', q.shadows, 'Ombres', 'plus joli, plus lourd')}${gt('glow', q.glow, 'Lueurs', 'torches, feux, impacts')}${gt('grass', q.grass >= 0.7, 'Herbe dense', '')}${gt('res', q.pixelRatio >= 1.5, 'Haute résolution', 'image plus nette')}</div></div>`;
     const p = this.prefs, tog = (k, l, sub) => this.btn(`${p[k] ? '✅' : '⬜'} ${l}`, sub, 'pref:' + k, false, 'act slim' + (p[k] ? '' : ' sec'));
     const game = `<div class="vols"><div class="hint small"><b>Difficulté</b> (vagues suivantes)</div><div class="row">${Object.keys(DIFFICULTY).map(k => this.btn(DIFFICULTY[k].name, k === 'easy' ? '−25 % zombies' : k === 'hard' ? '+30 % zombies, +15 % PV' : '', 'pref:difficulty:' + k, false, 'act slim' + (k === p.difficulty ? '' : ' sec'))).join('')}</div>
       <div class="row wrapr">${tog('autoRepair', 'Réparation auto', 'emprunte 2 villageois')}${tog('shake', 'Secousses', 'explosions')}${tog('fx', 'Effets', 'particules, feu')}</div></div>`;
@@ -412,6 +419,8 @@ export class UI {
     if (s.type === 'workshop') h += this.btn('🛠 Armes de siège', '', 'sheet:army:siege', false, 'act sec');
     if (s.type === 'forge') h += this.btn('🔨 Améliorations', '', 'sheet:army:forge', false, 'act sec');
     if (s.type === 'wizard') h += this.mageHtml(true);
+    if (s.type === 'church' && s.level) { const P = this.sim.priest, L = s.level; h += `<div class="rank">⛪ Le prêtre ${P.here ? (P.post ? `prie derrière le secteur <b>${SECTOR_SHORT[P.sector]}</b>` : 'veille sur le village') : 'arrive…'}<small>Pendant l'alerte et l'assaut, il va seul derrière le secteur le plus menacé.</small></div>`
+      + `<div class="spells">${PRIEST.powers.map(w => `<span class="${w.level <= L ? 'on' : 'off'}" title="${w.info}">${w.ico}<b>${w.name}</b><small>${w.level <= L ? w.info : 'église niv. ' + w.level}</small></span>`).join('')}</div>`; }
     if (s.type === 'publicworks' && s.level) { const R = this.sim.roads, q = R.quality(this.sim), pend = R.list.filter(r => r.built < 1).length; h += `<div class="rank">🛤 Routes : <b>${ROADWORKS.names[q]}</b> — villageois +${Math.round(ROADWORKS.speed[q] * 100)} % de vitesse sur les routes${q < 3 ? ` · niveau ${s.level + 1} : ${ROADWORKS.names[q + 1]}` : ''}${pend ? ` · ${pend} chantier${pend > 1 ? 's' : ''} de route` : ''}<small>Le réseau relie seul chaque nouveau bâtiment ; trace en plus tes propres routes (bois et pierre au mètre).</small></div>` + this.btn('🛤 Tracer une route', `${ROADWORKS.costPerM.wood} ${RES_INFO.wood.ico} + ${ROADWORKS.costPerM.stone} ${RES_INFO.stone.ico} par mètre`, 'road', false, 'act'); }
     if (s.type === 'infirmary' && s.level) h += `<div class="rank">🏥 Soins : <b>${(INFIRMARY.heal[s.level] * 100).toFixed(1)} %</b> des PV par seconde aux escouades en garnison hors combat · <b>${INFIRMARY.save[s.level] * 100} %</b> des combattants tombés sont sauvés (retour en réserve)${this.sim.army.saved ? ` · ${this.sim.army.saved} sauvés` : ''}</div>`;
     if (s.type === 'university' && s.level) h += this.btn('🎓 Améliorations des villageois', '', 'sheet:tech', false, 'act sec');

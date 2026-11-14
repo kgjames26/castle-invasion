@@ -25,6 +25,13 @@ export function levelProps(type, level, hw, hd) {
   const b = new B(); if (level < 2) return b.g;
   const L = level;
   switch (type) {
+    case 'church': {   // niv. 2 : petit cimetière (croix, pierres tombales), muret ; niv. 3 : jardin du presbytère, calvaire doré, bancs
+      for (let k = 0; k < 6; k++) { const x = -hw - 1.6 - (k % 2) * 1.6, z = -hd + 1.5 + (k >> 1) * 2.2; if (k % 3 === 0) { b.box(0.18, 1.2, 0.18, 0x8a8a8e, x, 0, z); b.box(0.7, 0.18, 0.18, 0x8a8a8e, x, 0.8, z); } else b.box(0.7, 0.9, 0.22, 0x9a9a9e, x, 0, z); }
+      b.box(0.3, 0.6, 7.4, 0x8c8a86, -hw - 3.4, 0, -hd + 3.7); b.box(3.4, 0.6, 0.3, 0x8c8a86, -hw - 1.7, 0, -hd);
+      if (L >= 3) { b.box(0.5, 0.5, 0.5, 0x8c8a86, hw + 2, 0, hd - 1); b.box(0.22, 3.0, 0.22, GOLD, hw + 2, 0.5, hd - 1); b.box(1.3, 0.22, 0.22, GOLD, hw + 2, 2.7, hd - 1);
+        for (let k = 0; k < 4; k++) b.ball(0.45, k % 2 ? 0x5f9a44 : 0x8ac06a, hw + 0.6 + k * 1.1, 0.4, hd + 1.2); for (const x of [hw + 0.8, hw + 3.2]) b.box(1.4, 0.45, 0.5, WOOD, x, 0, hd - 2.6); }
+      break;
+    }
     case 'sawmill':
       logs(b, 3, hw - 1.6, -hd + 1.4);
       if (L >= 3) { for (const x of [-hw + 0.8, -hw + 3.4]) { b.cyl(0.18, 3.2, WOOD, x, 0, -hd - 0.4); } b.box(3.2, 0.2, 0.2, WOOD, -hw + 2.1, 3.2, -hd - 0.4); for (let k = 0; k < 5; k++) b.box(0.12, 2.4, 0.9, 0xe5c28c, -hw + 0.9 + k * 0.6, 0.6, -hd - 0.4); }   // séchoir à planches

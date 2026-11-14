@@ -127,6 +127,7 @@ export function makeModel(type, kit, seed = 0) {
   if (type === 'wizard') return wizardModel();
   if (type === 'infirmary') return infirmaryModel();
   if (type === 'university') return universityModel();
+  if (type === 'church') { if (kit) return { g: kitModel(kit, 'Church', 1.32, 3), top: 14.5 }; const b = new B(); b.box(6, 5, 9, 0xe6dccb, 0, 0, 0.6); b.gable(6.6, 9.6, 2.6, 0x7a3f2a, 0, 5, 0.6); b.box(3.2, 9, 3.2, 0xd8ccb6, 0, 0, -4.2); b.add(new THREE.ConeGeometry(2.4, 3.6, 4), 0x4a5f80, 0, 10.8, -4.2, 0, Math.PI / 4); b.box(0.25, 1.6, 0.25, GOLD, 0, 12.6, -4.2); b.box(1.0, 0.25, 0.25, GOLD, 0, 13.0, -4.2); return { g: b.g, top: 14 }; }
   if (militaryModels[type]) { const m = militaryModels[type](); return { g: m.g, top: m.pips[1] }; }
   if (kit) {
     if (type === 'mill') return withProps({ g: kitModel(kit, 'Windmill', 1.05, 1), top: 8 }, millProps);

@@ -10,6 +10,7 @@ import { Army, archerPos } from './army.js';
 import { Siege } from './siege.js';
 import { START, UNITS, TIMING, waveSpec, giantsFor, golemsFor, GOLEM, PACK, FIRE, DIFFICULTY } from '../content/medieval.js';
 import { Mages } from './mage.js';
+import { Priest } from './priest.js';
 import { Frontier } from './frontier.js';
 import { Roads } from './roads.js';
 import { Night } from './night.js';
@@ -36,7 +37,7 @@ export class Simulation {
   newGame() {
     this.rng = makeRng(this.seed);
     this.wall.reset(); this.zombies.clear(); this.zombies.kills = 0;
-    this.army = new Army(); this.siege = new Siege(); this.mages = new Mages(); this.blasts = []; this.blastId = 0; this.fires = []; this.fallers = [];
+    this.army = new Army(); this.siege = new Siege(); this.mages = new Mages(); this.priest = new Priest(); this.blasts = []; this.blastId = 0; this.fires = []; this.fallers = [];
     this.frontier = new Frontier(); this.roads = new Roads(); this.night = new Night();
     this.eco.reset(); this.build.reset();
     this.army.reserve = { ...START.reserve };
@@ -204,7 +205,7 @@ export class Simulation {
     this.zombies.update(dt, this);
     this.army.update(dt, this);
     this.siege.update(dt, this);
-    this.mages.update(dt, this);
+    this.mages.update(dt, this); this.priest.update(dt, this);
     this.night.update(dt, this); this.roads.update(dt, this);
     this.golemSlams(dt);
     this.castleGuard(dt);

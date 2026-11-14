@@ -9,6 +9,8 @@ import { SEGS, SEG_W, SECTORS, SECTOR_W, WALK_H, GATE_SEGS, wallOff, wallSlope }
 import { STAIR_Z0, STAIR_Z1 } from '../sim/army.js';
 import { stoneMaterial } from './Stone.js';
 
+// GATE_HS : hauteur de chaque passage (la porte centrale, la grande porte, est plus haute) ; GATE_TH : hauteur des châtelets
+export const GATE_HS = [4.4, 6.2, 4.4], GATE_TH = [10.5, 13.2, 10.5];
 export const WALL_H = 6.4, GATE_H = 4.4, Z_OUT = 143.5, Z_IN = 148.9, Z_MID = 146.2, THICK = 2.0, STEPS = 12;
 // muraille en ARC (v2.1) : un point exprimé dans le repère « muraille droite » (x le long du mur, z en profondeur) est reporté sur l'arc :
 // décalé vers le nord de wallOff(x) et tourné selon la pente locale, pour que chaque pièce suive la courbe.
@@ -43,21 +45,24 @@ export class WallView {
     this.portcullis = new THREE.InstancedMesh(mergeGeometries(bars.map(g => g.index ? g.toNonIndexed() : g), false), fog(new THREE.MeshLambertMaterial({ color: 0x3a3c42, flatShading: true })), GATE_SEGS.length); this.portcullis.frustumCulled = false; scene.add(this.portcullis);
     // châtelets : tours, salle au-dessus du passage, créneaux, toits, bannières (statiques : construits une fois)
     this.gatehouse = new THREE.Group(); scene.add(this.gatehouse);
-    const st = stoneMaterial(0xb0aca4), roof = fog(new THREE.MeshLambertMaterial({ color: 0x7a3a2a, flatShading: true })), wood = fog(new THREE.MeshLambertMaterial({ color: 0x4a3426, flatShading: true }));
+    const st = stoneMaterial(0xb0aca4), dark = stoneMaterial(0x6a6660), roof = fog(new THREE.MeshLambertMaterial({ color: 0x7a3a2a, flatShading: true })), wood = fog(new THREE.MeshLambertMaterial({ color: 0x4a3426, flatShading: true }));
     const add = (geo, m, x, y, z, ry = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.y = ry; arcObject(o); o.castShadow = o.receiveShadow = true; this.gatehouse.add(o); return o; };
-    for (const [a, b] of GATE_SEGS) {
-      const x0 = a * SEG_W, x1 = (b + 1) * SEG_W, gc = (x0 + x1) / 2, TH = 10.5;
-      add(new THREE.BoxGeometry(x1 - x0 + 0.4, TH - GATE_H, THICK + 1.6), st, gc, GATE_H + (TH - GATE_H) / 2 - 0.6, Z_OUT + 0.4);                  // salle de la herse
+    const wallSkin = (w, h, x, y, z, ry) => { const o = add(asset.geo, panelMat, x, y, z, ry); o.scale.set(w / 10, h / 4, 0.35); return o; };   // parement du modèle de muraille
+    GATE_SEGS.forEach(([a, b], gi) => {
+      const x0 = a * SEG_W, x1 = (b + 1) * SEG_W, gc = (x0 + x1) / 2, TH = GATE_TH[gi], GH = GATE_HS[gi], RW = x1 - x0 + 0.4, RD = THICK + 1.6, RZ = Z_OUT + 0.4, RY0 = GH - 0.6, RH = TH - RY0;
+      add(new THREE.BoxGeometry(RW, RH, RD), dark, gc, RY0 + RH / 2, RZ);                                                                   // salle de la herse (cœur)
+      wallSkin(RW + 0.1, RH, gc, RY0, RZ - RD / 2 - 0.08, 0); wallSkin(RW + 0.1, RH, gc, RY0, RZ + RD / 2 + 0.08, Math.PI);                    // façades : même parement que la muraille
+      add(new THREE.BoxGeometry(RW + 0.5, 0.35, RD + 0.5), dark, gc, RY0 - 0.1, RZ);                                                          // linteau sombre au-dessus de la herse
       for (const tx of [x0 - 2.2, x1 + 2.2]) {
         add(new THREE.BoxGeometry(4.4, TH + 1.2, 6.4), st, tx, (TH + 1.2) / 2, Z_MID - 0.6);                                                       // tour du châtelet
         for (let i = 0; i < 4; i++) for (const [dx, dz] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { if (i % 2) continue; const ox = dx ? dx * 2.0 : -1.6 + i * 1.1, oz = dz ? dz * 3.0 : -2.4 + i * 1.6; add(new THREE.BoxGeometry(dx ? 0.5 : 0.9, 1.0, dz ? 0.5 : 0.9), st, tx + ox, TH + 1.7, Z_MID - 0.6 + oz); }
         add(new THREE.ConeGeometry(3.5, 3.6, 4), roof, tx, TH + 3.6, Z_MID - 0.6, Math.PI / 4);
-        add(new THREE.BoxGeometry(0.5, 1.1, 0.2), wood, tx, 6.6, Z_OUT - 1.25).material = new THREE.MeshBasicMaterial({ color: 0x1a120c });       // meurtrière
+        add(new THREE.BoxGeometry(0.5, 1.1, 0.2), wood, tx, TH * 0.63, Z_OUT - 1.25).material = new THREE.MeshBasicMaterial({ color: 0x1a120c });       // meurtrière
       }
       for (let i = 0; i < 5; i++) add(new THREE.BoxGeometry(0.9, 0.9, 0.6), st, x0 + 0.8 + i * (x1 - x0 - 1.6) / 4, TH - 0.15, Z_OUT - 0.4);          // créneaux du châtelet
       // bannières suspendues de part et d'autre du passage
-      for (const bx of [gc - 3.4, gc + 3.4]) { add(new THREE.BoxGeometry(1.5, 3.2, 0.08), fog(new THREE.MeshLambertMaterial({ color: 0x2f5fb0, side: THREE.DoubleSide })), bx, GATE_H + 2.6, Z_OUT - 0.95); add(new THREE.BoxGeometry(1.55, 0.18, 0.1), fog(new THREE.MeshLambertMaterial({ color: 0xf2c94a })), bx, GATE_H + 1.05, Z_OUT - 0.97); add(new THREE.BoxGeometry(0.5, 0.5, 0.1), fog(new THREE.MeshLambertMaterial({ color: 0xf2c94a })), bx, GATE_H + 2.9, Z_OUT - 1.0, Math.PI / 4); }
-    }
+      for (const bx of [gc - 3.4, gc + 3.4]) { add(new THREE.BoxGeometry(1.5, 3.2, 0.08), fog(new THREE.MeshLambertMaterial({ color: 0x2f5fb0, side: THREE.DoubleSide })), bx, GH + 2.6, Z_OUT - 1.62); add(new THREE.BoxGeometry(1.55, 0.18, 0.1), fog(new THREE.MeshLambertMaterial({ color: 0xf2c94a })), bx, GH + 1.05, Z_OUT - 1.64); add(new THREE.BoxGeometry(0.5, 0.5, 0.1), fog(new THREE.MeshLambertMaterial({ color: 0xf2c94a })), bx, GH + 2.9, Z_OUT - 1.67, Math.PI / 4); }
+    });
     // portes : une par passage (gauche, centre, droite) ; chacune a ses deux battants et son linteau
     this.gates = GATE_SEGS.map(([a, b], g) => ({ g, segs: [a, b], x0: a * SEG_W, x1: (b + 1) * SEG_W }));
     this.stairs();
@@ -83,16 +88,16 @@ export class WallView {
     // linteau au-dessus de la porte (panneau extérieur + dalle du chemin de ronde)
     let lintels = 0;
     for (const G of this.gates) {
-      const gw = G.x1 - G.x0, gc = (G.x0 + G.x1) / 2, intact = wall.hp[G.segs[0]] > 0 || wall.hp[G.segs[1]] > 0;
+      const gw = G.x1 - G.x0, gc = (G.x0 + G.x1) / 2, intact = wall.hp[G.segs[0]] > 0 || wall.hp[G.segs[1]] > 0, GH = GATE_HS[G.g];
       if (!intact) continue;
-      this.place(this.outer, n, gc, GATE_H, Z_OUT, 0, gw / 10, (WALL_H - GATE_H) / 4, THICK); this.tint(this.outer, n, 1, false);
-      this.place(this.core, n, gc, (GATE_H + WALL_H - 1.2) / 2 + 0.0, Z_MID, 0, gw, WALK_H - GATE_H, 4.7); this.core.setColorAt(n, this.c.setRGB(0.5, 0.5, 0.5)); n++; lintels++;
+      this.place(this.outer, n, gc, GH, Z_OUT, 0, gw / 10, Math.max(0.05, WALL_H - GH) / 4, THICK); this.tint(this.outer, n, 1, false);
+      const top = Math.max(WALK_H, GH + 0.4); this.place(this.core, n, gc, (GH + top) / 2, Z_MID, 0, gw, top - GH, 4.7); this.core.setColorAt(n, this.c.setRGB(0.5, 0.5, 0.5)); n++; lintels++;
     }
     this.outer.count = n; this.core.count = n; this.inner.count = n - lintels; this.leaves.count = nl;
     // herses : montent dans le châtelet à l'ouverture ; disparaissent si la porte est détruite
     this.gates.forEach((G, k) => {
-      const intact = wall.hp[G.segs[0]] > 0 || wall.hp[G.segs[1]] > 0, up = ease(gates[G.g]) * (GATE_H - 0.3);
-      this.place(this.portcullis, k, (G.x0 + G.x1) / 2, intact ? up : -20, Z_OUT + 0.15, 0, 1, 1, 1);
+      const GH = GATE_HS[G.g], intact = wall.hp[G.segs[0]] > 0 || wall.hp[G.segs[1]] > 0, up = ease(gates[G.g]) * (GH - 0.3);
+      this.place(this.portcullis, k, (G.x0 + G.x1) / 2, intact ? up : -20, Z_OUT + 0.15, 0, 1, GH / GATE_H, 1.25);
       const r = Math.min(wall.hp[G.segs[0]] / wall.segMax(G.segs[0]), wall.hp[G.segs[1]] / wall.segMax(G.segs[1])); this.portcullis.setColorAt(k, this.c.setRGB(1, 1, 1).lerp(this.c2, (1 - Math.max(0, r)) * 0.8));
     });
     this.portcullis.instanceMatrix.needsUpdate = true; if (this.portcullis.instanceColor) this.portcullis.instanceColor.needsUpdate = true;

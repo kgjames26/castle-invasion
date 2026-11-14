@@ -178,7 +178,7 @@ export class Build {
       for (let q = 0; q < m; q++) { const i = tmp[q]; if (Z.hp[i] <= 0) continue; const d = (Z.x[i] - s.x) ** 2 + (Z.z[i] - s.z) ** 2; if (d < bd) { bd = d; best = i; } }
       if (best < 0) { s.cd = 0.3; continue; }
       const E = sim.eco, fire = E.up.fireArrows && sim.rng() < UPGRADES.fireArrows.per * E.up.fireArrows;      // les archers des tours tirent aussi des flèches enflammées
-      Z.hit(best, st.dmg * (fire ? 1.25 : 1)); if (sim.arrows.length < 220) sim.arrows.push({ x0: s.x, z0: s.z, x1: Z.x[best], z1: Z.z[best], t: 0, h: 12, fire });
+      Z.hit(best, st.dmg * (fire ? 1.25 : 1) * (sim.priest ? sim.priest.blessMult(sim, sectorOfX(s.x)) : 1)); if (sim.arrows.length < 220) sim.arrows.push({ x0: s.x, z0: s.z, x1: Z.x[best], z1: Z.z[best], t: 0, h: 12, fire });
       if (fire && sim.fires.length < 60) sim.fires.push({ x: Z.x[best], z: Z.z[best], r: 1.8, t: 2.6, small: true });
       s.cd = st.rate * (0.9 + sim.rng() * 0.2);
     }

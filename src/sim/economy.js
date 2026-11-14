@@ -1,6 +1,6 @@
 // Économie : villageois autonomes (aucun ordre individuel). Le joueur fixe seulement les EFFECTIFS par tâche.
 // Chaque villageois sait quoi faire : aller au site → récolter → TOUT rapporter au château → recommencer.
-import { TASKS, BUILDINGS, UPGRADES, ECON, START, RES, RES_INFO, PROSPECT, START_DEPOSITS, AUTO_REPAIR, SMITH, FIRE_KEEP } from '../content/medieval.js';
+import { TASKS, BUILDINGS, UPGRADES, ECON, START, RES, RES_INFO, PROSPECT, START_DEPOSITS, AUTO_REPAIR, SMITH, FIRE_KEEP, PRIEST } from '../content/medieval.js';
 import { SEGS, SEG_W, SECTORS, SEGS_PER_SECTOR, wallOff } from './constants.js';
 import { WALL } from '../content/medieval.js';
 
@@ -30,7 +30,7 @@ export class Economy {
   // ——— grandeurs dérivées ———
   cap(r) { return ECON.baseStore + ECON.storePerLevel * this.level[r === 'food' ? 'granary' : 'warehouse']; }
   // Population PARTAGÉE : villageois + toutes les unités militaires (réserve, escouades, garnisons, file d'entraînement)
-  popCap() { return ECON.popBase + ECON.popPerHouse * this.houses; }
+  popCap() { return ECON.popBase + ECON.popPerHouse * this.houses + (this.level.church ? PRIEST.pop * this.level.church : 0); }   // église : des familles s'installent
   population() { return this.villagers.length + this.sim.army.popUsed() + this.sim.siege.popUsed() + (this.sim.mages ? this.sim.mages.popUsed() : 0); }
   popRoom() { return this.popCap() - this.population(); }
   speed() { return ECON.villagerSpeed * (1 + UPGRADES.boots.per * this.up.boots); }

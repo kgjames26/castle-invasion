@@ -163,6 +163,34 @@ export function makeMage(level = 1) {
   return { level, tierName: MT.name, halo, root, body, head, armR, armL, tip, handL, circle, circle2, bars, hp, mp, hatTip };
 }
 // pose du magicien : marche (balancement), repos (bâton qui tape), incantation (bras levés), soin (bras ouverts)
+// ——— PRÊTRE (v2.3) : soutane noire, col blanc, étole violette, tonsure, bâton surmonté d'une croix dorée, livre de prières ———
+//  même squelette que le magicien (body, head, armR, armL, cercles au sol) : il réutilise poseMage (prière = pose « soin », exorcisme = « sort »)
+export function makePriest(level = 1) {
+  const ROBE = 0x1f1f26, ROBE_D = 0x15151a, STOLE = level >= 3 ? 0xd9b23a : 0x6a2a8a, HAIR = 0x5a3a22, GOLDC = 0xf2c94a;
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
+  const cone = (r0, r1, h, c, x, y, z, seg = 10) => { const g = new THREE.CylinderGeometry(r1, r0, h, seg).toNonIndexed(); g.deleteAttribute('uv'); g.deleteAttribute('normal'); g.translate(x, y + h / 2, z); const cc = new THREE.Color(c), a = new Float32Array(g.attributes.position.count * 3); for (let i = 0; i < a.length; i += 3) { a[i] = cc.r; a[i + 1] = cc.g; a[i + 2] = cc.b; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); return g; };
+  body.add(meshOf([
+    cone(0.5, 0.3, 1.3, ROBE, 0, 0.05, 0), cone(0.3, 0.25, 0.5, ROBE_D, 0, 1.2, 0), bx(0.6, 0.16, 0.3, ROBE_D, 0, 1.6, 0),                   // soutane
+    bx(0.16, 0.12, 0.2, 0x2a1e14, 0.12, 0.05, 0.28), bx(0.16, 0.12, 0.2, 0x2a1e14, -0.12, 0.05, 0.28),                                         // souliers
+    bx(0.22, 0.06, 0.24, 0xf4f4f0, 0, 1.73, 0.02),                                                                                           // col blanc
+    bx(0.1, 1.3, 0.04, STOLE, 0.11, 0.55, 0.3), bx(0.1, 1.3, 0.04, STOLE, -0.11, 0.55, 0.3), bx(0.12, 0.12, 0.05, GOLDC, 0.11, 0.42, 0.33), bx(0.12, 0.12, 0.05, GOLDC, -0.11, 0.42, 0.33),   // étole
+    bx(0.06, 0.24, 0.03, GOLDC, 0, 1.38, 0.29), bx(0.16, 0.05, 0.03, GOLDC, 0, 1.44, 0.29),                                                 // petite croix pectorale
+    ...[0.5, 0.7, 0.9, 1.1].map(y => bx(0.06, 0.04, 0.03, 0xf4f4f0, 0, y, 0.33)),                                                           // boutons
+    ...(level >= 2 ? [bx(0.62, 1.45, 0.05, 0xe8e2d0, 0, 0.25, -0.3)] : []),                                                                 // chape claire (niv. 2+)
+  ]));
+  const head = new THREE.Group(); head.position.set(0, 1.78, 0.02); body.add(head);
+  head.add(meshOf([bx(0.28, 0.3, 0.28, SKIN, 0, 0, 0), bx(0.06, 0.08, 0.08, 0xd09a74, 0, -0.02, 0.17), bx(0.3, 0.12, 0.3, HAIR, 0, 0.06, -0.01), bx(0.3, 0.1, 0.06, HAIR, 0, -0.02, -0.13), bx(0.18, 0.04, 0.18, SKIN, 0, 0.14, 0)]));   // tête, couronne de cheveux, tonsure
+  const armR = new THREE.Group(); armR.position.set(0.34, 1.58, 0); body.add(armR);
+  armR.add(meshOf([bx(0.15, 0.55, 0.15, ROBE, 0, -0.25, 0), bx(0.12, 0.12, 0.12, SKIN, 0, -0.55, 0.04), bx(0.06, 2.0, 0.06, 0x6b4a2c, 0, 0.05, 0.4), bx(0.08, 0.5, 0.08, GOLDC, 0, 1.25, 0.4), bx(0.34, 0.08, 0.08, GOLDC, 0, 1.33, 0.4)]));   // bâton à croix
+  const tip = new THREE.Group(); tip.position.set(0, 1.3, 0.4); armR.add(tip);
+  const armL = new THREE.Group(); armL.position.set(-0.34, 1.58, 0); body.add(armL);
+  armL.add(meshOf([bx(0.15, 0.55, 0.15, ROBE, 0, -0.25, 0), bx(0.12, 0.12, 0.12, SKIN, 0, -0.55, 0.04), bx(0.24, 0.06, 0.3, 0x6a1e1e, 0, -0.6, 0.2), bx(0.2, 0.07, 0.26, 0xf0e8d0, 0, -0.56, 0.2)]));   // livre de prières
+  const handL = new THREE.Group(); handL.position.set(0, -0.62, 0.1); armL.add(handL);
+  const rg = new THREE.RingGeometry(1.2, 1.45, 48); rg.rotateX(-Math.PI / 2);
+  const circle = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0xffd86a, transparent: true, opacity: 0, depthWrite: false })); circle.position.y = 0.12; root.add(circle);
+  const rg2 = new THREE.RingGeometry(0.55, 0.65, 4, 1); rg2.rotateX(-Math.PI / 2); const circle2 = new THREE.Mesh(rg2, circle.material); circle2.position.y = 0.13; root.add(circle2);
+  return { level, root, body, head, armR, armL, tip, handL, circle, circle2 };
+}
 export function poseMage(M, s) {
   const { body, armR, armL, head, circle, circle2 } = M, t = s.t;
   const walk = s.walk, cast = s.cast, heal = s.heal;

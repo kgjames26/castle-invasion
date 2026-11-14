@@ -194,3 +194,13 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Gisements** : petits blocs de minerai (3 variantes par ressource) multipliés en grappes de 22 ; la grappe se vide bloc par bloc quand on l'exploite.
 - **Feux de la plaine** : 8 bûchers devant la muraille. Hors assaut et de jour, l'**équipe des feux** (tâche dédiée) charge des fagots aux tas de bois de la cour et monte les bûchers ; à l'approche de la nuit, elle les allume (grand feu, lumière large, 260 s). Les zombies dispersent les bûchers et éteignent les feux.
 - **Savoir-faire des allumeurs** (Université, 3 niveaux) : +25 % de vitesse, feux plus longs, −15 % de bois par niveau.
+
+## Phase 23 — Châtelets, grande porte, réglages graphiques, église et prêtre
+- **Châtelets** : la salle au-dessus de chaque herse porte le même parement que la muraille (modèle « dungeon_wall »), sur un cœur de pierre sombre.
+- **Grande porte centrale** : passage et herse plus hauts (6,2 m contre 4,4 m), châtelet plus haut (`GATE_HS`, `GATE_TH` dans WallView.js).
+- **Graphismes ajustables en cours de partie** (☰ Paramètres → Graphismes) : préréglage Téléphone / Tablette / Ordinateur, puis ombres, lueurs, herbe dense, haute résolution ; enregistré avec la partie (`sim.gfx`).
+- **Église** : plus d'église posée d'office. Bâtiment à construire (3 niveaux, petit cimetière au niv. 2, calvaire doré et jardin au niv. 3).
+- **Prêtre** (src/sim/priest.js) : arrive quand l'église est bâtie. Hors assaut, il reste devant l'église ; pendant l'alerte et l'assaut, il va prier derrière le secteur le plus menacé.
+  - niv. 1 : Bénédiction (archers et tours du secteur +15 %, +5 %/niveau) et Familles (+8 places de population par niveau)
+  - niv. 2 : Exorcisme (lumière sacrée toutes les 8 s sur les zombies proches, +50 % contre les golems)
+  - niv. 3 : Sanctuaire (zombies ralentis près de lui, escouades voisines soignées)

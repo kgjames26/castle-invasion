@@ -13,7 +13,7 @@ import { Effects, EFFECTS } from './Effects.js';
 import { ATMOS, CAMERA, quality, setQualityName } from './config.js';
 import { fogUniforms, patchNorthFog } from './fog.js';
 import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry, troopRig, siegeRig, bx } from './Troops.js';
-import { buildKnightRigs, makeMage, poseMage, knightRig, golemRig } from './Heroes.js';
+import { buildKnightRigs, makeMage, makePriest, poseMage, knightRig, golemRig } from './Heroes.js';
 import { carrierGeometry, TOOL_TINT } from './Village.js';
 import { OreView } from './Ores.js';
 import { LOADS, buildLoadMeshes, backToolMatrix } from './Loads.js';
@@ -56,7 +56,8 @@ export class Renderer {
   }
   // ——— qualité (voir render/config.js) : ombres, lueurs, résolution ———
   qualityName() { return quality.name; }
-  setQuality(name) { if (setQualityName(name)) this.applyQuality(); }
+  // préréglage (format) + réglages fins modifiables en cours de partie : ombres, lueurs, herbe, résolution
+  setQuality(name, over = null) { if (!setQualityName(name)) return; if (over) { Object.assign(quality, over); if (quality.shadows && !quality.shadowMap) quality.shadowMap = 1024; } this.applyQuality(); }
   applyQuality() {
     const q = quality; this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pixelRatio));
     this.renderer.shadowMap.enabled = q.shadows; this.sun.castShadow = q.shadows;
@@ -493,6 +494,20 @@ export class Renderer {
     this.struct.setKit(this.struct.kit);
   }
   // ——— magicien : un groupe articulé par magicien ; pose selon l'action (marche, incantation, soin) ; lueur du cristal ———
+  // ——— prêtre : prie (bras levés, cercle doré) derrière le secteur menacé ; exorcisme = bâton brandi + lueur dorée ———
+  renderPriest(alpha) {
+    const P = this.sim.priest; if (!P) return; const L = P.level(this.sim);
+    if (!P.here || !L) { if (this.priestV) this.priestV.root.visible = false; return; }
+    let v = this.priestV; if (v && v.level !== L) { this.scene.remove(v.root); v = null; }
+    if (!v) { v = this.priestV = makePriest(L); v.walk = 0; v.cast = 0; v.heal = 0; v.rot = P.face; this.scene.add(v.root); this.shadowize(v.root); }
+    v.root.visible = true; const t = this.clock, x = P.px + (P.x - P.px) * alpha, z = P.pz + (P.z - P.pz) * alpha, mv = Math.hypot(P.x - P.px, P.z - P.pz) > 0.004;
+    v.walk += ((mv ? 1 : 0) - v.walk) * 0.15; v.cast += ((P.cast > 0 ? 1 : 0) - v.cast) * 0.25; v.heal += ((P.post && P.cast <= 0 ? 1 : 0) - v.heal) * 0.1;
+    let dr = ((P.face - v.rot + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; v.rot += dr * 0.2;
+    v.root.position.set(x, 0, z); v.root.scale.setScalar(HUMAN_H / 2.05); v.body.rotation.y = v.rot;
+    poseMage(v, { t, walk: v.walk, cast: v.cast, heal: v.heal * 0.8 });
+    if (P.post) { v.root.updateMatrixWorld(true); const p = this._tipV || (this._tipV = new THREE.Vector3()); v.tip.getWorldPosition(p); this.fx.glowNow(p.x, p.y, p.z, (P.cast > 0 ? 1.6 : 0.4) * (0.85 + 0.15 * Math.sin(t * 5)), 1, 0.85, 0.4);
+      if (Math.random() < 0.25 * this.fx.q.particles) this.fx.A.emit(x + (Math.random() - 0.5) * 2, 0.3, z + (Math.random() - 0.5) * 2, 0, 1.0, 0, 1.4, 0.16, -0.2, [1, 0.88, 0.45]); }
+  }
   renderMages(alpha) {
     const M = this.sim.mages; if (!M) return; const seen = new Set(), t = this.clock;
     for (const m of M.list) {
@@ -569,7 +584,7 @@ export class Renderer {
     this.struct.setKit(kit);   // maisons, tours, moulin, entrepôt, grenier : modèles du kit
     // monuments et décor du village
     const one = (name, x, z, ry, sc) => { const m = new THREE.Mesh(geo[name], kitMaterial(kit.material.map, 0x7a3f2a, 0xe2d6bc)); m.position.set(x, 0, z); m.rotation.y = ry; m.scale.setScalar(sc); this.scene.add(m); return m; };
-    one('Church', 162, 292, -0.3, 1.0);
+    // (v2.3) l'église n'est plus un décor : c'est un bâtiment à construire, avec son prêtre
   }
   updateKitWall() {
     const wall = this.sim.wall, d = this.dummy, c = this.tmpColor, cnt = { Wall1: 0, Wall2: 0, Wall3: 0, Wall4: 0 };
@@ -758,7 +773,7 @@ export class Renderer {
     }
     zm.count = n; zm.instanceMatrix.needsUpdate = true; zm.instanceColor.needsUpdate = true;
     }
-    this.renderSquads(alpha); this.renderMages(alpha); const sel = this.selSquad;
+    this.renderSquads(alpha); this.renderMages(alpha); this.renderPriest(alpha); const sel = this.selSquad;
     // anneau de l'escouade choisie + marqueur de sortie
     const sq = sel ? sim.army.squads.find(q => q.id === sel) : null;
     this.ring.visible = !!sq;

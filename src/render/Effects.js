@@ -187,6 +187,7 @@ export class Effects {
           for (let k = 0; k < 10; k++) { const x = b.x + (Math.random() - 0.5) * b.r * 2; this.burst(x, 5.5, b.z + 3, 2, 1.2, 0.5, 1.0, 0.45, 12, COL.debris); this.burst(x, 0.8, b.z - 0.5, 2, 2, 0.8, 1.8, 1.3, -0.3, COL.dust, false, 1.3); }
           this.ring(b.x, b.z - 2, 10, 0.6, [0.55, 0.48, 0.4]); this.addShake(0.6); break;
         }
+        case 'holy': this.ring(b.x, b.z, b.r, 0.9, [1, 0.88, 0.45]); this.ring(b.x, b.z, b.r * 0.55, 0.6, [1, 0.97, 0.8]); this.burst(b.x, 0.6, b.z, 34, b.r, 4.5, 1.0, 0.4, -1.5, [1, 0.88, 0.45], true); this.flash(b.x, 2, b.z, b.r * 1.2, 0.5, [1, 0.9, 0.55]); break;
         case 'meteorCall': this.ring(b.x, b.z, b.r, 1.4, [1, 0.4, 0.1]); break;
       }
     }

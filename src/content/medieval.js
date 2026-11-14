@@ -143,6 +143,21 @@ export const ARMY_BUILDINGS = {
 // Maison du sorcier : invoque UN magicien autonome (il choisit seul de soigner ou d'attaquer). Le niveau du bâtiment = niveau du magicien.
 ARMY_BUILDINGS.wizard = { time: 60, base: 0, name: 'Maison du sorcier', ico: '🔮', group: 'army', start: 0, max: 5, cost: { wood: 120, stone: 140, gold: 80 }, pos: { x: 100, z: 280 }, size: [10, 14, 10], color: 0x5a4a8a, info: 'Invoque un magicien autonome · chaque niveau le rend plus puissant' };
 ARMY_BUILDINGS.workshop = { time: 55, base: 0, name: 'Atelier de siège', ico: '🛠', group: 'army', start: 0, max: 3, cost: { wood: 140, stone: 100, iron: 30 }, pos: { x: 136, z: 236 }, size: [14, 6, 10], color: 0x6a5a45, info: '2 armes déployables par niveau · Niv.1 baliste · Niv.2 catapulte · Niv.3 trébuchet' };
+// Église (v2.3) : pas d'église au départ. Une fois bâtie, un PRÊTRE s'installe au village ; le niveau de l'église lui donne ses pouvoirs.
+ARMY_BUILDINGS.church = { time: 55, base: 0, name: 'Église', ico: '⛪', group: 'eco', start: 0, max: 3, cost: { wood: 120, stone: 140, gold: 30 }, pos: { x: 30, z: 298 }, size: [11, 13, 10], color: 0xd8d0c0, info: 'Un prêtre s\'installe au village · niv. 1 Bénédiction et familles · niv. 2 Exorcisme · niv. 3 Sanctuaire' };
+//  bless : bonus de dégâts des archers et des tours du secteur où il prie · pop : places de population par niveau (familles qui s'installent)
+//  exo : exorcisme (lumière sacrée sur les zombies près de lui) · sanct : sanctuaire (zombies ralentis autour de lui, escouades soignées)
+export const PRIEST = {
+  speed: 5, bless: 0.15, blessPerLevel: 0.05, pop: 8,
+  exo: { level: 2, cd: 8, reach: 30, r: 6.5, dmg: 70, dmgPerLevel: 0.35, golem: 1.5 },
+  sanct: { level: 3, r: 11, heal: 0.012 },
+  powers: [
+    { level: 1, ico: '🙏', name: 'Bénédiction', info: 'Pendant l\'assaut, il prie derrière le secteur le plus menacé : archers et tours y font +15 % de dégâts (+5 %/niveau)' },
+    { level: 1, ico: '👪', name: 'Familles', info: '+8 places de population par niveau de l\'église' },
+    { level: 2, ico: '✨', name: 'Exorcisme', info: 'Toutes les 8 s, une lumière sacrée frappe les zombies proches (dégâts de zone, +50 % contre les golems)' },
+    { level: 3, ico: '🕊', name: 'Sanctuaire', info: 'Les zombies proches de lui sont ralentis et les escouades autour de lui reprennent des forces' },
+  ],
+};
 Object.assign(BUILDINGS, ARMY_BUILDINGS);
 // ——— Phase 6 : construction libre ———
 // Structures multiples (placées où l'on veut) : maisons et tours de défense. Les autres bâtiments existent en un seul exemplaire (niveaux).

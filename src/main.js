@@ -28,14 +28,15 @@ loadItems().then(() => rd.useItems()).catch(e => console.warn('Objets indisponib
 loadKit().then(k => rd.useKit(k)).catch(e => console.warn('Décor du kit indisponible, géométrie provisoire conservée', e));
 loadWall('assets/wall/dungeon_wall.glb').then(w => rd.useWall(w)).catch(e => console.warn('Muraille GLB indisponible, muraille provisoire conservée', e));
 let ui;
-function applyFormat() { if (!/[?&]q=/.test(location.search)) rd.setQuality(FORMATS[sim.format]?.q || 'medium'); }
+function applyFormat() { if (!/[?&]q=/.test(location.search)) rd.setQuality(FORMATS[sim.format]?.q || 'medium', sim.gfx); }
 applyFormat();
 const cam = new CameraController(rd.camera, rd.renderer.domElement, (x, z) => ui.onMapTap(x, z));
 const audio = new AudioManager();   // sons synthétisés (Web Audio) : lit l'état, ne le modifie pas
 addEventListener('pointerdown', () => audio.unlock()); addEventListener('keydown', () => audio.unlock());
 const hooks = {
   rd, cam, audio, resumed,
-  newGame: (fmt) => { clearSave(); sim.newGame(); sim.format = fmt || idealFormat(); applyFormat(); ui.sel = -1; ui.cancelPlace(); ui.closeCard(); ui.closeSheet(); ui.showOver(false); ui.refresh(true); save(sim); },
+  setGfx: (fmt, over) => { if (fmt) { sim.format = fmt; sim.gfx = null; } if (over) sim.gfx = { ...(sim.gfx || {}), ...over }; applyFormat(); save(sim); },   // réglages graphiques en cours de partie
+  newGame: (fmt) => { clearSave(); sim.newGame(); sim.format = fmt || idealFormat(); sim.gfx = null; applyFormat(); ui.sel = -1; ui.cancelPlace(); ui.closeCard(); ui.closeSheet(); ui.showOver(false); ui.refresh(true); save(sim); },
 };
 ui = new UI(sim, hooks);
 { const v = document.createElement('div'); v.className = 'vtag'; v.textContent = 'v' + VERSION; document.getElementById('app').appendChild(v); const sp = document.getElementById('splash'); document.getElementById('sp-v').textContent = 'v' + VERSION; setTimeout(() => sp.classList.add('off'), 1800); setTimeout(() => sp.remove(), 2700); }
