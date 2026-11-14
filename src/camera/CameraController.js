@@ -53,7 +53,9 @@ export class CameraController {
   clamp() {
     // on ne montre jamais le vide : le centre reste à une demi-largeur visible des bords du monde
     const hw = Math.min(W / 2, 0.92 * this.baseDist * this.zoom * Math.tan(THREE.MathUtils.degToRad(this.cam.fov / 2)) * (this.aspect || 1));
-    this.tx = Math.min(W - hw, Math.max(hw, this.tx)); this.tz = Math.min(D - 20, Math.max(20, this.tz));
+    // au niveau du village, la carte s'étend : forêts vierges à gauche et à droite (−200 … 400 m) ; plus haut, le front garde sa largeur
+    const wide = Math.max(0, Math.min(1, (this.tz - 170) / 40)), x0 = -200 * wide, x1 = W + 200 * wide;
+    this.tx = Math.min(x1 - hw, Math.max(x0 + hw, this.tx)); this.tz = Math.min(D - 20, Math.max(20, this.tz));
   }
   update(dt) {
     const sp = 90 * this.zoom * dt;
@@ -64,6 +66,6 @@ export class CameraController {
     if (this.focus) { const k = 1 - Math.exp(-8 * dt); this.tx += (this.focus.x - this.tx) * k; this.tz += (this.focus.z - this.tz) * k; if (Math.hypot(this.focus.x - this.tx, this.focus.z - this.tz) < 0.3) this.focus = null; }
     this.clamp();
     const d = this.baseDist * this.zoom;
-    this.cam.position.set(this.tx, d * Math.sin(PITCH), this.tz + d * Math.cos(PITCH)); this.cam.lookAt(this.tx, 0, this.tz); this.cam.updateMatrixWorld();
+    this.cam.position.set(this.tx, d * Math.sin(PITCH), this.tz + d * Math.cos(PITCH)); this.cam.lookAt(this.tx, 0, this.tz); this.cam.updateMatrixWorld(); this.cam.userData.tx = this.tx; this.cam.userData.tz = this.tz;
   }
 }

@@ -171,3 +171,12 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Ferme** 6 niveaux (champs, potager et poulailler, verger, silo et grange, pâture avec bêtes) et **moulin** 5 niveaux (fournil, socle de pierre, roue à aubes ; le moulin grandit).
 - **Minerais en 3D** (`Ores.js`) : affleurements de pierre, de fer (rouille, cristaux d'hématite) et d'or (filons, pépites), taille selon la réserve.
 - Test : `tests/golem.mjs`.
+
+## Phase 20 — Monde étendu, routes, nuit et feux
+- **Forêts vierges** (`src/sim/frontier.js`, `FRONTIER`) : le front ne change pas ; au niveau du village, la carte s'étend de 200 m à gauche et à droite. 100 parcelles de 20 m à défricher, de proche en proche ; la tâche « Défricheurs » abat le bois (rapporté au stock) ; une parcelle rasée devient constructible et révèle parfois un gisement (pierre, fer, or). Toucher une forêt ouvre sa fiche.
+- **Dépôts** : les porteurs déposent au plus proche (château, entrepôt, scierie, carrière, mine, grenier, moulin, ferme).
+- **Routes** (`src/sim/roads.js`, `ROADWORKS`) : réseau automatique (chaque bâtiment terminé est relié) + routes tracées par le joueur (bâtiment Travaux publics, bois et pierre au mètre, posées peu à peu). Le niveau des Travaux publics fixe la qualité de toutes les routes (terre battue, gravier, pavés : +15/30/45 % de vitesse). « Chemins pavés » de l'université est remplacé.
+- **Jour et nuit** (`src/sim/night.js`, `DAY`) : cycle progressif de 7 minutes ; la nuit, archers et tours voient moins loin sans feu. Lumière, ciel et soleil suivent l'heure ; indicateur ☀/🌅/🌇/🌙.
+- **Braseros et allumeurs** (`BRAZIERS`, `FIRE_KEEP`) : 22 braseros (muraille, champ de bataille, cour, village) ; la tâche « Allumeurs de feux » les allume et les ravitaille en bois à l'approche de la nuit, passe par les portes pour ceux du champ de bataille et rentre si un zombie approche. Les zombies qui passent dessus les éteignent.
+- **Flèches enflammées** (forge niveau 2, 3 niveaux) : archers et tours enflamment le sol à l'impact.
+- Sauvegarde v6. Test : `tests/monde.mjs`.

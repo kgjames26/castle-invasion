@@ -10,6 +10,23 @@ export const ZOMBIES = [
   { id: 5, name: 'Colosse',     hp: 1400, speed: 1.2, wall: 40, unit: 40, size: 4.4, color: 0x9a6f5c },   // géant : au moins 4× la taille d'un zombie normal, apparaît « parfois »
   { id: 6, name: 'Golem',       hp: 850, speed: 1.4, wall: 22, unit: 30, size: 2.4, color: 0x7d7a74 },    // golem de pierre : ses coups font trembler la muraille et tomber les archers
 ];
+// ——— Carte étendue (v2.0) : forêts vierges à gauche et à droite du village, à défricher parcelle par parcelle ———
+export const FRONTIER = { left: [-200, 0], right: [200, 400], z0: 212, z1: 312, cell: 20, wood: 160, oreChance: 0.38, oreAmount: { stone: 4000, iron: 3000, gold: 2200 } };
+// ——— Routes : chemins d'origine (réseau de base) ; Travaux publics = qualité de toutes les routes + routes tracées ———
+export const ROADS_BASE = [[[[100, 150], [100, 200], [100, 284]], 9], [[[100, 238], [40, 255]], 5], [[[100, 238], [160, 255]], 5], [[[100, 262], [182, 243]], 4.5], [[[100, 262], [18, 238]], 4.5], [[[8, 205], [192, 205]], 4]];
+export const ROADWORKS = { speed: [0, 0.15, 0.3, 0.45], names: ['Terre', 'Terre battue', 'Gravier', 'Pavés'], costPerM: { wood: 0.6, stone: 0.8 }, buildSpeed: 3, maxLen: 160 };
+// ——— Jour et nuit (v2.0) : un cycle complet dure `length` secondes ; la nuit réduit la portée des tireurs sans feux ———
+export const DAY = { length: 420, start: 0.12, dusk: [0.5, 0.62], dawn: [0.9, 0.99] };
+export const GATE_XS_LIST = [20, 100, 180];
+// braseros : sur la muraille (2 par secteur), devant elle sur le champ de bataille, dans la cour et au village
+export const BRAZIERS = [
+  ...[0, 1, 2, 3, 4].flatMap(s => [{ x: s * 40 + 11, z: 146, zone: 'wall' }, { x: s * 40 + 29, z: 146, zone: 'wall' }]),
+  ...[0, 1, 2, 3, 4].map(s => ({ x: s * 40 + 20 + (s % 2 ? 6 : -6), z: 118, zone: 'field' })),
+  { x: 30, z: 178, zone: 'court' }, { x: 100, z: 182, zone: 'court' }, { x: 170, z: 178, zone: 'court' },
+  { x: 62, z: 248, zone: 'village' }, { x: 138, z: 248, zone: 'village' }, { x: 80, z: 276, zone: 'village' }, { x: 120, z: 276, zone: 'village' },
+];
+// allumeurs : un plein de bois dure `burn` s ; `wood` par ravitaillement ; les zombies à moins de `stomp` m éteignent le feu ; on fuit à `flee` m
+export const FIRE_KEEP = { burn: 150, wood: 4, stoke: 1.6, stomp: 2.6, stompRate: 0.6, flee: 14 };
 // Forge v1.9 : attaque et défense PROPRES à chaque type, indépendantes du rang (bâtiment d'origine).
 //  attaque +12 %/niveau ; défense : dégâts reçus −8 %/niveau ; plafond = 2 × niveau de la forge (max 6).
 export const SMITH = {
@@ -89,7 +106,7 @@ export const ECON = {
 // Prospection : un villageois libre explore la campagne ; au bout de `time` secondes il découvre un NOUVEAU gisement (pierre, fer ou or) ailleurs sur la carte.
 // Gisements présents dès le début (bords de la zone constructible, hors des chemins de construction)
 export const START_DEPOSITS = { stone: [{ x: 188, z: 296, amount: 3000 }], iron: [{ x: 22, z: 272, amount: 2600 }, { x: 176, z: 276, amount: 2600 }], gold: [{ x: 12, z: 300, amount: 2200 }] };
-export const PROSPECT = { cost: { gold: 40, food: 30 }, time: 45, amount: [2200, 3800], maxPerRes: 4, res: ['stone', 'iron', 'gold'], zone: { x0: 12, x1: 188, z0: 206, z1: 292 }, clear: 16 };
+export const PROSPECT = { cost: { gold: 40, food: 30 }, time: 45, amount: [2200, 3800], maxPerRes: 4, res: ['stone', 'iron', 'gold'], zone: { x0: 12, x1: 188, z0: 218, z1: 292 }, clear: 16 };
 // Tâches : chaque villageois sait quoi faire ; le joueur ne règle que les effectifs.
 export const TASKS = {
   wood:   { name: 'Bûcherons',      ico: '🪵', res: 'wood',  building: 'sawmill', site: { x: 40,  z: 255 }, rate: 1.3,  deposit: 9000, regen: 3.2 },
@@ -98,6 +115,8 @@ export const TASKS = {
   gold:   { name: 'Mineurs (or)',   ico: '🪙', res: 'gold',  building: 'mine',    site: { x: 18,  z: 236 }, rate: 0.8,  deposit: 2500 },
   food:   { name: 'Fermiers',       ico: '🌾', res: 'food',  building: 'farm',    site: { x: 100, z: 252 }, rate: 1.15 },
   repair: { name: 'Réparation de la muraille', ico: '🔧', building: null, slots: 10 },
+  clear:  { name: 'Défricheurs',    ico: '🪓', res: 'wood',  building: null, slots: 14, rate: 1.4, dyn: true, site: { x: 0, z: 262 } },   // abattent les forêts vierges (parcelles choisies)
+  fire:   { name: 'Allumeurs de feux', ico: '🔥', building: null, slots: 12 },                                                         // allument et ravitaillent les braseros
 };
 // Bâtiments : niveau 0 = à construire. Coût du niveau N+1 = base × (N+1).
 export const BUILDINGS = {   // group: 'eco' (onglet Village) ou 'army' (onglet Armée)
@@ -115,6 +134,7 @@ export const ARMY_BUILDINGS = {
   stable:   { time: 45, base: 0, name: 'Écurie',       ico: '🐎', group: 'army', start: 0, cost: { wood: 120, stone: 40 }, max: 5, pos: { x: 164, z: 224 }, size: [16, 5, 11], color: 0x7a5a3a, info: 'Cavaliers' },
   range:    { time: 35, base: 0, name: 'Champ de tir', ico: '🎯', group: 'army', start: 0, cost: { wood: 90, stone: 30 },  max: 5, pos: { x: 100, z: 224 }, size: [18, 3, 9],  color: 0x4a6f4a, info: 'Archers' },
   forge:    { time: 50, base: 0, name: 'Forge',        ico: '🔨', group: 'army', start: 0, max: 3, cost: { wood: 80, stone: 80, iron: 40 }, pos: { x: 66, z: 236 }, size: [10, 6, 8], color: 0x5a4f58, info: 'Attaque et défense de chaque type d\'unité, indépendamment de son rang · niveau = plafond (2/4/6)' },
+  publicworks: { time: 45, base: 0, name: 'Travaux publics', ico: '🛤', group: 'eco', start: 0, max: 3, cost: { wood: 100, stone: 80 }, pos: { x: 150, z: 300 }, size: [12, 6, 9], color: 0x8a7a5a, info: 'Trace des routes et améliore TOUTES les routes : terre battue → gravier → pavés (villageois plus rapides)' },
   infirmary: { time: 40, base: 0, name: 'Infirmerie',  ico: '🏥', group: 'army', start: 0, max: 3, cost: { wood: 90, stone: 60, food: 60 }, pos: { x: 140, z: 290 }, size: [12, 6, 9], color: 0xe8e2d6, info: 'Soigne les escouades au repos · sauve une partie des blessés graves' },
   university: { time: 60, base: 0, name: 'Université', ico: '🎓', group: 'eco', start: 0, max: 3, cost: { wood: 140, stone: 120, gold: 40 }, pos: { x: 60, z: 286 }, size: [14, 9, 10], color: 0xb8a88a, info: 'Améliore les villageois · niveau = plafond des améliorations (2/3/4)' },
 };
@@ -172,9 +192,10 @@ export const SIEGE_RULES = { perLevel: 2, slotsPerSector: 3, queueMax: 4, speedP
 export const UPGRADES = {
   tools:   { name: 'Outils',            ico: '🛠', req: 'university', max: 4, cost: { wood: 60, iron: 20 }, per: 0.20, info: 'Récolte +20 % par niveau' },
   carts:   { name: 'Chariots',          ico: '🛒', req: 'university', max: 3, cost: { wood: 80, iron: 25 }, per: 0.50, info: 'Charge portée +50 % par niveau' },
-  boots:   { name: 'Chemins pavés',     ico: '👢', req: 'university', max: 3, cost: { stone: 70, wood: 40 }, per: 0.20, info: 'Vitesse de marche +20 % par niveau' },
+  boots:   { name: 'Chemins pavés',     ico: '👢', hidden: true, req: 'university', max: 3, cost: { stone: 70, wood: 40 }, per: 0.20, info: 'Vitesse de marche +20 % par niveau' },
   plow:    { name: 'Charrue',           ico: '🚜', req: 'university', max: 3, cost: { wood: 70, iron: 20 }, per: 0.25, info: 'Rendement des fermes +25 % par niveau' },
   masonry: { name: 'Maçonnerie',        ico: '🧱', req: 'university', max: 3, cost: { stone: 80, iron: 30 }, per: 0.30, info: 'Réparation +30 % vitesse, −10 % pierre par niveau' },
+  fireArrows: { name: 'Flèches enflammées', ico: '🔥', group: 'army', req: 'forge', minLevel: 2, max: 3, cost: { wood: 60, iron: 30, gold: 40 }, per: 0.12, info: 'Archers : 12 % des flèches par niveau enflamment le sol à l\'impact (forge niv. 2)' },
   apprentice: { name: 'Apprentissage', ico: '📐', req: 'university', max: 3, cost: { wood: 70, stone: 40, gold: 20 }, per: 0.25, info: 'Construction +25 % plus rapide par niveau' },
   // — Forge (onglet Armée) : anciennes améliorations globales, remplacées par SMITH (gardées pour les vieilles sauvegardes) —
   weapons: { name: 'Armes affûtées',    ico: '🗡', group: 'army', req: 'forge', max: 4, cost: { iron: 40, gold: 40 }, per: 0.10, info: 'Dégâts de toutes les unités +10 % par niveau' },

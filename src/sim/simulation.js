@@ -10,6 +10,9 @@ import { Army, archerPos } from './army.js';
 import { Siege } from './siege.js';
 import { START, UNITS, TIMING, waveSpec, giantsFor, golemsFor, GOLEM, PACK, FIRE, DIFFICULTY } from '../content/medieval.js';
 import { Mages } from './mage.js';
+import { Frontier } from './frontier.js';
+import { Roads } from './roads.js';
+import { Night } from './night.js';
 import { Economy } from './economy.js';
 import { Build } from './build.js';
 
@@ -34,6 +37,7 @@ export class Simulation {
     this.rng = makeRng(this.seed);
     this.wall.reset(); this.zombies.clear(); this.zombies.kills = 0;
     this.army = new Army(); this.siege = new Siege(); this.mages = new Mages(); this.blasts = []; this.blastId = 0; this.fires = []; this.fallers = [];
+    this.frontier = new Frontier(); this.roads = new Roads(); this.night = new Night();
     this.eco.reset(); this.build.reset();
     this.army.reserve = { ...START.reserve };
     for (let s = 0; s < SECTORS; s++) { this.army.reserve.archer += START.perSector.archer; this.army.assignArchers(s, START.perSector.archer); }
@@ -74,6 +78,9 @@ export class Simulation {
   recruitVillager() { return this.eco.recruitVillager(); }
   buyUpgrade(u) { return this.eco.buyUpgrade(u); }
   setRepairPriority(s) { this.eco.setRepairPriority(s); }
+  clearPatch(id) { return this.frontier.order(id); }
+  cancelClear(id) { return this.frontier.cancel(id); }
+  planRoad(x0, z0, x1, z1) { return this.roads.plan(this, x0, z0, x1, z1); }
   summonMage() { return this.mages.startSummon(this); }
   setDifficulty(d) { if (DIFFICULTY[d]) this.difficulty = d; }
   // ——— effets de zone (explosions, feu) : dégâts dans la simulation, trace visuelle dans `blasts` (lue par le rendu) ———
@@ -191,6 +198,7 @@ export class Simulation {
     this.army.update(dt, this);
     this.siege.update(dt, this);
     this.mages.update(dt, this);
+    this.night.update(dt, this); this.roads.update(dt, this);
     this.golemSlams(dt);
     this.burn(dt);
     this.build.update(dt);

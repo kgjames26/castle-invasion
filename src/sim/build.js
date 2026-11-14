@@ -3,6 +3,7 @@
 // jusqu'au passage d'un ouvrier). Les ouvriers sont des villageois LIBRES (sans tâche) : le joueur règle leur nombre par chantier.
 // La simulation ignore tout du rendu ; `eco.level` et `eco.houses` sont recalculés à partir des structures (source de vérité = ici).
 import { STRUCT, BUILDINGS, BUILD, TOWER, ECON, TASKS, RANK_BUILDINGS, RANK_UP , UPGRADES } from '../content/medieval.js';
+import { sectorOfX } from './constants.js';
 
 const tmp = new Int32Array(512);
 const WORKING = s => s.state === 'site' || s.state === 'upgrading' || s.state === 'moving';
@@ -53,7 +54,10 @@ export class Build {
   }
   canPlace(type, x, z, rot, ignoreId = 0) {
     const [hw, hd] = this.half(type, rot);
-    if (x - hw < BUILD.minX || x + hw > BUILD.maxX) return { ok: false, why: 'hors de la zone' };
+    if (x - hw < BUILD.minX || x + hw > BUILD.maxX) {     // forêts latérales : seulement sur des parcelles défrichées
+      if (type === 'tower' || x - hw < -195 || x + hw > 395 || z - hd < 212) return { ok: false, why: 'hors de la zone' };
+      if (!this.sim.frontier.isOpenRect(x - hw, z - hd, x + hw, z + hd)) return { ok: false, why: 'forêt : défriche d\'abord la parcelle' };
+    }
     const minZ = type === 'tower' ? BUILD.towerMinZ : BUILD.minZ;
     if (z - hd < minZ) return { ok: false, why: type === 'tower' ? 'trop près de la muraille' : 'trop près de la muraille (zone de garnison)' };
     if (z + hd > BUILD.maxZ) return { ok: false, why: 'hors de la zone' };
@@ -123,7 +127,7 @@ export class Build {
   towerLevel(s) { return ACTIVE(s) ? s.level : 0; }
   towerStats(s, sim) {
     const lv = s.level;
-    return { range: TOWER.range + TOWER.rangePerLevel * (lv - 1), dmg: TOWER.dmg * (1 + TOWER.dmgPerLevel * (lv - 1)) * sim.eco.atkMult('siege'), rate: TOWER.rate / (1 + TOWER.ratePerLevel * (lv - 1)) };
+    return { range: (TOWER.range + TOWER.rangePerLevel * (lv - 1)) * sim.night.rangeMult(sectorOfX(Math.max(0, Math.min(199, s.x)))), dmg: TOWER.dmg * (1 + TOWER.dmgPerLevel * (lv - 1)) * sim.eco.atkMult('siege'), rate: TOWER.rate / (1 + TOWER.ratePerLevel * (lv - 1)) };
   }
   // ——— ouvriers ———
   // un ouvrier quitte son chantier : il retourne à sa tâche d'origine s'il en manque une (emprunt), sinon il devient libre
@@ -173,7 +177,9 @@ export class Build {
       let best = -1, bd = Infinity;
       for (let q = 0; q < m; q++) { const i = tmp[q]; if (Z.hp[i] <= 0) continue; const d = (Z.x[i] - s.x) ** 2 + (Z.z[i] - s.z) ** 2; if (d < bd) { bd = d; best = i; } }
       if (best < 0) { s.cd = 0.3; continue; }
-      Z.hit(best, st.dmg); if (sim.arrows.length < 220) sim.arrows.push({ x0: s.x, z0: s.z, x1: Z.x[best], z1: Z.z[best], t: 0, h: 12 });
+      const E = sim.eco, fire = E.up.fireArrows && sim.rng() < UPGRADES.fireArrows.per * E.up.fireArrows;      // les archers des tours tirent aussi des flèches enflammées
+      Z.hit(best, st.dmg * (fire ? 1.25 : 1)); if (sim.arrows.length < 220) sim.arrows.push({ x0: s.x, z0: s.z, x1: Z.x[best], z1: Z.z[best], t: 0, h: 12, fire });
+      if (fire && sim.fires.length < 60) sim.fires.push({ x: Z.x[best], z: Z.z[best], r: 1.8, t: 2.6, small: true });
       s.cd = st.rate * (0.9 + sim.rng() * 0.2);
     }
   }

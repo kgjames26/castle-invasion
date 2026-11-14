@@ -14,8 +14,9 @@ import { ATMOS, CAMERA, quality, setQualityName } from './config.js';
 import { fogUniforms, patchNorthFog } from './fog.js';
 import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry, troopRig, siegeRig, bx } from './Troops.js';
 import { buildKnightRigs, makeMage, poseMage, knightRig, golemRig } from './Heroes.js';
-import { Paving, carrierGeometry, TOOL_TINT } from './Village.js';
+import { carrierGeometry, TOOL_TINT } from './Village.js';
 import { OreView } from './Ores.js';
+import { FrontierView, RoadView, BrazierView } from './World.js';
 import { RANKS } from '../content/medieval.js';
 const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1], [1]];      // le golem (6) a son propre modèle articulé ; [1] ne sert que de repli
 const _v1 = [];      // variantes de modèle par type de zombie
@@ -25,7 +26,8 @@ const lam = (color, opts = {}) => applyNorthFog(new THREE.MeshLambertMaterial({ 
 // Échelles (v1.8) : tous les humains mesurent ≈ 2,3 m (un peu plus grands que nature pour rester lisibles de haut) ;
 // zombie classique = humain ; colosse ≈ 10 m. Muraille 6,4 m, porte 4,4 m : un cavalier passe sous la herse.
 export const HUMAN_H = 2.3;
-const VCAP = 720;     // villageois affichables (grosse population, v1.9)
+const VCAP = 720;
+const TASK_LOOK = { clear: 'wood', fire: 'repair' };      // défricheurs = tenue de bûcheron ; allumeurs = tenue orange (+ torche la nuit)     // villageois affichables (grosse population, v1.9)
 const ASC = HUMAN_H / 1.69;
 const ZSCALE = 1.45, USCALE = 1.75;   // personnages à l'échelle des bâtiments (v3.1 : réduits d'environ 35 % pour éviter l'effet « maquette »)
 
@@ -38,13 +40,14 @@ export class Renderer {
     canvasParent.appendChild(this.renderer.domElement);
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(CAMERA.fov, 1, 2, 900);
-    this.scene.add(new THREE.HemisphereLight(ATMOS.hemiSky, ATMOS.hemiGround, ATMOS.hemiIntensity));
+    this.hemi = new THREE.HemisphereLight(ATMOS.hemiSky, ATMOS.hemiGround, ATMOS.hemiIntensity); this.scene.add(this.hemi);
     const sun = new THREE.DirectionalLight(ATMOS.sunColor, ATMOS.sunIntensity), A = ATMOS.shadowArea; this.sun = sun;
     sun.target.position.set(A.x, 0, A.z); sun.position.set(A.x + ATMOS.sunPos[0], ATMOS.sunPos[1], A.z + ATMOS.sunPos[2]); this.scene.add(sun, sun.target);
     Object.assign(sun.shadow.camera, { left: -A.hw, right: A.hw, top: A.hd, bottom: -A.hd, near: 10, far: 420 }); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.35; sun.shadow.radius = 3;
     this.dummy = new THREE.Object3D(); this.tmpColor = new THREE.Color();
     this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildSiege(); this.rigs = buildTroopRigs(this.scene); Object.assign(this.rigs, buildKnightRigs(this.scene)); this.rigs.knightGold = this.rigs.knight; this.mageViews = new Map(); this.rigTier = {}; this.vrigs = buildVillagerRigs(this.scene); this.vMesh.visible = false; this.buildHighlight();
-    this.buildGrass(); this.buildBlobs(); this.paving = new Paving(this.scene); this.cartLevel = -1;
+    this.buildGrass(); this.buildBlobs(); this.cartLevel = -1;
+    this.frontierV = new FrontierView(this.scene, sim.frontier); this.roadV = new RoadView(this.scene); this.braziers = new BrazierView(this.scene, sim.night, quality.glow ? 6 : 0);
     this.applyQuality();
     this.buildTorches(); this.buildRangeIndicator();
     this.fx = new Effects(this.scene, { enabled: EFFECTS.enabled });   // particules (flèches, zombies, muraille, siège) : vue seule
@@ -227,7 +230,8 @@ export class Renderer {
     };
     mk(new THREE.DodecahedronGeometry(1, 0), lam(0x8a8f94), rock, 0.55);
     // forêt (dans la carte et tout autour, hors des limites, pour cacher le vide) : sapins à deux étages, teintes variées, neige légère
-    for (let i = 0; i < 520; i++) { const side = i % 3, x = side === 0 ? -8 - r() * 70 : side === 1 ? W + 8 + r() * 70 : -70 + r() * (W + 140), z = side === 2 ? D + 6 + r() * 60 : 10 + r() * (D + 50); tree.push([x, z, 2.6 + r() * 2.6]); }
+    // bordure : à côté du champ de bataille seulement ; plus bas, ce sont les forêts vierges à défricher (World.js)
+    for (let i = 0; i < 520; i++) { const side = i % 3, x = side === 0 ? -8 - r() * 70 : side === 1 ? W + 8 + r() * 70 : -230 + r() * (W + 460), z = side === 2 ? D + 6 + r() * 60 : 10 + r() * 192; tree.push([x, z, 2.6 + r() * 2.6]); }
     this.buildForest(tree, r);
   }
   buildForest(list, r) {
@@ -255,7 +259,7 @@ export class Renderer {
     const sk = document.createElement('canvas'); sk.width = 4; sk.height = 64; const sg = sk.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 64);
     gr.addColorStop(0, '#5f6d7d'); gr.addColorStop(0.45, '#bcc8d3'); gr.addColorStop(0.5, '#9a9488'); gr.addColorStop(0.75, '#a99d84'); gr.addColorStop(1, '#8c8270'); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 64);
     const tex = new THREE.CanvasTexture(sk); tex.colorSpace = THREE.SRGBColorSpace;
-    const skirt = new THREE.Mesh(new THREE.PlaneGeometry(W + 240, D + 160), applyNorthFog(new THREE.MeshLambertMaterial({ map: tex })));
+    const skirt = new THREE.Mesh(new THREE.PlaneGeometry(W + 720, D + 160), applyNorthFog(new THREE.MeshLambertMaterial({ map: tex })));
     skirt.rotation.x = -Math.PI / 2; skirt.position.set(W / 2, -0.06, D / 2 + 20); skirt.receiveShadow = true; this.scene.add(skirt);
   }
   buildWall() {
@@ -284,6 +288,11 @@ export class Renderer {
   // brume du nord : respire lentement et avance pendant un assaut ; pulsation de l'indicateur de portée ; ombres des nouvelles structures
   updateAtmosphere(dt) {
     if (this.grassTime) this.grassTime.value = this.clock;
+    // jour / nuit : soleil et ciel baissent progressivement ; la nuit est bleutée ; braseros, torches et feux prennent le relais
+    const L = this.sim.night.light(), dusk = Math.max(0, 1 - Math.abs(L - 0.55) / 0.3);
+    this.sun.intensity = ATMOS.sunIntensity * (0.06 + 0.94 * L); this.sun.color.setHex(ATMOS.sunColor).lerp(this._dusk || (this._dusk = new THREE.Color(0xff8a4a)), dusk * 0.7);
+    this.hemi.intensity = ATMOS.hemiIntensity * (0.28 + 0.72 * L); this.hemi.color.setHex(ATMOS.hemiSky).lerp(this._nightSky || (this._nightSky = new THREE.Color(0x3a4f8a)), 1 - L);
+    this.dark = 1 - L;
     const sim = this.sim, a = sim.phase === 'assault' || sim.phase === 'alert' ? 1 : 0; this.fogA = (this.fogA || 0) + (a - (this.fogA || 0)) * Math.min(1, dt * 0.5);
     const near = ATMOS.fogNear - ATMOS.fogAssault * this.fogA + ATMOS.fogBreath * Math.sin(this.clock * ATMOS.fogBreathSpeed);
     fogUniforms.uNFogRange.value.set(near, ATMOS.fogFar);
@@ -351,7 +360,7 @@ export class Renderer {
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], x = v.px + (v.x - v.px) * alpha, z = v.pz + (v.z - v.pz) * alpha, dx = v.x - v.px, dz = v.z - v.pz, mv = dx * dx + dz * dz > 2e-6;
       v.rmv = (v.rmv || 0) + ((mv ? 1 : 0) - (v.rmv || 0)) * 0.25;
-      const key = v.job ? 'build' : v.task === 'repair' ? 'repair' : (v.task || 'idle'), working = v.state === 'gather' || v.state === 'building' || v.state === 'repairing';
+      const key = v.job ? 'build' : v.task === 'repair' ? 'repair' : (TASK_LOOK[v.task] || v.task || 'idle'), working = v.state === 'gather' || v.state === 'building' || v.state === 'repairing';
       let want = v.rrot ?? Math.PI;
       if (mv) want = Math.atan2(dx, dz);
       else if (v.state === 'building') { const s = this.sim.build.get(v.job); if (s) want = Math.atan2(s.x - v.x, s.z - v.z); }
@@ -614,7 +623,7 @@ export class Renderer {
   }
   // améliorations du village rendues visibles : chariots (brouettes/charrettes), chemins pavés, outils (teinte des fers)
   syncVillageUpgrades() {
-    const up = this.sim.eco.up; this.paving.set(up.boots);
+    const up = this.sim.eco.up;
     if (this.cartLevel !== up.carts) {
       this.cartLevel = up.carts; if (this.cart) { this.scene.remove(this.cart.mesh); this.cart = null; }
       if (up.carts > 0) { const c = carrierGeometry(up.carts), m = new THREE.InstancedMesh(c.geo, this.chars ? this.chars.archerMat : lam(0xffffff), VCAP); m.frustumCulled = false; m.count = 0; this.scene.add(m); this.cart = { mesh: m, load: c.load }; }
@@ -630,7 +639,7 @@ export class Renderer {
     let nc = 0;
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], x = v.px + (v.x - v.px) * alpha, z = v.pz + (v.z - v.pz) * alpha, dx = v.x - v.px, dz = v.z - v.pz, mv = dx * dx + dz * dz > 2e-6;
-      const key = v.job ? 'build' : v.task === 'repair' ? 'repair' : (v.task || 'idle'), working = v.state === 'gather' || v.state === 'building' || v.state === 'repairing', carrying = v.carry > 0;
+      const key = v.job ? 'build' : v.task === 'repair' ? 'repair' : (TASK_LOOK[v.task] || v.task || 'idle'), working = v.state === 'gather' || v.state === 'building' || v.state === 'repairing', carrying = v.carry > 0;
       let want = v.rrot ?? Math.PI;
       if (mv) want = Math.atan2(dx, dz);
       else if (v.state === 'building') { const s = this.sim.build.get(v.job); if (s) want = Math.atan2(s.x - v.x, s.z - v.z); }
@@ -643,6 +652,7 @@ export class Renderer {
       im.setMatrixAt(k, d.matrix); im.anim.array[k] = an;
       const f0 = Math.floor(an), tl = vv.tools[key], ht = vv.hats[key];
       if (tl) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.hand[f0]); tl.setMatrixAt(k, this._gm); }
+      if (v.task === 'fire' && this.sim.night.light() < 0.75) { this.fx.glowNow(x + Math.sin(v.rrot) * 0.4, 2.2, z + Math.cos(v.rrot) * 0.4, 0.55 + 0.08 * Math.sin(t * 9 + i), 1, 0.55, 0.15); }   // torche de l'allumeur
       if (ht) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.head[f0]); ht.setMatrixAt(k, this._gm); }
       if (carrying) {
         const cart = this.cart, cs = cart ? cart.load : null;
@@ -773,7 +783,7 @@ export class Renderer {
     const ar = sim.arrows; this.arMesh.count = Math.min(ar.length, 256);
     for (let i = 0; i < this.arMesh.count; i++) {
       const a = ar[i], f = Math.min(1, a.t / 0.3), x = a.x0 + (a.x1 - a.x0) * f, z = a.z0 + (a.z1 - a.z0) * f, y = (a.h || 6.4) * (1 - f) + 1 + 3 * Math.sin(Math.PI * f);
-      d.position.set(x, y, z); d.scale.set(1, 1, 1); d.rotation.set(0, Math.atan2(a.x1 - a.x0, a.z1 - a.z0), 0); d.updateMatrix(); this.arMesh.setMatrixAt(i, d.matrix); this.tmpColor.setRGB(1, 0.95, 0.7); this.arMesh.setColorAt(i, this.tmpColor);
+      d.position.set(x, y, z); d.scale.set(1, 1, 1); d.rotation.set(0, Math.atan2(a.x1 - a.x0, a.z1 - a.z0), 0); d.updateMatrix(); this.arMesh.setMatrixAt(i, d.matrix); if (a.fire) { this.tmpColor.setRGB(1, 0.5, 0.1); this.fx.glowNow(x, y, z, 0.5, 1, 0.5, 0.12); if (Math.random() < 0.5) this.fx.A.emit(x, y, z, 0, 0.4, 0, 0.3, 0.22, 0, [1, 0.55, 0.1]); } else this.tmpColor.setRGB(1, 0.95, 0.7); this.arMesh.setColorAt(i, this.tmpColor);
     }
     this.arMesh.instanceMatrix.needsUpdate = true; if (this.arMesh.instanceColor) this.arMesh.instanceColor.needsUpdate = true;
     // alertes de secteur (menace proche / attaque)
@@ -785,6 +795,10 @@ export class Renderer {
     this.updateWall(); this.updateEconomy(alpha); this.updateSiege(alpha); this.struct.update(dtReal, this.clock);
     this.updateAtmosphere(dtReal); this.updateBlobs(sim.speed ? alpha : 1); this.maskGrass();
     this.fx.setTorches(this.torchPos, sim.army.gate, this.clock);
+    // monde étendu : forêts à défricher, routes, braseros (les objets de la simulation sont recréés à chaque nouvelle partie)
+    if (this.frontierV.F !== sim.frontier) { this.frontierV.F = sim.frontier; this.frontierV.ver = -1; }
+    this.braziers.N = sim.night; this.frontierV.update(this.clock); this.roadV.update(sim);
+    this.braziers.update(this.fx, this.clock, this.camera, this.dark || 0);
     this.fx.frame(sim, dtReal);   // effets : lit l'état, ne le modifie pas
     for (const v of this.struct.map.values()) { const o = v.model && v.model.userData.spin; if (o) { o.rotation.y = this.clock * 0.6; o.children.forEach((c, i) => { c.position.y = Math.sin(this.clock * 1.4 + i * 1.7) * 0.7; c.rotation.y = this.clock * 1.5; }); } }
     // secousse de caméra (explosions, brèches) : décalage le temps du rendu seulement

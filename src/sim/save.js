@@ -2,10 +2,11 @@
 
 import { BUILDINGS } from '../content/medieval.js';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 const KEY = 'castle-invasion.v3.save';   // même clé : les parties v3 sont migrées vers la construction libre
 // MIGRATIONS[n] : état de la version n → version n+1
 const MIGRATIONS = {
+  5: st => st,     // v5 → v6 : forêts, routes, nuit et feux (champs facultatifs, valeurs par défaut au chargement)
   // v4 → v5 : magicien, chevaliers, feu, difficulté (champs facultatifs) ; les structures mal placées sont replacées au chargement (Build.relocateInvalid)
   4: st => ({ ...st, army: { ...st.army, reserve: { knight: 0, ...(st.army?.reserve || {}) } } }),
   // v3 (bâtiments à emplacement fixe, maisons en nombre) → v4 (construction libre : chaque bâtiment devient une structure placée)
@@ -46,7 +47,7 @@ export function serialize(sim) {
     spawn: sim.spawn ? { ...sim.spawn, counts: [...sim.spawn.counts] } : null, assaultTime: sim.assaultTime,
     wall: { hp: Array.from(sim.wall.hp), level: Array.from(sim.wall.level) },
     army: sim.army.serialize(),
-    siege: sim.siege.serialize(), mages: sim.mages.serialize(), difficulty: sim.difficulty, format: sim.format, autoRepair: sim.autoRepair,
+    siege: sim.siege.serialize(), mages: sim.mages.serialize(), frontier: sim.frontier.serialize(), roads: sim.roads.serialize(), night: sim.night.serialize(), difficulty: sim.difficulty, format: sim.format, autoRepair: sim.autoRepair,
     fires: sim.fires.map(f => ({ ...f })),
     zombies: zs,
   };
@@ -60,7 +61,7 @@ export function restore(sim, st) {
   sim.wall.hp.set(st.wall.hp); sim.wall.level.set(st.wall.level);
   const Z = sim.zombies; Z.clear(); Z.kills = st.kills;
   for (const [x, z, hp, t, s] of st.zombies) { if (Z.spawn(t, x, z, s, sim.rng)) Z.hp[Z.n - 1] = hp; }
-  sim.army.restore(st.army); sim.siege.restore(st.siege); sim.mages.restore(st.mages, sim);
+  sim.army.restore(st.army); sim.siege.restore(st.siege); sim.mages.restore(st.mages, sim); sim.frontier.restore(st.frontier); sim.roads.restore(st.roads); sim.night.restore(st.night);
   sim.format = st.format || null; sim.difficulty = st.difficulty || 'normal'; sim.autoRepair = st.autoRepair !== false; sim.fires = (st.fires || []).map(f => ({ ...f })); sim.blasts = [];
   sim.flow.rebuildAll();
 }

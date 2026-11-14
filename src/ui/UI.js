@@ -2,7 +2,7 @@
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
 import { SECTORS, SECTOR_NAMES, SECTOR_SHORT, ARCHER_SLOTS, CASTLE } from '../sim/constants.js';
-import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, DIFFICULTY, SMITH, INFIRMARY } from '../content/medieval.js';
+import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP } from '../content/medieval.js';
 import { MAGE_TIERS } from '../render/Heroes.js';
 import { FORMATS, idealFormat } from '../render/config.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
@@ -12,7 +12,7 @@ const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls)
 const fmt = n => Math.floor(n).toString();
 const TASK_ORDER = ['wood', 'stone', 'iron', 'gold', 'food'];
 const TB = { sawmill: ['wood'], quarry: ['stone'], mine: ['iron', 'gold'], farm: ['food'] };       // bâtiment → tâches de récolte
-const GROUPS = [['Économie', ['sawmill', 'quarry', 'mine', 'farm', 'mill', 'granary', 'warehouse', 'university', 'house']], ['Armée', ['barracks', 'range', 'stable', 'workshop', 'forge', 'infirmary', 'wizard']], ['Défense', ['tower']]];
+const GROUPS = [['Économie', ['sawmill', 'quarry', 'mine', 'farm', 'mill', 'granary', 'warehouse', 'university', 'publicworks', 'house']], ['Armée', ['barracks', 'range', 'stable', 'workshop', 'forge', 'infirmary', 'wizard']], ['Défense', ['tower']]];
 import { VERSION } from '../version.js';
 // Réglages de l'interface : tutorial = astuces de premier lancement (aussi coupé par ?tuto=0) ; haptics = vibrations sur mobile.
 export const UI_FLAGS = { tutorial: !/[?&]tuto=0\b/.test(location.search), haptics: true };
@@ -78,12 +78,20 @@ export class UI {
     this.rd.struct.setSelected(c.kind === 'struct' ? c.id : 0); this.rd.setSelected(c.kind === 'sector' ? c.id : -1); this.sel = c.kind === 'sector' ? c.id : -1;
     this.cardEl.classList.add('on'); this.refresh(true);
   }
-  closeCard() { if (this.card?.kind === 'squad') { this.selSq = 0; this.rd.setSquad(0); } this.card = null; this.sel = -1; this.cardEl.classList.remove('on'); this.rd.struct.setSelected(0); this.rd.setSelected(-1); }
+  closeCard() { if (this.rd.frontierV) this.rd.frontierV.sel = -1; if (this.card?.kind === 'squad') { this.selSq = 0; this.rd.setSquad(0); } this.card = null; this.sel = -1; this.cardEl.classList.remove('on'); this.rd.struct.setSelected(0); this.rd.setSelected(-1); }
   // ——— toucher la carte ———
   onMapTap(x, z) {
     const sim = this.sim;
     if (this.mode !== 'idle') { this.moveGhost(x, z); return; }
     if (this.rallying) { sim.army.setRally(x, z); this.rallying = false; this.toast && this.toast('📍 Point de ralliement placé'); this.refresh(true); return; }
+    // tracé de route (Travaux publics) : 1er toucher = départ, 2e = arrivée
+    if (this.roadMode) {
+      if (!this.roadMode.a) { this.roadMode.a = { x, z }; this.rd.orderPing(x, z, false); this.toast('🛤 Départ posé — touche le point d\'arrivée', 'info'); return; }
+      const a = this.roadMode.a, r = sim.planRoad(a.x, a.z, x, z); this.roadMode = null; this.rd.orderPing(x, z, false);
+      this.toast(r.ok ? `🛤 Route prévue (${Math.round(Math.hypot(x - a.x, z - a.z))} m) — les Travaux publics la posent` : '⚠ ' + r.why, r.ok ? 'ok' : 'warn'); this.refresh(true); return;
+    }
+    // forêts vierges sur les côtés du village : toucher une parcelle = fiche de défrichage
+    if ((x < 0 || x > 200) && z >= FRONTIER.z0 && z < FRONTIER.z1) { const p = sim.frontier.at(x, z); if (p && p.state !== 'open') { this.openCard({ kind: 'patch', id: p.id }); this.rd.frontierV.sel = p.id; return; } }
     // escouade choisie : toucher la carte = ordre de mouvement (devant la muraille : sortie ; derrière : nouveau poste) ; toucher une autre escouade = la choisir
     const near = this.squadAt(x, z);
     if (this.card?.kind === 'squad' && sim.squad(this.card.id)) {
@@ -97,6 +105,20 @@ export class UI {
     if (near) { this.openSquad(near); return; }
     if (z > 70 && z < 168) { this.openCard({ kind: 'sector', id: Math.min(4, Math.max(0, (x / 40) | 0)) }); return; }
     this.closeCard(); if (this.sheet) this.closeSheet();
+  }
+  // parcelle de forêt vierge : défricher (si elle touche une terre ouverte), avancement, bois et minerai éventuel
+  patchCard(p) {
+    const sim = this.sim, F = sim.frontier, E = sim.eco, can = F.canClear(p);
+    let h = `<div class="ptitle">🌲 Forêt vierge<span class="lvl">${p.state === 'clearing' ? 'défrichage ' + Math.round(100 * (1 - p.wood / FRONTIER.wood)) + ' %' : p.state === 'open' ? 'défrichée' : 'intacte'}</span></div>`;
+    h += `<div class="hint small">🪵 ${Math.round(p.wood)} bois à abattre. Le sol défriché devient constructible ; il cache peut-être un gisement de pierre, de fer ou d'or…</div>`;
+    if (p.state === 'clearing') {
+      h += `<div class="hpline"><div class="bar big"><i style="width:${100 * (1 - p.wood / FRONTIER.wood)}%"></i></div><span>🪓 ${E.assign.clear} défricheur${E.assign.clear > 1 ? 's' : ''}</span></div>`;
+      if (!E.assign.clear) h += '<div class="warn">Aucun défricheur : ajoute-en ci-dessous (ou dans 👥 Villageois).</div>';
+      h += `<div class="row">${this.btn('🪓 +2 défricheurs', '', 'as:clear:2', false, 'act slim')}${this.btn('Arrêter', '', 'unclear:' + p.id, false, 'act slim sec')}</div>`;
+    } else if (p.state === 'forest') {
+      h += can ? `<div class="row">${this.btn('🪓 Défricher cette parcelle', 'les défricheurs s\'en chargent', 'clear:' + p.id, false)}</div>` : '<div class="warn">Trop loin : défriche d\'abord une parcelle voisine du village.</div>';
+    }
+    return h;
   }
   squadAt(x, z) { let best = 0, bd = Infinity; for (const q of this.sim.army.squads) { const d = Math.hypot(q.x - x, q.z - z); if (d < Math.max(4, q.rad + 1.5) && d < bd) { bd = d; best = q.id; } } return best; }
   openSquad(id) { this.closeSheet(); this.pickSquad(id); this.openCard({ kind: 'squad', id }); this.buzz(10); }
@@ -205,6 +227,9 @@ export class UI {
       case 'reinf': sim.squadReinforce(this.selSq); break;
       case 'disb': sim.squadDisband(this.selSq); this.selSq = 0; this.rd.setSquad(0); this.setTargeting(false); if (this.card?.kind === 'squad') this.closeCard(); break;
       case 'sqcard': { const q = sim.squad(+x); if (q) { this.cam.focusOn(q.x, q.z); this.openSquad(q.id); } break; }
+      case 'clear': if (sim.clearPatch(+x)) { if (!sim.eco.assign.clear) sim.assignVillagers('clear', 2); this.toast('🪓 Défrichage lancé', 'ok'); } break;
+      case 'unclear': sim.cancelClear(+x); break;
+      case 'road': this.roadMode = {}; this.closeCard(); this.toast('🛤 Touche le point de départ de la route', 'info'); break;
       case 'summon': if (!sim.summonMage()) this.toast('Invocation impossible (or, vivres, une place de population)'); else this.toast('🔮 Invocation du magicien…', 'ok'); break;
       case 'pref': { const p = this.prefs; if (x === 'difficulty') p.difficulty = y; else p[x] = !p[x]; this.applyPrefs(); this.html.sheet = ''; break; }
       case 'goto': { const t = sim.build.of(x); if (t) { this.cam.focusOn(t.x, t.z); this.openCard({ kind: 'struct', id: t.id }); } else this.startPlace(x); break; }
@@ -228,6 +253,10 @@ export class UI {
     else if (e.type === 'waveStart') { const t = (sim.targets || []).map(s => SECTOR_SHORT[s]).join(' · '); this.toast(`🌊 Vague ${e.wave} — attaque : ${t || '?'}`, 'warn'); this.flashScreen('warn'); this.buzz(60); }
     else if (e.type === 'discovered') { this.toast(`🧭 Nouveau gisement de ${RES_INFO[e.res].name.toLowerCase()} découvert (${e.amount}) !`); this.cam.focusOn(e.x, e.z); }
     else if (e.type === 'golem') { this.toast(`🗿 Un golem secoue la muraille : ${e.fell} archer${e.fell > 1 ? 's' : ''} tombé${e.fell > 1 ? 's' : ''}${e.dead ? ` (${e.dead} mort${e.dead > 1 ? 's' : ''})` : ''}`, 'danger'); this.buzz(40); }
+    else if (e.type === 'oreFound') this.toast(`⛏ Défrichage : un gisement de ${RES_INFO[e.res].name.toLowerCase()} découvert !`, 'ok');
+    else if (e.type === 'cleared') this.toast('🌲 Parcelle défrichée : terrain constructible', 'info');
+    else if (e.type === 'fireOut') { if (e.zone !== 'village' && (!this.lastFireOut || performance.now() - this.lastFireOut > 4000)) { this.lastFireOut = performance.now(); this.toast(e.zone === 'field' ? '🔥 Les zombies ont éteint un brasero du champ de bataille !' : '🔥 Un feu s\'est éteint', 'danger'); } }
+    else if (e.type === 'roadDone') this.toast('🛤 Route terminée', 'ok');
     else if (e.type === 'autoRepair') this.toast(`🔧 Réparation automatique : ${e.n} villageois empruntés`, 'info');
     else if (e.type === 'autoRepairDone') this.toast(`🔧 Muraille réparée — ${e.n} villageois retournent à leur tâche`, 'ok');
     else if (e.type === 'mage') this.toast(e.what === 'summoned' ? '🔮 Le magicien est arrivé ! Il agit seul : soins, réparations, sorts.' : '💀 Le magicien est tombé — il reviendra dans 30 s', e.what === 'summoned' ? 'ok' : 'danger');
@@ -239,7 +268,8 @@ export class UI {
     for (const r of RES) { const e = $('#r-' + r); e.querySelector('b').textContent = fmt(E.res[r]); e.classList.toggle('full', E.res[r] >= E.cap(r) - 0.5); e.classList.toggle('low', r === 'food' && E.famine); }
     const pop = $('#r-pop'); pop.querySelector('b').textContent = `${E.population()}/${E.popCap()}`; pop.classList.toggle('max', E.popRoom() <= 0);
     $('#wave-title').textContent = `Vague ${sim.wave}` + (sim.phase === 'assault' ? ` · ${sim.zombies.n + (sim.spawn ? sim.spawn.left : 0)} 🧟` : '');
-    $('#wave-phase').textContent = PHASES[sim.phase] + (sim.phase === 'assault' ? '' : ` · ${Math.ceil(sim.timer)} s`);
+    const Lt = sim.night.light(), dn = Lt > 0.8 ? '☀' : Lt > 0.45 ? (sim.night.t < 0.5 || sim.night.t > 0.9 ? '🌅' : '🌇') : '🌙';
+    $('#wave-phase').textContent = PHASES[sim.phase] + (sim.phase === 'assault' ? '' : ` · ${Math.ceil(sim.timer)} s`) + ` · ${dn}`;
     $('#wave-phase').dataset.p = sim.phase; $('#b-skip').style.display = sim.phase === 'prep' ? '' : 'none';
     $('#castle-bar').style.width = (100 * sim.castleHp / CASTLE.hp) + '%';
     let alert = false;
@@ -289,7 +319,7 @@ export class UI {
     const c = this.card; if (!c) return;
     let html = '';
     if (c.kind === 'struct') { const s = this.sim.build.get(c.id); if (!s) { this.closeCard(); return; } html = this.structCard(s); }
-    else if (c.kind === 'sector') html = this.sectorCard(c.id); else if (c.kind === 'squad') { const q = this.sim.squad(c.id); if (!q) { this.closeCard(); return; } html = this.squadCard(q); } else html = this.castleCard();
+    else if (c.kind === 'sector') html = this.sectorCard(c.id); else if (c.kind === 'squad') { const q = this.sim.squad(c.id); if (!q) { this.closeCard(); return; } html = this.squadCard(q); } else if (c.kind === 'patch') html = this.patchCard(this.sim.frontier.patches[c.id]); else html = this.castleCard();
     html = `<button class="x" data-a="close">✕</button>` + html;
     this.setHtml('card', this.cardEl, html);
   }
@@ -343,7 +373,7 @@ export class UI {
     const c = this.card; if (!c) return;
     let a;
     if (c.kind === 'struct') { const s = this.sim.build.get(c.id); if (!s) return; a = this.rd.project(s.x, 4, s.z); }
-    else if (c.kind === 'sector') a = this.rd.project(c.id * 40 + 20, 6, 146); else if (c.kind === 'squad') { const q = this.sim.squad(c.id); if (!q) return; a = this.rd.project(q.x, 4, q.z); } else a = this.rd.project(CASTLE.x, 14, CASTLE.z);
+    else if (c.kind === 'sector') a = this.rd.project(c.id * 40 + 20, 6, 146); else if (c.kind === 'squad') { const q = this.sim.squad(c.id); if (!q) return; a = this.rd.project(q.x, 4, q.z); } else if (c.kind === 'patch') { const p = this.sim.frontier.patches[c.id]; a = this.rd.project(p.x, 5, p.z); } else a = this.rd.project(CASTLE.x, 14, CASTLE.z);
     const w = this.cardEl.offsetWidth, h = this.cardEl.offsetHeight, topMin = 96, botMax = vh - 90;
     let top = a.y - h - 26; if (top < topMin) top = Math.min(botMax - h, a.y + 30); if (top + h > botMax) top = Math.max(topMin, botMax - h);
     this.cardEl.style.left = Math.min(vw - w - 8, Math.max(8, a.x - w / 2)) + 'px'; this.cardEl.style.top = top + 'px';
@@ -380,6 +410,7 @@ export class UI {
     if (s.type === 'workshop') h += this.btn('🛠 Armes de siège', '', 'sheet:army:siege', false, 'act sec');
     if (s.type === 'forge') h += this.btn('🔨 Améliorations', '', 'sheet:army:forge', false, 'act sec');
     if (s.type === 'wizard') h += this.mageHtml(true);
+    if (s.type === 'publicworks' && s.level) { const R = this.sim.roads, q = R.quality(this.sim), pend = R.list.filter(r => r.built < 1).length; h += `<div class="rank">🛤 Routes : <b>${ROADWORKS.names[q]}</b> — villageois +${Math.round(ROADWORKS.speed[q] * 100)} % de vitesse sur les routes${q < 3 ? ` · niveau ${s.level + 1} : ${ROADWORKS.names[q + 1]}` : ''}${pend ? ` · ${pend} chantier${pend > 1 ? 's' : ''} de route` : ''}<small>Le réseau relie seul chaque nouveau bâtiment ; trace en plus tes propres routes (bois et pierre au mètre).</small></div>` + this.btn('🛤 Tracer une route', `${ROADWORKS.costPerM.wood} 🪵 + ${ROADWORKS.costPerM.stone} 🪨 par mètre`, 'road', false, 'act'); }
     if (s.type === 'infirmary' && s.level) h += `<div class="rank">🏥 Soins : <b>${(INFIRMARY.heal[s.level] * 100).toFixed(1)} %</b> des PV par seconde aux escouades en garnison hors combat · <b>${INFIRMARY.save[s.level] * 100} %</b> des combattants tombés sont sauvés (retour en réserve)${this.sim.army.saved ? ` · ${this.sim.army.saved} sauvés` : ''}</div>`;
     if (s.type === 'university' && s.level) h += this.btn('🎓 Améliorations des villageois', '', 'sheet:tech', false, 'act sec');
     if (s.type === 'forge' && s.level) h += `<div class="hint small">Plafond attaque/défense : ${this.sim.eco.smithMax()}</div>`;
@@ -547,6 +578,8 @@ export class UI {
         <span class="sk">🛡 ${d}/${mx}</span>${cd ? this.btn('+1', this.cost(cd), `smith:def:${t}`, !E.afford(cd), 'act slim sm') : '<span class="max">max</span>'}</div>`;
     }
     h += '</div>';
+    { const fa = E.upgradeCost('fireArrows'), lk = E.level.forge < 2;
+      h += `<div class="card"><div class="ct"><b>🔥 Flèches enflammées</b> <span class="lvl">${E.up.fireArrows}/${UPGRADES.fireArrows.max}</span><small>${lk ? 'Requiert : Forge niveau 2' : UPGRADES.fireArrows.info}</small></div>${fa ? this.btn(`Niv. ${E.up.fireArrows + 1}`, this.cost(fa), 'upg:fireArrows', lk || !E.afford(fa), 'act slim') : '<span class="max">max</span>'}</div>`; }
     const ac = E.upgradeCost('arcana'), wl = E.level.wizard < 1;
     h += `<div class="card"><div class="ct"><b>📖 Arcanes</b> <span class="lvl">${E.up.arcana}/${UPGRADES.arcana.max}</span><small>${wl ? 'Requiert : Maison du sorcier' : UPGRADES.arcana.info}</small></div>${ac ? this.btn(`Niv. ${E.up.arcana + 1}`, this.cost(ac), 'upg:arcana', wl || !E.afford(ac), 'act slim') : '<span class="max">max</span>'}</div>`;
     return h;
@@ -571,6 +604,11 @@ export class UI {
       h += `<div class="card"><div class="ct"><b>🧭 Prospection</b><small>${P ? `Un villageois explore la campagne… ${Math.round(100 * P.t / P.dur)} %` : `Un villageois libre part ${PROSPECT.time} s et découvre un nouveau gisement ailleurs sur la carte.`}</small></div></div>`;
       if (!P) h += `<div class="row">${PROSPECT.res.map(r => this.btn(`${RES_INFO[r].ico || ''} ${RES_INFO[r].name}`, this.cost(PROSPECT.cost), 'pro:' + r, !E.canProspect(r), 'act slim')).join('')}</div>`;
     }
+    {   // défricheurs et allumeurs : tâches sans bâtiment
+      const nc = E.assign.clear, act = sim.frontier.active().length, nf = E.assign.fire, lit = sim.night.fires.filter(f => f.lit).length;
+      h += `<div class="row step task"><span class="lab">🪓 Défricheurs<small class="sub">${act ? `${act} parcelle${act > 1 ? 's' : ''} en cours · bois rapporté` : 'touche une forêt sur les côtés du village pour la défricher'}</small></span>${this.btn('−', '', 'as:clear:-1', nc <= 0, 'sq')}<b class="val">${nc}</b>${this.btn('+', idle <= 0 && E.donorFor('clear') ? '↺' : '', 'as:clear:1', (idle <= 0 && !E.donorFor('clear')) || nc >= TASKS.clear.slots, 'sq')}</div>`;
+      h += `<div class="row step task"><span class="lab">🔥 Allumeurs de feux<small class="sub">${lit}/${sim.night.fires.length} braseros allumés · ${FIRE_KEEP.wood} bois par plein · ${sim.night.isNight() ? 'nuit' : sim.night.nightSoon() ? 'la nuit approche' : 'de jour : ils se reposent'}</small></span>${this.btn('−', '', 'as:fire:-1', nf <= 0, 'sq')}<b class="val">${nf}</b>${this.btn('+', idle <= 0 && E.donorFor('fire') ? '↺' : '', 'as:fire:1', (idle <= 0 && !E.donorFor('fire')) || nf >= TASKS.fire.slots, 'sq')}</div>`;
+    }
     const dmg = this.damagedSegs(), n = E.assign.repair;
     h += `<div class="row step task"><span class="lab">🔧 Réparation muraille<small class="sub">${dmg ? dmg + ' tronçon(s) à réparer' : 'muraille intacte'} · pierre${sim.autoRepair ? ' · auto ✅' : ''}</small></span>${this.btn('−', '', 'as:repair:-1', n <= 0, 'sq')}<b class="val">${n}</b>${this.btn('+', idle <= 0 && E.donorFor('repair') ? '↺' : '', 'as:repair:1', (idle <= 0 && !E.donorFor('repair')) || n >= TASKS.repair.slots, 'sq')}</div>`;
     h += `<div class="prio"><span>Priorité :</span>${[['-1', 'Auto'], ...SECTOR_SHORT.map((x, i) => [String(i), x])].map(([v, l]) => `<button class="chipb ${E.repairPriority === +v ? 'on' : ''}" data-a="prio:${v}">${l}</button>`).join('')}</div>`;
@@ -579,7 +617,7 @@ export class UI {
   damagedSegs() { const w = this.sim.wall; let n = 0; for (let i = 0; i < 40; i++) if (w.hp[i] < w.segMax(i) - 0.5) n++; return n; }
   techHtml() {
     const E = this.sim.eco; let h = '<div class="tgrp">Où améliorer quoi ?</div><div class="where">' + [
-      ['forge', '🔨 Forge', 'attaque et défense de chaque type d\'unité (indépendantes du rang)'], ['university', '🎓 Université', 'outils, chariots, chemins pavés, charrue, maçonnerie, apprentissage'], ['infirmary', '🏥 Infirmerie', 'soigne les escouades au repos, sauve des blessés'], ['wizard', '🔮 Maison du sorcier', 'invoque le magicien ; son niveau = puissance du magicien ; Arcanes'],
+      ['forge', '🔨 Forge', 'attaque et défense de chaque type d\'unité (indépendantes du rang)'], ['university', '🎓 Université', 'outils, chariots, chemins pavés, charrue, maçonnerie, apprentissage'], ['infirmary', '🏥 Infirmerie', 'soigne les escouades au repos, sauve des blessés'], ['publicworks', '🛤 Travaux publics', 'trace des routes ; niveau = qualité de toutes les routes (terre battue, gravier, pavés)'], ['wizard', '🔮 Maison du sorcier', 'invoque le magicien ; son niveau = puissance du magicien ; Arcanes'],
       ['barracks', '🪖 Caserne · 🐎 Écurie · 🎯 Champ de tir', 'leur niveau = rang des unités (Recrue → Légende)'], ['workshop', '🛠 Atelier de siège', 'baliste, catapulte, trébuchet ; aspect des machines'],
       ['sawmill', '🪚 Scierie · ⛏ Carrière · ⛓ Mine · 🌾 Ferme', 'niveau = places et rendement ; de nouvelles installations apparaissent'],
     ].map(([b, n, d]) => `<button class="wrow" data-a="goto:${b}"><b>${n}</b><small>${d}</small></button>`).join('') + '<div class="wrow"><b>🧱 Muraille</b><small>touche un secteur pour le renforcer · 🗼 touche une tour pour l\'améliorer</small></div></div>';
@@ -587,7 +625,7 @@ export class UI {
     const nb = this.needBuild('university'); if (nb) return h + nb;
     h += `<div class="hint small">🎓 Université niv. ${E.level.university} : améliorations jusqu'au niveau <b>${E.level.university + 1}</b>${E.level.university < 3 ? ' — améliore l\'université pour aller plus loin' : ''}.</div>`;
     for (const id in UPGRADES) {
-      const U = UPGRADES[id]; if (U.group === 'army' || U.req !== 'university') continue;
+      const U = UPGRADES[id]; if (U.group === 'army' || U.req !== 'university' || U.hidden) continue;
       const lv = E.up[id], c = E.upgradeCost(id), cap = E.upgradeCap(id);
       h += `<div class="card"><div class="ct"><b>${U.ico} ${U.name}</b> <span class="lvl">${lv}/${U.max}</span><small>${U.info}</small></div>${c ? this.btn(`Niv. ${lv + 1}`, this.cost(c), 'upg:' + id, !E.afford(c), 'act slim') : `<span class="max">${lv >= U.max ? 'max' : '🎓 niv. ' + lv}</span>`}</div>`;
     }

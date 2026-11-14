@@ -1,10 +1,11 @@
 // Économie : villageois autonomes (aucun ordre individuel). Le joueur fixe seulement les EFFECTIFS par tâche.
 // Chaque villageois sait quoi faire : aller au site → récolter → TOUT rapporter au château → recommencer.
-import { TASKS, BUILDINGS, UPGRADES, ECON, START, RES, RES_INFO, PROSPECT, START_DEPOSITS, AUTO_REPAIR, SMITH } from '../content/medieval.js';
+import { TASKS, BUILDINGS, UPGRADES, ECON, START, RES, RES_INFO, PROSPECT, START_DEPOSITS, AUTO_REPAIR, SMITH, FIRE_KEEP } from '../content/medieval.js';
 import { SEGS, SEG_W, SECTORS, SEGS_PER_SECTOR } from './constants.js';
 import { WALL } from '../content/medieval.js';
 
 const TASK_IDS = Object.keys(TASKS);
+const DROPS = { wood: ['warehouse', 'sawmill'], stone: ['warehouse', 'quarry'], iron: ['warehouse', 'mine'], gold: ['warehouse', 'mine'], food: ['granary', 'mill', 'farm'] };
 const GATHER = TASK_IDS.filter(t => TASKS[t].res);
 
 export class Economy {
@@ -36,24 +37,26 @@ export class Economy {
   carryCap() { return ECON.carry * (1 + UPGRADES.carts.per * this.up.carts); }
   slots(b) { return BUILDINGS[b].base + ECON.slotsPerLevel * this.level[b]; }   // base = ce que le château permet avant toute construction
   taskCap(t) {
-    if (t === 'repair') return TASKS.repair.slots;
+    if (t === 'repair' || !TASKS[t].building) return TASKS[t].slots;
     const b = TASKS[t].building; let used = 0;
     for (const o of GATHER) if (o !== t && TASKS[o].building === b) used += this.assign[o];
     return Math.max(0, this.slots(b) - used);
   }
   gatherRate(t) {
-    const T = TASKS[t]; let r = T.rate * (1 + UPGRADES.tools.per * this.up.tools) * (1 + ECON.levelGather * Math.max(0, this.level[T.building] - 1));
+    const T = TASKS[t]; let r = T.rate * (1 + UPGRADES.tools.per * this.up.tools) * (1 + ECON.levelGather * Math.max(0, (T.building ? this.level[T.building] : 1) - 1));
     if (t === 'food') r *= (1 + UPGRADES.plow.per * this.up.plow) * (1 + ECON.millBonus * this.level.mill);
     return r * (this.famine ? ECON.famineMult : 1);
   }
   // ——— gisements : site principal + gisements découverts par prospection ———
   siteList(t) {
-    const T = TASKS[t], out = []; if (!T.deposit) { const f = t === 'food' ? this.sim.build.of('farm') : null; return f && (f.state === 'built' || f.state === 'upgrading') ? [{ x: f.x, z: f.z, si: -1 }] : [{ x: T.site.x, z: T.site.z, si: -1 }]; }
+    const T = TASKS[t], out = [];
+    if (T.dyn) return this.sim.frontier.active().map(p => ({ x: p.x + ((p.id * 7) % 9 - 4), z: p.z + ((p.id * 3) % 7 - 3), si: p.id }));   // défrichage : parcelles en cours
+    if (!T.deposit) { const f = t === 'food' ? this.sim.build.of('farm') : null; return f && (f.state === 'built' || f.state === 'upgrading') ? [{ x: f.x, z: f.z, si: -1 }] : [{ x: T.site.x, z: T.site.z, si: -1 }]; }
     if (this.deposit[t] > 0) out.push({ x: T.site.x, z: T.site.z, si: -1 });
     const ex = this.extra[t]; if (ex) ex.forEach((e, i) => { if (e.amount > 0) out.push({ x: e.x, z: e.z, si: i }); });
     return out;
   }
-  amountAt(t, si) { return si < 0 ? this.deposit[t] : (this.extra[t][si]?.amount || 0); }
+  amountAt(t, si) { if (TASKS[t].dyn) { const p = this.sim.frontier.patches[si]; return p && p.state === 'clearing' ? p.wood : 0; } return si < 0 ? this.deposit[t] : (this.extra[t][si]?.amount || 0); }
   totalDeposit(t) { let n = this.deposit[t] || 0; for (const e of this.extra[t] || []) n += e.amount; return n; }
   // ——— prospection ———
   canProspect(r) { return PROSPECT.res.includes(r) && !this.prospect && this.extra[r].length < PROSPECT.maxPerRes && this.idleCount() > 0 && this.afford(PROSPECT.cost); }
@@ -81,6 +84,8 @@ export class Economy {
   builderCount() { let n = 0; for (const v of this.villagers) if (v.job) n++; return n; }
   // urgence d'une tâche : 0 = rien ne manque ; une ressource rare (stock faible) ou une muraille blessée rend la tâche urgente
   urgency(t) {
+    if (t === 'fire') { const N = this.sim.night; return N && N.nightSoon() ? 0.85 : 0.05; }
+    if (t === 'clear') { const F = this.sim.frontier; return F && F.active().length ? 0.5 : 0.02; }
     if (t === 'repair') { const W = this.sim.wall; for (let i = 0; i < W.hp.length; i++) if (W.hp[i] < W.segMax(i)) return 0.9; return 0.1; }
     const r = TASKS[t].res; return 1 - Math.min(1, this.res[r] / this.cap(r));
   }
@@ -158,7 +163,7 @@ export class Economy {
     if (this.popRoom() <= 0 || !this.pay(ECON.villagerCost)) return false;
     this.addVillager(); this.syncTasks(); return true;
   }
-  buyUpgrade(u) { const U = UPGRADES[u]; if (U.req && this.level[U.req] < 1) return false; const c = this.upgradeCost(u); if (!c || !this.pay(c)) return false; this.up[u]++; return true; }
+  buyUpgrade(u) { const U = UPGRADES[u]; if (U.req && this.level[U.req] < (U.minLevel || 1)) return false; const c = this.upgradeCost(u); if (!c || !this.pay(c)) return false; this.up[u]++; return true; }
   setRepairPriority(s) { this.repairPriority = s; }
   // ——— villageois ———
   addVillager(x, z) {
@@ -186,9 +191,10 @@ export class Economy {
       }
     }
   }
-  release(v) { v.sx = null; v.task = null; v.state = 'idle'; v.leaving = false; v.seg = -1; v.timer = 0; }
+  release(v) { if (v.task === 'fire' && v.fire >= 0 && this.sim.night) { const F = this.sim.night.fires[v.fire]; if (F && F.claim > 0) F.claim--; } v.fire = -1; v.path = null; v.dropX = null; v.sx = null; v.task = null; v.state = 'idle'; v.leaving = false; v.seg = -1; v.timer = 0; }
   moveTo(v, tx, tz, dt) {
-    const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz), st = this.speed() * dt;
+    if ((v.rsT = (v.rsT || 0) - dt) <= 0) { v.rsT = 0.5; v.rs = this.sim.roads ? this.sim.roads.speedMult(this.sim, v.x, v.z) : 1; }   // bonus des routes (réévalué 2× par s)
+    const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz), st = this.speed() * (v.rs || 1) * dt;
     if (d <= st + 0.05) { v.x = tx; v.z = tz; return true; }
     v.x += dx / d * st; v.z += dz / d * st; return false;
   }
@@ -210,29 +216,35 @@ export class Economy {
       if (v.state === 'toBuild') { if (this.moveTo(v, v.bx, v.bz, dt)) v.state = 'building'; }
       return;
     }
-    const T = v.task ? TASKS[v.task] : null;
+    const T = v.task ? TASKS[v.task] : null, dep = T && (T.deposit || T.dyn);
+    if (v.task === 'fire') return this.updateKeeper(v, i, dt);
     switch (v.state) {
       case 'idle': this.moveTo(v, v.jx, v.jz, dt); break;
       case 'toSite': {
         if (v.sx === null) {                       // choisit un gisement (réparti entre les gisements encore riches)
-          const l = this.siteList(v.task), s = l.length ? l[v.id % l.length] : { x: T.site.x, z: T.site.z, si: -1 }; v.sx = s.x; v.sz = s.z; v.si = s.si;
+          const l = this.siteList(v.task); if (!l.length && T.dyn) { v.state = 'blocked'; this.moveTo(v, v.jx, v.jz, dt); break; }
+          const s = l.length ? l[v.id % l.length] : { x: T.site.x, z: T.site.z, si: -1 }; v.sx = s.x; v.sz = s.z; v.si = s.si;
         }
-        if (this.moveTo(v, v.sx, v.sz, dt)) { v.state = (T.deposit && this.amountAt(v.task, v.si) <= 0) ? 'blocked' : 'gather'; v.timer = 0; }
+        if (v.sx === undefined || v.sx === null) { v.state = 'blocked'; break; }
+        if (this.moveTo(v, v.sx, v.sz, dt)) { v.state = (dep && this.amountAt(v.task, v.si) <= 0) ? 'blocked' : 'gather'; v.timer = 0; }
         break;
       }
-      case 'blocked': if (!T.deposit || this.siteList(v.task).length) { v.sx = null; v.state = 'toSite'; } break;
+      case 'blocked': if (!dep || this.siteList(v.task).length) { v.sx = null; v.state = 'toSite'; } else this.moveTo(v, v.jx, v.jz, dt); break;
       case 'gather': {
         v.timer += this.gatherRate(v.task) * dt;
-        const want = Math.min(this.carryCap(), T.deposit ? this.amountAt(v.task, v.si) : Infinity);
+        const want = Math.min(this.carryCap(), dep ? this.amountAt(v.task, v.si) : Infinity);
         if (want <= 0) { v.sx = null; v.state = 'toSite'; break; }
         if (v.timer >= want) {
-          if (T.deposit) { if (v.si < 0) this.deposit[v.task] -= want; else this.extra[v.task][v.si].amount -= want; }
+          if (T.dyn) this.sim.frontier.chop(v.si, want, this.sim);
+          else if (T.deposit) { if (v.si < 0) this.deposit[v.task] -= want; else this.extra[v.task][v.si].amount -= want; }
           v.carry = want; v.carryRes = T.res; v.state = 'toCastle';
         }
         break;
       }
       case 'toCastle':
-        if (this.moveTo(v, v.jx, ECON.drop.z, dt)) {
+        if (v.dropX == null) { const d = this.dropFor(v.carryRes, v.x, v.z, v); v.dropX = d.x; v.dropZ = d.z; }
+        if (this.moveTo(v, v.dropX, v.dropZ, dt)) {
+          v.dropX = null;
           const got = this.add(v.carryRes, v.carry); if (v.task) this.acc[v.task] += got;
           v.carry = 0; v.carryRes = null;
           if (v.leaving) this.release(v); else { v.sx = null; v.state = 'toSite'; }
@@ -250,6 +262,33 @@ export class Economy {
         break;
       case 'repairing': this.repairWork(v, dt); break;
     }
+  }
+  // dépôt le plus proche : château, entrepôt, ou le bâtiment de récolte de la ressource (comme les camps d'Age of Empires)
+  dropFor(res, x, z, v) {
+    let best = { x: v.jx, z: ECON.drop.z }, bd = Math.hypot(x - best.x, z - best.z); const kinds = DROPS[res] || ['warehouse'];
+    for (const s of this.sim.build.items) { if (!kinds.includes(s.type) || (s.state !== 'built' && s.state !== 'upgrading')) continue; const [, hd] = this.sim.build.half(s.type, s.rot), px = s.x, pz = s.z + hd + 1, d = Math.hypot(x - px, z - pz); if (d < bd) { bd = d; best = { x: px + ((v.id % 5) - 2) * 0.8, z: pz }; } }
+    return best;
+  }
+  // ——— allumeurs : vont au brasero le plus urgent (en passant par les portes), le ravitaillent en bois, rentrent si danger ———
+  updateKeeper(v, i, dt) {
+    const N = this.sim.night, sim = this.sim, home = () => N.route(v.x, v.z, 100 + ((i * 13) % 40 - 20), 172);
+    if (v.state === 'returning') { const p = v.path && v.path[0]; if (!p) { v.state = 'fireIdle'; return; } if (this.moveTo(v, p[0], p[1], dt)) v.path.shift(); return; }
+    if (v.fire == null || v.fire < 0) {
+      const f = N.pick(sim, v);
+      if (f < 0) { v.state = 'fireIdle'; if (v.z < 150) { v.path = home(); v.state = 'returning'; } else this.moveTo(v, 100 + ((i * 17) % 21 - 10), 192 + (i % 5), dt); return; }
+      v.fire = f; N.fires[f].claim++; const F = N.fires[f]; v.path = N.route(v.x, v.z, F.x + ((i % 3) - 1) * 0.9, F.z + 1.2); v.state = 'toFire';
+    }
+    const F = N.fires[v.fire], drop = () => { if (F.claim > 0) F.claim--; v.fire = -1; };
+    if (F.zone === 'field' && N.danger(sim, F.x, F.z)) { drop(); v.path = home(); v.state = 'returning'; return; }   // un zombie approche : on rentre
+    if (v.state === 'toFire') { const p = v.path[0]; if (!p) { v.state = 'stoking'; v.timer = 0; return; } if (this.moveTo(v, p[0], p[1], dt)) v.path.shift(); return; }
+    if (v.state === 'stoking') {
+      if (this.res.wood < FIRE_KEEP.wood) { drop(); return; }     // plus de bois : on attendra
+      v.timer += dt; if (v.timer < FIRE_KEEP.stoke) return;
+      this.res.wood -= FIRE_KEEP.wood; F.fuel = 1; if (!F.lit) { F.lit = true; sim.events.push({ type: 'fireLit', zone: F.zone }); sim.blast('fireLit', F.x, F.z, 1.5); }
+      drop(); if (F.zone === 'field') { v.path = home(); v.state = 'returning'; }
+      return;
+    }
+    v.state = 'toFire'; v.path = N.route(v.x, v.z, F.x, F.z + 1.2);
   }
   pickRepairTarget() {
     const w = this.sim.wall, p = this.repairPriority, lo = p >= 0 ? p * SEGS_PER_SECTOR : 0, hi = p >= 0 ? lo + SEGS_PER_SECTOR : SEGS;
