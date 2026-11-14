@@ -24,7 +24,7 @@ const hooks = {
   newGame: () => { clearSave(); sim.newGame(); ui.sel = -1; ui.cancelPlace(); ui.closeCard(); ui.closeSheet(); ui.showOver(false); ui.refresh(true); save(sim); },
 };
 ui = new UI(sim, hooks);
-cam.setView({ tx: 100, tz: 215, zoom: innerHeight > innerWidth ? 1.0 : 0.62 });   // vue de départ : la cour du château, pas le champ de bataille
+cam.setView({ tx: 100, tz: innerHeight > innerWidth ? 262 : 278, zoom: innerHeight > innerWidth ? 0.7 : 0.42 });   // vue de départ : la cour du château, pas le champ de bataille
 function onResize() { const r = view.getBoundingClientRect(); rd.resize(Math.max(1, r.width), Math.max(1, r.height)); cam.fit(r.width, r.height); }
 new ResizeObserver(onResize).observe(view); onResize();
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(sim); }); addEventListener('pagehide', () => save(sim));

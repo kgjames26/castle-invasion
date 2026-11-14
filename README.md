@@ -109,3 +109,8 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - 8 robes (alezan/bai, noir, blanc, alezan clair, gris, palomino, isabelle, pie) : couleurs de sommets (corps · crinière/queue · balzanes), choisies par escouade ; `Renderer.useHorseGLB` crée une maille instanciée par robe.
 - Le cavalier (`horseParts` dans Troops.js) n'est plus qu'un rig de boîtes posé sur la selle et suit le tangage du cheval. Allure : galop en déplacement rapide, pas sinon, repos à l'arrêt/au combat.
 - Pour ajouter une robe : une entrée dans `SKINS` de `bake_horse.py`, puis relancer le script.
+
+## Phase 12 — Échelle réaliste (fin de l'effet « maquette »)
+- Personnages réduits d'environ 35 % par rapport aux bâtiments : zombies `ZSCALE` 1.45, archers 1.55, `USCALE` 1.75, soldats 1.6 / lourds 1.8 / cavaliers 1.35, machines de siège ×0.72, villageois GLB `SC` 0.0105 (≈ 2 m).
+- Caméra : inclinaison 58° → 42° (vue plus rasante), champ de vision 50° → 58°, zoom minimum 0.1 → 0.05, vue de départ plus proche du château.
+- Dalles de la cour et pavés du château deux fois plus petits (repères d'échelle).

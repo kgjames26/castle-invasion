@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { W, D } from '../sim/constants.js';
 
-const PITCH = 58 * Math.PI / 180;
+const PITCH = 42 * Math.PI / 180;       // vue plus rasante (v3.1) : moins « table de jeu »
 export class CameraController {
   constructor(camera, dom, onTap) {
     this.cam = camera; this.dom = dom; this.onTap = onTap;
@@ -20,7 +20,7 @@ export class CameraController {
     this.baseDist = widthM / (2 * Math.tan(THREE.MathUtils.degToRad(this.cam.fov / 2)) * this.aspect);
     this.update(0);
   }
-  setZoom(z) { this.zoom = Math.min(1.7, Math.max(0.1, z)); }
+  setZoom(z) { this.zoom = Math.min(1.7, Math.max(0.05, z)); }
   focusOn(x, z) { this.focus = { x, z }; }
   // changement de vue instantané (onglets) : position et zoom mémorisés par onglet
   getView() { return { tx: this.tx, tz: this.tz, zoom: this.zoom }; }

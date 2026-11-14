@@ -11,7 +11,7 @@ const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1]];      // variantes de
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
 
 const lam = (color, opts = {}) => applyNorthFog(new THREE.MeshLambertMaterial({ color, flatShading: true, ...opts }));
-const ZSCALE = 2.2, USCALE = 2.6;   // exagération volontaire pour la lisibilité sur petit écran
+const ZSCALE = 1.45, USCALE = 1.75;   // personnages à l'échelle des bâtiments (v3.1 : réduits d'environ 35 % pour éviter l'effet « maquette »)
 
 export class Renderer {
   constructor(canvasParent, sim) {
@@ -21,7 +21,7 @@ export class Renderer {
     this.renderer.setClearColor(0x0a0f16);
     canvasParent.appendChild(this.renderer.domElement);
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(50, 1, 2, 900);
+    this.camera = new THREE.PerspectiveCamera(58, 1, 2, 900);
     this.scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x4a4030, 1.55));
     const sun = new THREE.DirectionalLight(0xfff1d0, 1.5); sun.position.set(-60, 120, 80); this.scene.add(sun);
     this.dummy = new THREE.Object3D(); this.tmpColor = new THREE.Color();
@@ -55,13 +55,13 @@ export class Renderer {
     // ——— dalles de la cour militaire (z 152 → 200) et pavés autour du château ———
     const flags = (x0, z0, x1, z1, base, rows, clip) => {
       g.save(); if (clip) clip(); else { g.beginPath(); g.rect(X(x0), X(z0), X(x1 - x0), X(z1 - z0)); g.clip(); }
-      for (let z = z0; z < z1; z += rows) { let x = x0 - r() * 2; while (x < x1) { const w = rr(1.4, 3.0), v = rr(-14, 14); g.fillStyle = `rgb(${base[0] + v},${base[1] + v},${base[2] + v})`; g.fillRect(X(x) + 1, X(z) + 1, X(w) - 2, X(rows) - 2); if (r() < 0.18) { g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(X(x) + 2, X(z) + 2, X(w) - 4, rr(2, 6)); } x += w; } }
+      for (let z = z0; z < z1; z += rows) { let x = x0 - r() * 2; while (x < x1) { const w = rr(0.7, 1.5), v = rr(-14, 14); g.fillStyle = `rgb(${base[0] + v},${base[1] + v},${base[2] + v})`; g.fillRect(X(x) + 1, X(z) + 1, X(w) - 2, X(rows) - 2); if (r() < 0.18) { g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(X(x) + 2, X(z) + 2, X(w) - 4, rr(2, 6)); } x += w; } }
       g.restore();
     };
     g.fillStyle = '#6e6a63'; g.fillRect(0, X(WALL_Z0), W * k, X(WALL_Z1 - WALL_Z0));
-    flags(0, WALL_Z1, W, 203, [150, 144, 133], 1.6);
+    flags(0, WALL_Z1, W, 203, [150, 144, 133], 0.8);
     for (let i = 0; i < 420; i++) blob(r() * W, rr(WALL_Z1, 203), rr(2, 7), 'rgba(250,252,255,A)', rr(0.1, 0.32));       // neige poudrée sur les dalles
-    flags(0, 0, 0, 0, [170, 162, 148], 1.5, () => { g.beginPath(); g.ellipse(X(CASTLE.x), X(CASTLE.z), X(36), X(26), 0, 0, 7); g.clip(); });
+    flags(0, 0, 0, 0, [170, 162, 148], 0.8, () => { g.beginPath(); g.ellipse(X(CASTLE.x), X(CASTLE.z), X(36), X(26), 0, 0, 7); g.clip(); });
     // ——— village : terre battue, herbe morte, neige par plaques ———
     for (let i = 0; i < 520; i++) blob(r() * W, rr(203, 292), rr(2, 8), r() < 0.62 ? 'rgba(158,124,82,A)' : 'rgba(255,255,255,A)', rr(0.12, 0.3));
     for (let i = 0; i < 700; i++) { const x = r() * W, z = rr(203, 296); g.strokeStyle = r() < 0.7 ? 'rgba(120,128,80,.55)' : 'rgba(150,140,90,.5)'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(X(x), X(z)); g.lineTo(X(x + rr(-.4, .4)), X(z - rr(.5, 1.4))); g.stroke(); }
@@ -182,7 +182,7 @@ export class Renderer {
     }
     if (this.vv) return this.updateVillagersVAT(alpha);
     // ——— villageois (repli) : un modèle par métier, animé selon l'état (marche, outil qui frappe, charge portée) ———
-    const R = this.vrigs, vs = E.villagers, t = this.clock, SC = 2.0, FREQ = { wood: 7, stone: 6, iron: 6, gold: 6, food: 3.6, build: 8, repair: 8 }; let nc = 0;
+    const R = this.vrigs, vs = E.villagers, t = this.clock, SC = 1.4, FREQ = { wood: 7, stone: 6, iron: 6, gold: 6, food: 3.6, build: 8, repair: 8 }; let nc = 0;
     for (const k in R) R[k].begin();
     const lerpAng = (a, b, k) => { const dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
     for (let i = 0; i < vs.length; i++) {
@@ -203,7 +203,7 @@ export class Renderer {
       d.position.set(x, bob, z); d.scale.set(SC, SC, SC); d.rotation.set(0, v.rrot, 0); d.updateMatrix();
       this.tmpColor.setRGB(1, 1, 1); R[key].push(d.matrix, this.tmpColor, [0, sw, -sw, arm]);
       if (carrying) {                                    // charge portée devant la poitrine : caisse colorée selon la ressource
-        d.position.set(x + Math.sin(v.rrot) * 0.95, 2.0 + bob, z + Math.cos(v.rrot) * 0.95); d.scale.set(1.5, 1.2, 1.5); d.rotation.set(0, v.rrot, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
+        d.position.set(x + Math.sin(v.rrot) * 0.7, 1.4 + bob, z + Math.cos(v.rrot) * 0.7); d.scale.set(1.05, 0.85, 1.05); d.rotation.set(0, v.rrot, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
         this.tmpColor.setHex(RES_INFO[v.carryRes].color); this.cMesh.setColorAt(nc, this.tmpColor); nc++;
       }
     }
@@ -245,7 +245,7 @@ export class Renderer {
   }
   // ——— troupes : fantassins, lourds, cavaliers (pièces animées : jambes, bras, bras d'épée) ———
   renderSquads(alpha) {
-    const R = this.rigs, d = this.dummy, t = this.clock, sel = this.selSquad, tint = this.tmpColor, SCALE = { soldier: 2.4, heavy: 2.7, cavalry: 2.0 };
+    const R = this.rigs, d = this.dummy, t = this.clock, sel = this.selSquad, tint = this.tmpColor, SCALE = { soldier: 1.6, heavy: 1.8, cavalry: 1.35 };
     R.soldier.begin(); R.heavy.begin(); R.cavalry.begin();
     const hh = this.hh; if (hh) for (const k of hh.hg.skins) hh.cnt[k] = 0;
     const lerpAng = (a, b, k) => { let dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
@@ -274,7 +274,7 @@ export class Renderer {
   }
   // ——— machines de siège : le bras de lancer suit le cycle de tir (armé → détente → remontée) ———
   renderMachines(S) {
-    const R = this.rigs, d = this.dummy, tint = this.tmpColor, SC = { ballista: 1.4, catapult: 1.5, trebuchet: 1.4 };
+    const R = this.rigs, d = this.dummy, tint = this.tmpColor, SC = { ballista: 1.0, catapult: 1.1, trebuchet: 1.0 };
     for (const k of ['ballista', 'catapult', 'trebuchet']) R[k].begin();
     for (const w of S.weapons) {
       const D = SIEGE[w.type], sc = SC[w.type], e = D.reload - w.cd; d.position.set(w.x, 0, w.z); d.scale.set(sc, sc, sc); d.rotation.set(0, 0, 0); d.updateMatrix();
@@ -369,7 +369,7 @@ export class Renderer {
     this._ty = new THREE.Matrix4().makeTranslation(0, -vg.miny, 0); this._gm = new THREE.Matrix4();
   }
   updateVillagersVAT(alpha) {
-    const E = this.sim.eco, d = this.dummy, vv = this.vv, vg = vv.vg, t = this.clock, vs = E.villagers, SC = 0.0150;
+    const E = this.sim.eco, d = this.dummy, vv = this.vv, vg = vv.vg, t = this.clock, vs = E.villagers, SC = 0.0105;
     const SPEED = { walk: 1.3, carry: 1.2, idle: 0.35 }, WORK = { wood: 0.9, stone: 0.8, iron: 0.8, gold: 0.8, food: 0.55, build: 1.0, repair: 1.0 };
     for (const k in vv.meshes) { vv.cnt[k] = 0; }
     const lerpAng = (a, b, k) => { const dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
@@ -391,7 +391,7 @@ export class Renderer {
       if (tl) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.hand[f0]); tl.setMatrixAt(k, this._gm); }
       if (ht) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.head[f0]); ht.setMatrixAt(k, this._gm); }
       if (carrying) {
-        d.position.set(x + Math.sin(v.rrot) * 1.15, 2.15, z + Math.cos(v.rrot) * 1.15); d.scale.set(1.5, 1.2, 1.5); d.rotation.set(0, v.rrot, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
+        d.position.set(x + Math.sin(v.rrot) * 0.8, 1.5, z + Math.cos(v.rrot) * 0.8); d.scale.set(1.05, 0.85, 1.05); d.rotation.set(0, v.rrot, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
         this.tmpColor.setHex(RES_INFO[v.carryRes].color); this.cMesh.setColorAt(nc, this.tmpColor); nc++;
       }
     }
@@ -414,7 +414,7 @@ export class Renderer {
   renderArchers() {
     const sim = this.sim, d = this.dummy; let ai = 0;
     for (let s = 0; s < SECTORS; s++) for (let k = 0; k < sim.army.archers[s].n; k++) {
-      const p = archerPos(s, k), a = sim.siege ? 0 : 0; d.position.set(p.x, this.kitWalls ? 4.9 : 4, p.z); d.scale.set(2.3, 2.3, 2.3); d.rotation.set(0, Math.PI, 0); d.updateMatrix();
+      const p = archerPos(s, k), a = sim.siege ? 0 : 0; d.position.set(p.x, this.kitWalls ? 4.9 : 4, p.z); d.scale.set(1.55, 1.55, 1.55); d.rotation.set(0, Math.PI, 0); d.updateMatrix();
       this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); ai++;
     }
     this.ab.count = this.abow.count = ai; this.ab.instanceMatrix.needsUpdate = this.abow.instanceMatrix.needsUpdate = true;
