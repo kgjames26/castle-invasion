@@ -18,15 +18,17 @@ export const ROADWORKS = { speed: [0, 0.15, 0.3, 0.45], names: ['Terre', 'Terre 
 // ——— Jour et nuit (v2.0) : un cycle complet dure `length` secondes ; la nuit réduit la portée des tireurs sans feux ———
 export const DAY = { length: 420, start: 0.12, dusk: [0.5, 0.62], dawn: [0.9, 0.99] };
 export const GATE_XS_LIST = [20, 100, 180];
-// braseros : sur la muraille (2 par secteur), devant elle sur le champ de bataille, dans la cour et au village
+// braseros : sur la muraille (2 par secteur), grands feux de bois dans la plaine (bûchers préparés entre les vagues), dans la cour et au village
 export const BRAZIERS = [
   ...[0, 1, 2, 3, 4].flatMap(s => [{ x: s * 40 + 11, z: 146, zone: 'wall' }, { x: s * 40 + 29, z: 146, zone: 'wall' }]),
-  ...[0, 1, 2, 3, 4].map(s => ({ x: s * 40 + 20 + (s % 2 ? 6 : -6), z: 118, zone: 'field' })),
+  ...[12, 37, 62, 86, 114, 138, 163, 188].map((x, i) => ({ x, z: i % 2 ? 122 : 108, zone: 'plain' })),
   { x: 30, z: 178, zone: 'court' }, { x: 100, z: 182, zone: 'court' }, { x: 170, z: 178, zone: 'court' },
   { x: 62, z: 248, zone: 'village' }, { x: 138, z: 248, zone: 'village' }, { x: 80, z: 276, zone: 'village' }, { x: 120, z: 276, zone: 'village' },
 ];
 // allumeurs : un plein de bois dure `burn` s ; `wood` par ravitaillement ; les zombies à moins de `stomp` m éteignent le feu ; on fuit à `flee` m
-export const FIRE_KEEP = { burn: 150, wood: 4, stoke: 1.6, stomp: 2.6, stompRate: 0.6, flee: 14 };
+//  feux de la plaine : entre deux vagues, l'équipe apporte du bois (`trip` par voyage) jusqu'à remplir un bûcher (`pile` bois), puis l'allume à l'approche
+//  de la nuit (le bois est pris aux tas réservés aux feux, dans la cour près des portes) ; il brûle `plainBurn` s ; les zombies piétinent les bûchers (`trample` par zombie et par s) et éteignent les feux
+export const FIRE_KEEP = { burn: 150, wood: 4, stoke: 1.6, stomp: 2.6, stompRate: 0.6, flee: 14, pile: 12, trip: 6, depots: [[28, 166], [108, 166], [188, 166]], stack: 2.2, light: 1.4, plainBurn: 260, plainStomp: 3.4, trample: 0.12 };
 // Forge v1.9 : attaque et défense PROPRES à chaque type, indépendantes du rang (bâtiment d'origine).
 //  attaque +12 %/niveau ; défense : dégâts reçus −8 %/niveau ; plafond = 2 × niveau de la forge (max 6).
 export const SMITH = {
@@ -89,9 +91,9 @@ export const START = {
 // ——— Économie (Phase 3) ———
 export const RES = ['wood', 'stone', 'iron', 'food', 'gold'];
 export const RES_INFO = {
-  wood: { name: 'Bois', ico: '🪵', color: 0x8b5a2b }, stone: { name: 'Pierre', ico: '🪨', color: 0x9aa0a6 },
-  iron: { name: 'Fer', ico: '⛓', color: 0x5b6b8a }, food: { name: 'Nourriture', ico: '🌾', color: 0xe6c84a },
-  gold: { name: 'Or', ico: '🪙', color: 0xffd23f },
+  wood: { name: 'Bois', ico: '<span class="ri ri-wood"></span>', color: 0x8b5a2b }, stone: { name: 'Pierre', ico: '<span class="ri ri-stone"></span>', color: 0x9aa0a6 },
+  iron: { name: 'Fer', ico: '<span class="ri ri-iron"></span>', color: 0x5b6b8a }, food: { name: 'Nourriture', ico: '<span class="ri ri-food"></span>', color: 0xe6c84a },
+  gold: { name: 'Or', ico: '<span class="ri ri-gold"></span>', color: 0xffd23f },
 };
 export const ECON = {
   villagerSpeed: 3.6, carry: 10, slotsPerLevel: 5, maxLevel: 4,
@@ -109,14 +111,14 @@ export const START_DEPOSITS = { stone: [{ x: 188, z: 296, amount: 3000 }], iron:
 export const PROSPECT = { cost: { gold: 40, food: 30 }, time: 45, amount: [2200, 3800], maxPerRes: 4, res: ['stone', 'iron', 'gold'], zone: { x0: 12, x1: 188, z0: 218, z1: 292 }, clear: 16 };
 // Tâches : chaque villageois sait quoi faire ; le joueur ne règle que les effectifs.
 export const TASKS = {
-  wood:   { name: 'Bûcherons',      ico: '🪵', res: 'wood',  building: 'sawmill', site: { x: 40,  z: 255 }, rate: 1.3,  deposit: 9000, regen: 3.2 },
-  stone:  { name: 'Carriers',       ico: '🪨', res: 'stone', building: 'quarry',  site: { x: 160, z: 255 }, rate: 1.0,  deposit: 7000 },
-  iron:   { name: 'Mineurs (fer)',  ico: '⛓', res: 'iron',  building: 'mine',    site: { x: 182, z: 236 }, rate: 0.9, deposit: 3500 },
-  gold:   { name: 'Mineurs (or)',   ico: '🪙', res: 'gold',  building: 'mine',    site: { x: 18,  z: 236 }, rate: 0.8,  deposit: 2500 },
-  food:   { name: 'Fermiers',       ico: '🌾', res: 'food',  building: 'farm',    site: { x: 100, z: 252 }, rate: 1.15 },
+  wood:   { name: 'Bûcherons',      ico: '<span class="ri ri-wood"></span>', res: 'wood',  building: 'sawmill', site: { x: 40,  z: 255 }, rate: 1.3,  deposit: 9000, regen: 3.2 },
+  stone:  { name: 'Carriers',       ico: '<span class="ri ri-stone"></span>', res: 'stone', building: 'quarry',  site: { x: 160, z: 255 }, rate: 1.0,  deposit: 7000 },
+  iron:   { name: 'Mineurs (fer)',  ico: '<span class="ri ri-iron"></span>', res: 'iron',  building: 'mine',    site: { x: 182, z: 236 }, rate: 0.9, deposit: 3500 },
+  gold:   { name: 'Mineurs (or)',   ico: '<span class="ri ri-gold"></span>', res: 'gold',  building: 'mine',    site: { x: 18,  z: 236 }, rate: 0.8,  deposit: 2500 },
+  food:   { name: 'Fermiers',       ico: '<span class="ri ri-food"></span>', res: 'food',  building: 'farm',    site: { x: 100, z: 252 }, rate: 1.15 },
   repair: { name: 'Réparation de la muraille', ico: '🔧', building: null, slots: 10 },
   clear:  { name: 'Défricheurs',    ico: '🪓', res: 'wood',  building: null, slots: 14, rate: 1.4, dyn: true, site: { x: 0, z: 262 } },   // abattent les forêts vierges (parcelles choisies)
-  fire:   { name: 'Allumeurs de feux', ico: '🔥', building: null, slots: 12 },                                                         // allument et ravitaillent les braseros
+  fire:   { name: 'Équipe des feux', ico: '🔥', building: null, slots: 12 },                                                         // allument et ravitaillent les braseros
 };
 // Bâtiments : niveau 0 = à construire. Coût du niveau N+1 = base × (N+1).
 export const BUILDINGS = {   // group: 'eco' (onglet Village) ou 'army' (onglet Armée)
@@ -196,6 +198,7 @@ export const UPGRADES = {
   plow:    { name: 'Charrue',           ico: '🚜', req: 'university', max: 3, cost: { wood: 70, iron: 20 }, per: 0.25, info: 'Rendement des fermes +25 % par niveau' },
   masonry: { name: 'Maçonnerie',        ico: '🧱', req: 'university', max: 3, cost: { stone: 80, iron: 30 }, per: 0.30, info: 'Réparation +30 % vitesse, −10 % pierre par niveau' },
   fireArrows: { name: 'Flèches enflammées', ico: '🔥', group: 'army', req: 'forge', minLevel: 2, max: 3, cost: { wood: 60, iron: 30, gold: 40 }, per: 0.12, info: 'Archers : 12 % des flèches par niveau enflamment le sol à l\'impact (forge niv. 2)' },
+  firecraft: { name: 'Savoir-faire des allumeurs', ico: '🔥', req: 'university', max: 3, cost: { wood: 60, gold: 15 }, per: 0.25, info: 'Équipe des feux : +25 % de vitesse (marche, empilage, allumage), feux de plaine +25 % plus longs et −15 % de bois par niveau' },
   apprentice: { name: 'Apprentissage', ico: '📐', req: 'university', max: 3, cost: { wood: 70, stone: 40, gold: 20 }, per: 0.25, info: 'Construction +25 % plus rapide par niveau' },
   // — Forge (onglet Armée) : anciennes améliorations globales, remplacées par SMITH (gardées pour les vieilles sauvegardes) —
   weapons: { name: 'Armes affûtées',    ico: '🗡', group: 'army', req: 'forge', max: 4, cost: { iron: 40, gold: 40 }, per: 0.10, info: 'Dégâts de toutes les unités +10 % par niveau' },

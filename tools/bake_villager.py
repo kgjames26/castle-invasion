@@ -98,13 +98,18 @@ def walk(p, carry=False):
     rot['LeftUpLeg'] = (-0.55 * s, 0, 0); rot['RightUpLeg'] = (0.55 * s, 0, 0)
     rot['LeftLeg'] = (0.85 * max(0, c), 0, 0); rot['RightLeg'] = (0.85 * max(0, -c), 0, 0)
     rot['LeftFoot'] = (-0.25 * rot['LeftLeg'][0] + 0.3 * s * 0.5, 0, 0); rot['RightFoot'] = (-0.25 * rot['RightLeg'][0] - 0.3 * s * 0.5, 0, 0)
-    if carry:
-        rot['LeftArm'] = (-0.95, 0, -sx * 0.5); rot['RightArm'] = (-0.95, 0, sx * 0.5); rot['LeftForeArm'] = (-0.9, 0, 0); rot['RightForeArm'] = (-0.9, 0, 0)
-        for n in ('Spine', 'Spine1', 'Spine2'): rot[n] = (-0.05, 0.04 * s, 0)
+    if carry == 'front':                                  # charge tenue à deux mains devant le ventre (pierres, panier de minerai)
+        rot['RightArm'] = (-0.345, 0, sx * 1.425); rot['RightForeArm'] = (-0.713 + 0.05 * s, -sx * 0.225, sx * 0.65)
+        rot['LeftArm'] = (-0.345, 0, -sx * 1.425); rot['LeftForeArm'] = (-0.713 - 0.05 * s, sx * 0.225, -sx * 0.65)
+        for n in ('Spine', 'Spine1', 'Spine2'): rot[n] = (-0.04, 0.03 * s, 0)
+    elif carry == 'shoulder':                             # rondins / sac sur l'épaule droite, tenus d'une main ; l'autre bras balance
+        rot['RightArm'] = (0.556, 0, -sx * 0.462); rot['RightForeArm'] = (0.131, 0, -sx * 2.231)
+        rot['LeftArm'] = (0.45 * s, 0, -sx * A); rot['LeftForeArm'] = (-0.3 - 0.2 * max(0, -s), 0, 0)
+        for n in ('Spine', 'Spine1', 'Spine2'): rot[n] = (0.03, -0.05 * s, -sx * 0.035)
     else:
         rot['LeftArm'] = (0.5 * s, 0, -sx * A); rot['RightArm'] = (-0.5 * s, 0, sx * A); rot['LeftForeArm'] = (-0.3 - 0.2 * max(0, -s), 0, 0); rot['RightForeArm'] = (-0.3 - 0.2 * max(0, s), 0, 0)
         for n in ('Spine', 'Spine1', 'Spine2'): rot[n] = (0.04, -0.08 * s, 0.03 * s)
-    rot['Head'] = (-0.03, 0.05 * s, 0); rot['Hips'] = (0, 0.12 * s, 0)
+    rot['Head'] = (-0.03, 0.05 * s, -sx * 0.1 if carry == 'shoulder' else 0); rot['Hips'] = (0, 0.12 * s, 0)
     return rot, 1.3 * abs(s) * (0.6 if carry else 1.0)
 def smooth(x): x = min(1, max(0, x)); return x * x * (3 - 2 * x)
 def work(t):
@@ -123,14 +128,14 @@ def idle(t):
     s = math.sin(t * 2 * math.pi); rot = {}; arms_down(rot, 1.0)
     rot['LeftForeArm'] = (-0.12, 0, 0); rot['RightForeArm'] = (-0.12, 0, 0); rot['Spine1'] = (0.02 * s, 0, 0); rot['Head'] = (0.02 * s, 0.05 * s, 0)
     return rot, 0.5 * s
-CLIPS = [('walk', 10, lambda t: walk(2 * math.pi * t)), ('carry', 10, lambda t: walk(2 * math.pi * t, True)), ('work', 12, work), ('idle', 4, idle)]
-frames = []; clipInfo = {}; hand = []; head = []
-RH, HD = BI['RightHand'], BI['Head']
+CLIPS = [('walk', 10, lambda t: walk(2 * math.pi * t)), ('carry', 10, lambda t: walk(2 * math.pi * t, 'front')), ('shoulder', 10, lambda t: walk(2 * math.pi * t, 'shoulder')), ('work', 12, work), ('idle', 4, idle)]
+frames = []; clipInfo = {}; hand = []; head = []; spine = []
+RH, HD, SP = BI['RightHand'], BI['Head'], BI['Spine2']
 for name, n, fn in CLIPS:
     start = len(frames)
     for i in range(n + 1):                                # la dernière image répète la première : boucle propre
         rot, hy = fn((i % n) / n); Jp = pose(rot, hy); frames.append(skin_pose(Jp))
-        hand.append((Jp[RH] @ inv[RH]).T.reshape(-1).tolist()); head.append((Jp[HD] @ inv[HD]).T.reshape(-1).tolist())
+        hand.append((Jp[RH] @ inv[RH]).T.reshape(-1).tolist()); head.append((Jp[HD] @ inv[HD]).T.reshape(-1).tolist()); spine.append((Jp[SP] @ inv[SP]).T.reshape(-1).tolist())
     clipInfo[name] = [start, n]
 F = len(frames); frames = np.stack(frames); print('images', F)
 # gabarit : pieds au sol
@@ -142,7 +147,7 @@ TINT = {'idle': (1, 1, 1), 'wood': (0.75, 1.0, 0.62), 'stone': (0.95, 0.95, 1.0)
 variants = {}
 for k, tint in TINT.items():
     c = Cl.copy(); m = Part == 1; c[m] = np.clip(c[m] * np.array(tint) * (1.0 if k == 'idle' else 1.25), 0, 1); variants[k] = (c * 255 + 0.5).astype(np.uint8)
-hdr = {'V': int(V), 'I': int(len(Ix)), 'F': int(F), 'mn': mn.tolist(), 'mx': mx.tolist(), 'clips': clipInfo, 'tints': list(TINT), 'hand': hand, 'head': head, 'miny': float(miny), 'height': float(mx[1] - mn[1]), 'sx': sx, 'handPos': Jm[RH][:3, 3].tolist(), 'headPos': Jm[HD][:3, 3].tolist()}
+hdr = {'V': int(V), 'I': int(len(Ix)), 'F': int(F), 'mn': mn.tolist(), 'mx': mx.tolist(), 'clips': clipInfo, 'tints': list(TINT), 'hand': hand, 'head': head, 'spine': spine, 'miny': float(miny), 'height': float(mx[1] - mn[1]), 'sx': sx, 'handPos': Jm[RH][:3, 3].tolist(), 'headPos': Jm[HD][:3, 3].tolist()}
 def align(o): return (o + 3) & ~3
 hb = json.dumps(hdr).encode(); out = bytearray(struct.pack('<I', len(hb))) + hb
 while len(out) % 4: out += b' '

@@ -72,7 +72,7 @@ function villagerGeometry() {
   const g = mergeGeometries(parts, false); g.computeBoundingSphere(); return g;
 }
 
-// Villageois (modèle GLB Mixamo cuit en VAT par tools/bake_villager.py) : un maillage unique, une variante de couleur par métier, 4 clips (marche, portage, coup d'outil, repos).
+// Villageois (modèle GLB Mixamo cuit en VAT par tools/bake_villager.py) : un maillage unique, une variante de couleur par métier, 5 clips (marche, portage devant, portage à l'épaule, coup d'outil, repos).
 async function loadVillager(url) {
   const buf = await (await fetch(url)).arrayBuffer(), { hdr, off: o0 } = header(buf); let off = o0; const V = hdr.V, F = hdr.F;
   const idx = new Uint16Array(buf.slice(off, off + hdr.I * 2)); off = align(off + hdr.I * 2);
@@ -88,7 +88,7 @@ async function loadVillager(url) {
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
   mat.onBeforeCompile = sh => { patchVat(sh, v); patchNorthFog(sh); }; mat.customProgramCacheKey = () => 'vat-nfog-dbl';
   const mats = (arr) => arr.map(a => new THREE.Matrix4().fromArray(a));
-  return { geos, mat, F, clips: hdr.clips, tints: hdr.tints, hand: mats(hdr.hand), head: mats(hdr.head), handPos: hdr.handPos, headPos: hdr.headPos, miny: hdr.miny, height: hdr.height };
+  return { geos, mat, F, clips: hdr.clips, tints: hdr.tints, hand: mats(hdr.hand), head: mats(hdr.head), spine: mats(hdr.spine || hdr.head.map(() => new THREE.Matrix4().toArray())), handPos: hdr.handPos, headPos: hdr.headPos, miny: hdr.miny, height: hdr.height };
 }
 
 // Cheval (modèle GLB low-poly cuit en VAT par tools/bake_horse.py) : 3 allures (pas, galop, repos), 8 robes, matrices de selle par image.

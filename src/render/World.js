@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FRONTIER, ROADWORKS } from '../content/medieval.js';
+import { FIRE_KEEP } from '../content/medieval.js';
 import { applyNorthFog } from './fog.js';
 
 const lamV = () => applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
@@ -84,7 +85,19 @@ export class BrazierView {
     const stand = mergeGeometries([colored(new THREE.CylinderGeometry(0.12, 0.22, 1.5, 6).translate(0, 0.75, 0), 0x3a3c42), colored(new THREE.CylinderGeometry(0.62, 0.4, 0.42, 8).translate(0, 1.65, 0), 0x4a4c52), colored(new THREE.TorusGeometry(0.62, 0.06, 4, 10).rotateX(Math.PI / 2).translate(0, 1.86, 0), 0x2a2c30), colored(new THREE.CylinderGeometry(0.5, 0.5, 0.06, 8).translate(0, 0.03, 0), 0x3a3c42)]);
     this.stand = new THREE.InstancedMesh(stand, lamV(), n); this.stand.castShadow = true; this.stand.frustumCulled = false; scene.add(this.stand);
     this.coal = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.42, 0), new THREE.MeshBasicMaterial({ color: 0xffffff }), n); this.coal.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); this.coal.frustumCulled = false; scene.add(this.coal);
-    const d = new THREE.Object3D(); night.fires.forEach((f, i) => { d.position.set(f.x, f.zone === 'wall' ? 6.4 : 0, f.z); d.updateMatrix(); this.stand.setMatrixAt(i, d.matrix); });
+    const d = new THREE.Object3D(); night.fires.forEach((f, i) => { d.position.set(f.x, f.zone === 'wall' ? 6.4 : 0, f.z); d.scale.setScalar(f.zone === 'plain' ? 0.0001 : 1); d.updateMatrix(); this.stand.setMatrixAt(i, d.matrix); });
+    // bûchers de la plaine : cercle de pierres (fixe) + rondins dressés en tipi, ajoutés au fil des voyages de bois ; consumés en brûlant
+    const plains = night.fires.filter(f => f.zone === 'plain'), NP = plains.length; this.LOGS = 9;
+    const ringG = colored(new THREE.DodecahedronGeometry(0.42, 0), 0x8a8c90), logG = colored(new THREE.CylinderGeometry(0.16, 0.2, 2.5, 6).translate(0, 1.25, 0), 0x7a4a24);
+    this.ring = new THREE.InstancedMesh(ringG, lamV(), NP * 10); this.ring.frustumCulled = false; scene.add(this.ring);
+    this.logs = new THREE.InstancedMesh(logG, lamV(), NP * this.LOGS); this.logs.frustumCulled = false; this.logs.castShadow = true; this.logs.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(NP * this.LOGS * 3).fill(1), 3); scene.add(this.logs);
+    let nr = 0; for (const f of plains) for (let k = 0; k < 10; k++) { const a = k / 10 * 6.283; d.position.set(f.x + Math.cos(a) * 1.55, 0.12, f.z + Math.sin(a) * 1.55); d.rotation.set(k, k * 2, 0); d.scale.set(1, 0.7 + 0.25 * (k % 3), 1); d.updateMatrix(); this.ring.setMatrixAt(nr++, d.matrix); }
+    d.rotation.set(0, 0, 0); d.scale.setScalar(1); this.plains = plains;
+    // tas de bois réservés aux feux, dans la cour près des portes (l'équipe y charge ses fagots)
+    const pileG = mergeGeometries([colored(new THREE.CylinderGeometry(0.2, 0.2, 2.6, 6).rotateX(Math.PI / 2), 0x7f4e26), colored(new THREE.CylinderGeometry(0.17, 0.17, 2.62, 6).rotateX(Math.PI / 2).scale(1, 1, 1.001), 0xe2bc84).scale(0.85, 0.85, 1.0)]);
+    const rows = [5, 4, 3, 2], depots = FIRE_KEEP.depots, per = rows.reduce((a, b) => a + b, 0) + 4; this.woodpile = new THREE.InstancedMesh(pileG, lamV(), depots.length * per); this.woodpile.castShadow = true; this.woodpile.frustumCulled = false; scene.add(this.woodpile);
+    let nw = 0; for (const [px, pz] of depots) { rows.forEach((n, r) => { for (let k = 0; k < n; k++) { d.position.set(px + (k - (n - 1) / 2) * 0.42, 0.2 + r * 0.36, pz); d.rotation.set(0, (k * 0.07) % 0.12, 0); d.updateMatrix(); this.woodpile.setMatrixAt(nw++, d.matrix); } }); for (const sx of [-1.3, 1.3]) for (const sz of [-1, 1]) { d.position.set(px + sx, 0.6, pz + sz * 0.9); d.rotation.set(Math.PI / 2, 0, 0); d.scale.set(0.5, 0.45, 0.5); d.updateMatrix(); this.woodpile.setMatrixAt(nw++, d.matrix); d.scale.setScalar(1); } }
+    d.rotation.set(0, 0, 0);
     // vraies lumières : quelques-unes seulement (les plus proches de la caméra), le reste en lueurs
     this.lights = []; for (let k = 0; k < nLights; k++) { const L = new THREE.PointLight(0xff9a40, 0, 26, 1.6); scene.add(L); this.lights.push(L); }
     this.d = d; this.c = new THREE.Color();
@@ -92,7 +105,24 @@ export class BrazierView {
   y(f) { return f.zone === 'wall' ? 6.4 : 0; }
   update(fx, clock, camera, dark) {
     const F = this.N.fires, d = this.d, c = this.c;
+    let nl = 0;
+    for (const f of this.plains) {   // rondins : nombre selon le bûcher en préparation ou le bois restant ; noircis en brûlant
+      const n = f.lit ? Math.ceil(this.LOGS * Math.min(1, f.fuel * 1.2)) : Math.floor(this.LOGS * f.pile + 1e-6);
+      for (let k = 0; k < n; k++) { const a = k / this.LOGS * 6.283 + (k % 2) * 0.3, lean = 0.42 + 0.05 * (k % 3); d.position.set(f.x + Math.cos(a) * 0.95, 0, f.z + Math.sin(a) * 0.95); d.rotation.set(0, 0, 0); d.rotateY(-a); d.rotateZ(lean); d.updateMatrix(); this.logs.setMatrixAt(nl, d.matrix);
+        const ch = f.lit ? 0.35 + 0.65 * f.fuel : 1; this.logs.setColorAt(nl, c.setRGB(ch, ch * 0.92, ch * 0.88)); nl++; }
+    }
+    this.logs.count = nl; this.logs.instanceMatrix.needsUpdate = true; if (nl) this.logs.instanceColor.needsUpdate = true; d.rotation.set(0, 0, 0);
     F.forEach((f, i) => {
+      if (f.zone === 'plain') {   // grand feu de bois : flammes hautes, beaucoup d'étincelles, lueur large
+        d.position.set(f.x, f.lit ? 1.1 : -5, f.z); d.scale.setScalar(f.lit ? 1.5 + 0.4 * f.fuel : 0.001); d.updateMatrix(); this.coal.setMatrixAt(i, d.matrix); this.coal.setColorAt(i, c.setRGB(1, 0.5 + 0.2 * Math.sin(clock * 7 + i), 0.14));
+        if (f.lit) {
+          const fl = 0.85 + 0.15 * Math.sin(clock * 11 + i * 2.3) * Math.sin(clock * 6.1 + i), k = 0.5 + 0.5 * Math.min(1, f.fuel * 2);
+          fx.glowNow(f.x, 2.2, f.z, (1.4 + 1.6 * dark) * fl * k, 1, 0.55, 0.18);
+          for (let e = 0; e < 2; e++) if (Math.random() < 0.8 * fx.q.particles) fx.A.emit(f.x + (Math.random() - 0.5) * 1.4, 0.8, f.z + (Math.random() - 0.5) * 1.4, (Math.random() - 0.5) * 0.6, 2.6 + Math.random() * 2.2, (Math.random() - 0.5) * 0.6, 0.6, 0.45 + 0.3 * k, -1, Math.random() < 0.6 ? [1, 0.45, 0.08] : [1, 0.78, 0.2], 0.55);
+          if (Math.random() < 0.12 * fx.q.particles) fx.P.emit(f.x, 3.2, f.z, 0.3, 1.4, 0.1, 3, 0.8, -0.12, [0.3, 0.28, 0.28], 1.6);
+        }
+        return;
+      }
       const y = this.y(f) + 1.9, k = f.lit ? 0.6 + 0.4 * Math.min(1, f.fuel * 2) : 0; d.position.set(f.x, y, f.z); d.scale.setScalar(f.lit ? 1 : 0.7); d.updateMatrix(); this.coal.setMatrixAt(i, d.matrix);
       this.coal.setColorAt(i, f.lit ? c.setRGB(1, 0.45 + 0.2 * Math.sin(clock * 7 + i), 0.12) : c.setRGB(0.18, 0.16, 0.15));
       if (f.lit) {
@@ -106,7 +136,7 @@ export class BrazierView {
     // lumières réelles : les 6 braseros allumés les plus proches du centre de la vue, intensité selon l'obscurité
     const cx = camera.userData.tx ?? camera.position.x, cz = camera.userData.tz ?? camera.position.z;
     const lit = F.filter(f => f.lit).sort((a, b) => Math.hypot(a.x - cx, a.z - cz) - Math.hypot(b.x - cx, b.z - cz));
-    this.lights.forEach((L, k) => { const f = lit[k]; if (!f || dark < 0.05) { L.intensity = 0; return; } L.position.set(f.x, this.y(f) + 2.4, f.z); L.intensity = dark * 60 * (0.85 + 0.15 * Math.sin(clock * 9 + k)) * Math.min(1, f.fuel * 3); });
+    this.lights.forEach((L, k) => { const f = lit[k]; if (!f || dark < 0.05) { L.intensity = 0; return; } L.position.set(f.x, this.y(f) + 2.4, f.z); L.intensity = dark * (f.zone === 'plain' ? 110 : 60) * (0.85 + 0.15 * Math.sin(clock * 9 + k)) * Math.min(1, f.fuel * 3); L.distance = f.zone === 'plain' ? 38 : 26; });
   }
 }
 export { ROADWORKS };

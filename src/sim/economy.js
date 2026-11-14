@@ -84,7 +84,7 @@ export class Economy {
   builderCount() { let n = 0; for (const v of this.villagers) if (v.job) n++; return n; }
   // urgence d'une tâche : 0 = rien ne manque ; une ressource rare (stock faible) ou une muraille blessée rend la tâche urgente
   urgency(t) {
-    if (t === 'fire') { const N = this.sim.night; return N && N.nightSoon() ? 0.85 : 0.05; }
+    if (t === 'fire') { const N = this.sim.night; if (!N) return 0.05; if (N.nightSoon()) return 0.85; const P = N.piles(); return N.building(this.sim) && P.ready + P.lit < P.n ? 0.6 : 0.05; }
     if (t === 'clear') { const F = this.sim.frontier; return F && F.active().length ? 0.5 : 0.02; }
     if (t === 'repair') { const W = this.sim.wall; for (let i = 0; i < W.hp.length; i++) if (W.hp[i] < W.segMax(i)) return 0.9; return 0.1; }
     const r = TASKS[t].res; return 1 - Math.min(1, this.res[r] / this.cap(r));
@@ -191,10 +191,10 @@ export class Economy {
       }
     }
   }
-  release(v) { if (v.task === 'fire' && v.fire >= 0 && this.sim.night) { const F = this.sim.night.fires[v.fire]; if (F && F.claim > 0) F.claim--; } v.fire = -1; v.path = null; v.dropX = null; v.sx = null; v.task = null; v.state = 'idle'; v.leaving = false; v.seg = -1; v.timer = 0; }
+  release(v) { if (v.task === 'fire' && v.fire >= 0 && this.sim.night) { const F = this.sim.night.fires[v.fire]; if (F && F.claim > 0) F.claim--; } if (v.task === 'fire' && v.carry > 0) { this.add('wood', v.carry); v.carry = 0; v.carryRes = null; } v.fire = -1; v.path = null; v.dropX = null; v.sx = null; v.task = null; v.state = 'idle'; v.leaving = false; v.seg = -1; v.timer = 0; }
   moveTo(v, tx, tz, dt) {
     if ((v.rsT = (v.rsT || 0) - dt) <= 0) { v.rsT = 0.5; v.rs = this.sim.roads ? this.sim.roads.speedMult(this.sim, v.x, v.z) : 1; }   // bonus des routes (réévalué 2× par s)
-    const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz), st = this.speed() * (v.rs || 1) * dt;
+    const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz), st = this.speed() * (v.rs || 1) * (v.task === 'fire' ? 1 + UPGRADES.firecraft.per * (this.up.firecraft || 0) : 1) * dt;
     if (d <= st + 0.05) { v.x = tx; v.z = tz; return true; }
     v.x += dx / d * st; v.z += dz / d * st; return false;
   }
@@ -269,26 +269,48 @@ export class Economy {
     for (const s of this.sim.build.items) { if (!kinds.includes(s.type) || (s.state !== 'built' && s.state !== 'upgrading')) continue; const [, hd] = this.sim.build.half(s.type, s.rot), px = s.x, pz = s.z + hd + 1, d = Math.hypot(x - px, z - pz); if (d < bd) { bd = d; best = { x: px + ((v.id % 5) - 2) * 0.8, z: pz }; } }
     return best;
   }
-  // ——— allumeurs : vont au brasero le plus urgent (en passant par les portes), le ravitaillent en bois, rentrent si danger ———
+  // ——— équipe des feux : braseros (ravitaillement), bûchers de la plaine (bois apporté entre deux vagues, allumés avant la nuit) ———
   updateKeeper(v, i, dt) {
-    const N = this.sim.night, sim = this.sim, home = () => N.route(v.x, v.z, 100 + ((i * 13) % 40 - 20), 172);
-    if (v.state === 'returning') { const p = v.path && v.path[0]; if (!p) { v.state = 'fireIdle'; return; } if (this.moveTo(v, p[0], p[1], dt)) v.path.shift(); return; }
+    const N = this.sim.night, sim = this.sim, K = 1 + UPGRADES.firecraft.per * (this.up.firecraft || 0), home = () => N.route(v.x, v.z, 100 + ((i * 13) % 40 - 20), 172);
+    const giveBack = () => { if (v.carry > 0) { this.add('wood', v.carry); v.carry = 0; v.carryRes = null; } };
+    const walk = () => { const p = v.path && v.path[0]; if (!p) return true; if (this.moveTo(v, p[0], p[1], dt)) v.path.shift(); return false; };
+    if (v.leaving) { if (v.fire >= 0) { const F0 = N.fires[v.fire]; if (F0 && F0.claim > 0) F0.claim--; v.fire = -1; } giveBack(); this.release(v); return; }
+    if (v.state === 'returning') { if (walk()) { giveBack(); v.state = 'fireIdle'; } return; }
     if (v.fire == null || v.fire < 0) {
-      const f = N.pick(sim, v);
-      if (f < 0) { v.state = 'fireIdle'; if (v.z < 150) { v.path = home(); v.state = 'returning'; } else this.moveTo(v, 100 + ((i * 17) % 21 - 10), 192 + (i % 5), dt); return; }
-      v.fire = f; N.fires[f].claim++; const F = N.fires[f]; v.path = N.route(v.x, v.z, F.x + ((i % 3) - 1) * 0.9, F.z + 1.2); v.state = 'toFire';
+      const m = N.pick(sim, v);
+      if (!m) { giveBack(); v.state = 'fireIdle'; if (v.z < 150) { v.path = home(); v.state = 'returning'; } else this.moveTo(v, 100 + ((i * 17) % 21 - 10), 192 + (i % 5), dt); return; }
+      v.fire = m.id; v.fireMode = m.mode; N.fires[m.id].claim++; const F = N.fires[m.id];
+      if (m.mode === 'stack' && v.carry <= 0) { const d = N.depot(F); v.path = N.route(v.x, v.z, d[0] + ((i % 3) - 1) * 1.2, d[1] + 1.6); v.state = 'toWood'; }
+      else { v.path = N.route(v.x, v.z, F.x + ((i % 3) - 1) * 0.9, F.z + 1.2); v.state = 'toFire'; }
+      v.timer = 0;
     }
     const F = N.fires[v.fire], drop = () => { if (F.claim > 0) F.claim--; v.fire = -1; };
-    if (F.zone === 'field' && N.danger(sim, F.x, F.z)) { drop(); v.path = home(); v.state = 'returning'; return; }   // un zombie approche : on rentre
-    if (v.state === 'toFire') { const p = v.path[0]; if (!p) { v.state = 'stoking'; v.timer = 0; return; } if (this.moveTo(v, p[0], p[1], dt)) v.path.shift(); return; }
+    if (F.zone === 'plain' && N.danger(sim, F.x, F.z)) { drop(); v.path = home(); v.state = 'returning'; return; }   // un zombie approche : on rentre
+    if (v.fireMode === 'stack' && (F.lit || F.pile >= 0.999 || !N.building(sim)) && v.state !== 'toFire') { drop(); return; }
+    if (v.state === 'toWood') {                                      // au tas de bois des feux (cour, près des portes) : on charge un fagot (rondins sur l'épaule)
+      if (!walk()) return;
+      const need = FIRE_KEEP.pile * Math.pow(0.85, this.up.firecraft || 0), amt = Math.min(Math.max(FIRE_KEEP.trip, Math.round(this.carryCap() * 0.6)), Math.max(1, Math.ceil(need * (1 - F.pile))));
+      if (this.res.wood < amt) { drop(); v.state = 'fireIdle'; return; }
+      this.res.wood -= amt; v.carry = amt; v.carryRes = 'wood'; v.path = N.route(v.x, v.z, F.x + ((i % 3) - 1) * 1.1, F.z + 1.4); v.state = 'toFire'; return;
+    }
+    if (v.state === 'toFire') { if (walk()) { v.state = v.fireMode === 'stack' ? 'stacking' : v.fireMode === 'light' ? 'lighting' : 'stoking'; v.timer = 0; } return; }
+    if (v.state === 'stacking') {
+      v.timer += dt * K; if (v.timer < FIRE_KEEP.stack) return;
+      if (!F.lit) { const need = FIRE_KEEP.pile * Math.pow(0.85, this.up.firecraft || 0); F.pile = Math.min(1, F.pile + v.carry / need); v.carry = 0; v.carryRes = null; if (F.pile >= 0.999) sim.events.push({ type: 'pileReady', x: F.x, z: F.z }); }
+      giveBack(); drop(); return;                                     // repart chercher du bois (prochaine mission)
+    }
+    if (v.state === 'lighting') {
+      v.timer += dt * K; if (v.timer < FIRE_KEEP.light) return;
+      if (!F.lit && F.pile >= 0.999) { F.lit = true; F.fuel = 1; F.pile = 0; sim.events.push({ type: 'fireLit', zone: F.zone }); sim.blast('fireLit', F.x, F.z, 2.5); }
+      drop(); return;
+    }
     if (v.state === 'stoking') {
       if (this.res.wood < FIRE_KEEP.wood) { drop(); return; }     // plus de bois : on attendra
-      v.timer += dt; if (v.timer < FIRE_KEEP.stoke) return;
+      v.timer += dt * K; if (v.timer < FIRE_KEEP.stoke) return;
       this.res.wood -= FIRE_KEEP.wood; F.fuel = 1; if (!F.lit) { F.lit = true; sim.events.push({ type: 'fireLit', zone: F.zone }); sim.blast('fireLit', F.x, F.z, 1.5); }
-      drop(); if (F.zone === 'field') { v.path = home(); v.state = 'returning'; }
-      return;
+      drop(); return;
     }
-    v.state = 'toFire'; v.path = N.route(v.x, v.z, F.x, F.z + 1.2);
+    drop();
   }
   pickRepairTarget() {
     const w = this.sim.wall, p = this.repairPriority, lo = p >= 0 ? p * SEGS_PER_SECTOR : 0, hi = p >= 0 ? lo + SEGS_PER_SECTOR : SEGS;

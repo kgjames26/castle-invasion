@@ -186,3 +186,11 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Tout suit la courbe : remparts, merlons, escaliers, portes et herses, tours fixes, archers, braseros, engins de siège, champ de flux des zombies, routes des allumeurs, points de réparation et badges d'interface.
 - Le château tire lui-même sur les zombies qui l'atteignent (garde du château).
 - Cohésion des hordes corrigée : un zombie isolé loin de sa meute n'est plus bloqué.
+
+## Phase 22 — Ressources portées, gisements en grappes, feux de la plaine
+- **Icônes des ressources** redessinées en vectoriel (rondins, bloc de pierre, lingots de fer, gerbe de blé, pièces d'or), partout dans l'interface (`.ri-*` dans style.css, `RES_INFO.ico`).
+- **Charges modélisées** (src/render/Loads.js) : fagot de rondins et sac de grain sur l'épaule, blocs de pierre tenus à deux mains, paniers d'osier de minerai de fer ou de pépites d'or ; posées aussi dans les brouettes et charrettes.
+- **Animations de portage** recalculées (tools/bake_villager.py) : portage devant (bras fléchis) et portage à l'épaule (une main tient la charge, l'autre balance). Pendant le portage, l'**outil est rangé dans le dos** (matrice du buste par image).
+- **Gisements** : petits blocs de minerai (3 variantes par ressource) multipliés en grappes de 22 ; la grappe se vide bloc par bloc quand on l'exploite.
+- **Feux de la plaine** : 8 bûchers devant la muraille. Hors assaut et de jour, l'**équipe des feux** (tâche dédiée) charge des fagots aux tas de bois de la cour et monte les bûchers ; à l'approche de la nuit, elle les allume (grand feu, lumière large, 260 s). Les zombies dispersent les bûchers et éteignent les feux.
+- **Savoir-faire des allumeurs** (Université, 3 niveaux) : +25 % de vitesse, feux plus longs, −15 % de bois par niveau.

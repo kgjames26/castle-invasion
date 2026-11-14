@@ -16,6 +16,7 @@ import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometr
 import { buildKnightRigs, makeMage, poseMage, knightRig, golemRig } from './Heroes.js';
 import { carrierGeometry, TOOL_TINT } from './Village.js';
 import { OreView } from './Ores.js';
+import { LOADS, buildLoadMeshes, backToolMatrix } from './Loads.js';
 import { FrontierView, RoadView, BrazierView } from './World.js';
 import { RANKS } from '../content/medieval.js';
 const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1], [1]];      // le golem (6) a son propre modèle articulé ; [1] ne sert que de repli
@@ -330,6 +331,7 @@ export class Renderer {
     this.vMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(VCAP * 3), 3); this.scene.add(this.vMesh);
     const cg = new THREE.BoxGeometry(0.7, 0.7, 0.7); this.cMesh = new THREE.InstancedMesh(cg, lam(0xffffff), VCAP); this.cMesh.frustumCulled = false; this.cMesh.count = 0;
     this.cMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(VCAP * 3), 3); this.scene.add(this.cMesh);
+    this.loads = buildLoadMeshes(this.scene, applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })), VCAP); this.lcnt = {};   // charges portées modélisées (rondins, sac, pierres, paniers)
     this.vCol = { idle: new THREE.Color(0xd8b48a), repair: new THREE.Color(0xe67e22) };
   }
   updateEconomy(alpha) {
@@ -354,7 +356,7 @@ export class Renderer {
     }
     if (this.vv) return this.updateVillagersVAT(alpha);
     // ——— villageois (repli) : un modèle par métier, animé selon l'état (marche, outil qui frappe, charge portée) ———
-    const R = this.vrigs, vs = E.villagers, t = this.clock, SC = 1.4, FREQ = { wood: 7, stone: 6, iron: 6, gold: 6, food: 3.6, build: 8, repair: 8 }; let nc = 0;
+    const R = this.vrigs, vs = E.villagers, t = this.clock, SC = 1.4, FREQ = { wood: 7, stone: 6, iron: 6, gold: 6, food: 3.6, build: 8, repair: 8 }; let nc = 0; for (const r in this.loads) this.lcnt[r] = 0;
     for (const k in R) R[k].begin();
     const lerpAng = (a, b, k) => { const dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
     for (let i = 0; i < vs.length; i++) {
@@ -374,13 +376,12 @@ export class Renderer {
       const bob = (mv ? Math.abs(Math.sin(ph)) * 0.07 : working ? Math.abs(sn) * 0.05 : 0) * SC;
       d.position.set(x, bob, z); d.scale.set(SC, SC, SC); d.rotation.set(0, v.rrot, 0); d.updateMatrix();
       this.tmpColor.setRGB(1, 1, 1); R[key].push(d.matrix, this.tmpColor, [0, sw, -sw, arm]);
-      if (carrying) {                                    // charge portée devant la poitrine : caisse colorée selon la ressource
-        d.position.set(x + Math.sin(v.rrot) * 0.7, 1.4 + bob, z + Math.cos(v.rrot) * 0.7); d.scale.set(1.05, 0.85, 1.05); d.rotation.set(0, v.rrot, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
-        this.tmpColor.setHex(RES_INFO[v.carryRes].color); this.cMesh.setColorAt(nc, this.tmpColor); nc++;
+      if (carrying && this.loads[v.carryRes]) {          // charge portée (modèle) devant la poitrine
+        const LM = this.loads[v.carryRes], k = this.lcnt[v.carryRes]++; d.position.set(x + Math.sin(v.rrot) * 0.6, 1.3 + bob, z + Math.cos(v.rrot) * 0.6); d.scale.setScalar(0.0105); d.rotation.set(0, v.rrot, 0); d.updateMatrix(); LM.setMatrixAt(k, d.matrix); nc++;
       }
     }
     for (const k in R) R[k].end();
-    this.cMesh.count = nc; this.cMesh.instanceMatrix.needsUpdate = true; if (nc) this.cMesh.instanceColor.needsUpdate = true;
+    this.endLoads();
   }
   buildUnits() {
     const box = new THREE.BoxGeometry(0.8, 1.7, 0.8); box.translate(0, 0.85, 0);
@@ -620,7 +621,9 @@ export class Renderer {
     }
     this.vv = vv; this.vMesh.visible = false; for (const r in this.vrigs) for (const m of this.vrigs[r].meshes) m.visible = false;
     this._ty = new THREE.Matrix4().makeTranslation(0, -vg.miny, 0); this._gm = new THREE.Matrix4();
+    this._back = backToolMatrix(vg.handPos); this._at = {}; for (const r in LOADS) this._at[r] = new THREE.Matrix4().makeTranslation(...LOADS[r].at);   // outil dans le dos ; place de chaque charge sur le buste
   }
+  endLoads() { for (const r in this.loads) { const m = this.loads[r]; m.count = this.lcnt[r]; m.instanceMatrix.needsUpdate = true; } }
   // améliorations du village rendues visibles : chariots (brouettes/charrettes), chemins pavés, outils (teinte des fers)
   syncVillageUpgrades() {
     const up = this.sim.eco.up;
@@ -633,8 +636,8 @@ export class Renderer {
   updateVillagersVAT(alpha) {
     this.syncVillageUpgrades();
     const E = this.sim.eco, d = this.dummy, vv = this.vv, vg = vv.vg, t = this.clock, vs = E.villagers, SC = 0.0105 * HUMAN_H / 1.99;
-    const SPEED = { walk: 1.3, carry: 1.2, idle: 0.35 }, WORK = { wood: 0.9, stone: 0.8, iron: 0.8, gold: 0.8, food: 0.55, build: 1.0, repair: 1.0 };
-    for (const k in vv.meshes) { vv.cnt[k] = 0; }
+    const SPEED = { walk: 1.3, carry: 1.2, shoulder: 1.2, idle: 0.35 }, WORK = { wood: 0.9, stone: 0.8, iron: 0.8, gold: 0.8, food: 0.55, build: 1.0, repair: 1.0 };
+    for (const k in vv.meshes) { vv.cnt[k] = 0; } for (const r in this.loads) this.lcnt[r] = 0;
     const lerpAng = (a, b, k) => { const dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
     let nc = 0;
     for (let i = 0; i < vs.length; i++) {
@@ -646,26 +649,27 @@ export class Renderer {
       else if (v.state === 'repairing') want = Math.PI;
       else if (v.state === 'gather' && v.sx !== null && v.sx !== undefined) want = Math.atan2(v.sx - v.x, v.sz - v.z);
       v.rrot = lerpAng(v.rrot ?? Math.PI, want, mv ? 0.3 : 0.15);
-      const clip = working && !mv ? 'work' : mv ? (carrying ? 'carry' : 'walk') : carrying ? 'carry' : 'idle', [c0, cn] = vg.clips[clip];
+      const LD = carrying ? LOADS[v.carryRes] : null, cclip = this.cart || !LD ? 'carry' : (vg.clips[LD.clip] ? LD.clip : 'carry');   // portage : devant (pierre, paniers, brouette) ou sur l'épaule (rondins, sac)
+      const clip = working && !mv ? 'work' : carrying ? cclip : mv ? 'walk' : 'idle', [c0, cn] = vg.clips[clip];
       const spd = clip === 'work' ? (WORK[key] || 0.9) : SPEED[clip] || 1, ph = (t * spd + i * 0.37) % 1, an = c0 + ph * cn, k = vv.cnt[key]++, im = vv.meshes[key];
       d.position.set(x, 0, z); d.scale.set(SC, SC, SC); d.rotation.set(0, v.rrot, 0); d.updateMatrix();
       im.setMatrixAt(k, d.matrix); im.anim.array[k] = an;
       const f0 = Math.floor(an), tl = vv.tools[key], ht = vv.hats[key];
-      if (tl) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.hand[f0]); tl.setMatrixAt(k, this._gm); }
+      if (tl) { this._gm.copy(d.matrix).multiply(this._ty); if (carrying) this._gm.multiply(vg.spine[f0]).multiply(this._back); else this._gm.multiply(vg.hand[f0]); tl.setMatrixAt(k, this._gm); }   // en portant : outil rangé dans le dos
       if (v.task === 'fire' && this.sim.night.light() < 0.75) { this.fx.glowNow(x + Math.sin(v.rrot) * 0.4, 2.2, z + Math.cos(v.rrot) * 0.4, 0.55 + 0.08 * Math.sin(t * 9 + i), 1, 0.55, 0.15); }   // torche de l'allumeur
       if (ht) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.head[f0]); ht.setMatrixAt(k, this._gm); }
       if (carrying) {
-        const cart = this.cart, cs = cart ? cart.load : null;
-        if (cart) {   // brouette / charrette poussée devant le porteur, chargement teinté par-dessus
+        const cart = this.cart, cs = cart ? cart.load : null, LM = this.loads[v.carryRes];
+        if (cart) {   // brouette / charrette poussée devant le porteur, chargement modélisé posé dedans
           const fx = x + Math.sin(v.rrot) * 1.1, fz = z + Math.cos(v.rrot) * 1.1; d.position.set(fx, 1.15, fz); d.scale.set(1, 1, 1); d.rotation.set(0, v.rrot, 0); d.updateMatrix(); cart.mesh.setMatrixAt(nc, d.matrix);
-          const lx = cs[0], ly = cs[1], lz = cs[2], s1 = Math.sin(v.rrot), c1 = Math.cos(v.rrot); d.position.set(fx + lx * c1 + lz * s1, 1.15 + ly, fz - lx * s1 + lz * c1); d.scale.set(cs[3] / 0.7, cs[4] / 0.7, cs[5] / 0.7);
-        } else { d.position.set(x + Math.sin(v.rrot) * 0.8, 1.5, z + Math.cos(v.rrot) * 0.8); d.scale.set(1.05, 0.85, 1.05); }
-        d.rotation.set(0, v.rrot, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
-        this.tmpColor.setHex(RES_INFO[v.carryRes].color); this.cMesh.setColorAt(nc, this.tmpColor); nc++;
+          if (LM) { const lx = cs[0], ly = cs[1], lz = cs[2], s1 = Math.sin(v.rrot), c1 = Math.cos(v.rrot), kk = (LD.axis === 2 ? cs[5] : cs[3]) / (LD.span * SC) * 0.95 * SC;
+            d.position.set(fx + lx * c1 + lz * s1, 1.15 + ly + cs[4] * 0.25, fz - lx * s1 + lz * c1); d.scale.setScalar(kk); d.updateMatrix(); LM.setMatrixAt(this.lcnt[v.carryRes]++, d.matrix); }
+        } else if (LM) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.spine[f0]).multiply(this._at[v.carryRes]); LM.setMatrixAt(this.lcnt[v.carryRes]++, this._gm); }
+        nc++;
       }
     }
     for (const k in vv.meshes) { const n = vv.cnt[k], im = vv.meshes[k]; im.count = n; im.instanceMatrix.needsUpdate = true; im.anim.needsUpdate = true; for (const g of [vv.tools[k], vv.hats[k]]) if (g) { g.count = n; g.instanceMatrix.needsUpdate = true; } }
-    this.cMesh.count = nc; this.cMesh.instanceMatrix.needsUpdate = true; if (nc) this.cMesh.instanceColor.needsUpdate = true;
+    this.cMesh.count = 0; this.endLoads();
     if (this.cart) { this.cart.mesh.count = nc; this.cart.mesh.instanceMatrix.needsUpdate = true; }
   }
   renderZombies(alpha) {

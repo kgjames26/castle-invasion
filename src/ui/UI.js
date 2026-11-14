@@ -110,7 +110,7 @@ export class UI {
   patchCard(p) {
     const sim = this.sim, F = sim.frontier, E = sim.eco, can = F.canClear(p);
     let h = `<div class="ptitle">🌲 Forêt vierge<span class="lvl">${p.state === 'clearing' ? 'défrichage ' + Math.round(100 * (1 - p.wood / FRONTIER.wood)) + ' %' : p.state === 'open' ? 'défrichée' : 'intacte'}</span></div>`;
-    h += `<div class="hint small">🪵 ${Math.round(p.wood)} bois à abattre. Le sol défriché devient constructible ; il cache peut-être un gisement de pierre, de fer ou d'or…</div>`;
+    h += `<div class="hint small">${RES_INFO.wood.ico} ${Math.round(p.wood)} bois à abattre. Le sol défriché devient constructible ; il cache peut-être un gisement de pierre, de fer ou d'or…</div>`;
     if (p.state === 'clearing') {
       h += `<div class="hpline"><div class="bar big"><i style="width:${100 * (1 - p.wood / FRONTIER.wood)}%"></i></div><span>🪓 ${E.assign.clear} défricheur${E.assign.clear > 1 ? 's' : ''}</span></div>`;
       if (!E.assign.clear) h += '<div class="warn">Aucun défricheur : ajoute-en ci-dessous (ou dans 👥 Villageois).</div>';
@@ -255,7 +255,8 @@ export class UI {
     else if (e.type === 'golem') { this.toast(`🗿 Un golem secoue la muraille : ${e.fell} archer${e.fell > 1 ? 's' : ''} tombé${e.fell > 1 ? 's' : ''}${e.dead ? ` (${e.dead} mort${e.dead > 1 ? 's' : ''})` : ''}`, 'danger'); this.buzz(40); }
     else if (e.type === 'oreFound') this.toast(`⛏ Défrichage : un gisement de ${RES_INFO[e.res].name.toLowerCase()} découvert !`, 'ok');
     else if (e.type === 'cleared') this.toast('🌲 Parcelle défrichée : terrain constructible', 'info');
-    else if (e.type === 'fireOut') { if (e.zone !== 'village' && (!this.lastFireOut || performance.now() - this.lastFireOut > 4000)) { this.lastFireOut = performance.now(); this.toast(e.zone === 'field' ? '🔥 Les zombies ont éteint un brasero du champ de bataille !' : '🔥 Un feu s\'est éteint', 'danger'); } }
+    else if (e.type === 'fireLit' && e.zone === 'plain') { if (!this.plainLitShown) { this.plainLitShown = true; this.toast('🔥 La nuit tombe : l\'équipe des feux allume les bûchers de la plaine', 'ok'); } }
+    else if (e.type === 'fireOut') { if (e.zone !== 'village' && (!this.lastFireOut || performance.now() - this.lastFireOut > 4000)) { this.lastFireOut = performance.now(); this.toast(e.zone === 'plain' ? '🔥 Les zombies ont éteint un feu de la plaine !' : '🔥 Un feu s\'est éteint', 'danger'); } }
     else if (e.type === 'roadDone') this.toast('🛤 Route terminée', 'ok');
     else if (e.type === 'autoRepair') this.toast(`🔧 Réparation automatique : ${e.n} villageois empruntés`, 'info');
     else if (e.type === 'autoRepairDone') this.toast(`🔧 Muraille réparée — ${e.n} villageois retournent à leur tâche`, 'ok');
@@ -266,6 +267,7 @@ export class UI {
   refresh(force) {
     const sim = this.sim, w = sim.wall, army = sim.army, E = sim.eco;
     for (const r of RES) { const e = $('#r-' + r); e.querySelector('b').textContent = fmt(E.res[r]); e.classList.toggle('full', E.res[r] >= E.cap(r) - 0.5); e.classList.toggle('low', r === 'food' && E.famine); }
+    if (this.plainLitShown && this.sim.night.light() > 0.97) this.plainLitShown = false;
     const pop = $('#r-pop'); pop.querySelector('b').textContent = `${E.population()}/${E.popCap()}`; pop.classList.toggle('max', E.popRoom() <= 0);
     $('#wave-title').textContent = `Vague ${sim.wave}` + (sim.phase === 'assault' ? ` · ${sim.zombies.n + (sim.spawn ? sim.spawn.left : 0)} 🧟` : '');
     const Lt = sim.night.light(), dn = Lt > 0.8 ? '☀' : Lt > 0.45 ? (sim.night.t < 0.5 || sim.night.t > 0.9 ? '🌅' : '🌇') : '🌙';
@@ -410,7 +412,7 @@ export class UI {
     if (s.type === 'workshop') h += this.btn('🛠 Armes de siège', '', 'sheet:army:siege', false, 'act sec');
     if (s.type === 'forge') h += this.btn('🔨 Améliorations', '', 'sheet:army:forge', false, 'act sec');
     if (s.type === 'wizard') h += this.mageHtml(true);
-    if (s.type === 'publicworks' && s.level) { const R = this.sim.roads, q = R.quality(this.sim), pend = R.list.filter(r => r.built < 1).length; h += `<div class="rank">🛤 Routes : <b>${ROADWORKS.names[q]}</b> — villageois +${Math.round(ROADWORKS.speed[q] * 100)} % de vitesse sur les routes${q < 3 ? ` · niveau ${s.level + 1} : ${ROADWORKS.names[q + 1]}` : ''}${pend ? ` · ${pend} chantier${pend > 1 ? 's' : ''} de route` : ''}<small>Le réseau relie seul chaque nouveau bâtiment ; trace en plus tes propres routes (bois et pierre au mètre).</small></div>` + this.btn('🛤 Tracer une route', `${ROADWORKS.costPerM.wood} 🪵 + ${ROADWORKS.costPerM.stone} 🪨 par mètre`, 'road', false, 'act'); }
+    if (s.type === 'publicworks' && s.level) { const R = this.sim.roads, q = R.quality(this.sim), pend = R.list.filter(r => r.built < 1).length; h += `<div class="rank">🛤 Routes : <b>${ROADWORKS.names[q]}</b> — villageois +${Math.round(ROADWORKS.speed[q] * 100)} % de vitesse sur les routes${q < 3 ? ` · niveau ${s.level + 1} : ${ROADWORKS.names[q + 1]}` : ''}${pend ? ` · ${pend} chantier${pend > 1 ? 's' : ''} de route` : ''}<small>Le réseau relie seul chaque nouveau bâtiment ; trace en plus tes propres routes (bois et pierre au mètre).</small></div>` + this.btn('🛤 Tracer une route', `${ROADWORKS.costPerM.wood} ${RES_INFO.wood.ico} + ${ROADWORKS.costPerM.stone} ${RES_INFO.stone.ico} par mètre`, 'road', false, 'act'); }
     if (s.type === 'infirmary' && s.level) h += `<div class="rank">🏥 Soins : <b>${(INFIRMARY.heal[s.level] * 100).toFixed(1)} %</b> des PV par seconde aux escouades en garnison hors combat · <b>${INFIRMARY.save[s.level] * 100} %</b> des combattants tombés sont sauvés (retour en réserve)${this.sim.army.saved ? ` · ${this.sim.army.saved} sauvés` : ''}</div>`;
     if (s.type === 'university' && s.level) h += this.btn('🎓 Améliorations des villageois', '', 'sheet:tech', false, 'act sec');
     if (s.type === 'forge' && s.level) h += `<div class="hint small">Plafond attaque/défense : ${this.sim.eco.smithMax()}</div>`;
@@ -607,7 +609,8 @@ export class UI {
     {   // défricheurs et allumeurs : tâches sans bâtiment
       const nc = E.assign.clear, act = sim.frontier.active().length, nf = E.assign.fire, lit = sim.night.fires.filter(f => f.lit).length;
       h += `<div class="row step task"><span class="lab">🪓 Défricheurs<small class="sub">${act ? `${act} parcelle${act > 1 ? 's' : ''} en cours · bois rapporté` : 'touche une forêt sur les côtés du village pour la défricher'}</small></span>${this.btn('−', '', 'as:clear:-1', nc <= 0, 'sq')}<b class="val">${nc}</b>${this.btn('+', idle <= 0 && E.donorFor('clear') ? '↺' : '', 'as:clear:1', (idle <= 0 && !E.donorFor('clear')) || nc >= TASKS.clear.slots, 'sq')}</div>`;
-      h += `<div class="row step task"><span class="lab">🔥 Allumeurs de feux<small class="sub">${lit}/${sim.night.fires.length} braseros allumés · ${FIRE_KEEP.wood} bois par plein · ${sim.night.isNight() ? 'nuit' : sim.night.nightSoon() ? 'la nuit approche' : 'de jour : ils se reposent'}</small></span>${this.btn('−', '', 'as:fire:-1', nf <= 0, 'sq')}<b class="val">${nf}</b>${this.btn('+', idle <= 0 && E.donorFor('fire') ? '↺' : '', 'as:fire:1', (idle <= 0 && !E.donorFor('fire')) || nf >= TASKS.fire.slots, 'sq')}</div>`;
+      const P = sim.night.piles(), N = sim.night, fstate = N.isNight() ? 'nuit : feux allumés et ravitaillés' : N.nightSoon() ? 'la nuit approche : on allume' : N.building(sim) ? 'entre deux vagues : bûchers en préparation' : 'pendant l\'assaut : à l\'abri';
+      h += `<div class="row step task"><span class="lab">🔥 Équipe des feux<small class="sub">Plaine : ${P.ready} bûcher${P.ready > 1 ? 's' : ''} prêt${P.ready > 1 ? 's' : ''}/${P.n}${P.lit ? ` · ${P.lit} en feu` : ''} · braseros ${lit - P.lit}/${N.fires.length - P.n} · ${fstate}${E.up.firecraft ? ` · savoir-faire niv. ${E.up.firecraft}` : ''}</small></span>${this.btn('−', '', 'as:fire:-1', nf <= 0, 'sq')}<b class="val">${nf}</b>${this.btn('+', idle <= 0 && E.donorFor('fire') ? '↺' : '', 'as:fire:1', (idle <= 0 && !E.donorFor('fire')) || nf >= TASKS.fire.slots, 'sq')}</div>`;
     }
     const dmg = this.damagedSegs(), n = E.assign.repair;
     h += `<div class="row step task"><span class="lab">🔧 Réparation muraille<small class="sub">${dmg ? dmg + ' tronçon(s) à réparer' : 'muraille intacte'} · pierre${sim.autoRepair ? ' · auto ✅' : ''}</small></span>${this.btn('−', '', 'as:repair:-1', n <= 0, 'sq')}<b class="val">${n}</b>${this.btn('+', idle <= 0 && E.donorFor('repair') ? '↺' : '', 'as:repair:1', (idle <= 0 && !E.donorFor('repair')) || n >= TASKS.repair.slots, 'sq')}</div>`;
@@ -617,7 +620,7 @@ export class UI {
   damagedSegs() { const w = this.sim.wall; let n = 0; for (let i = 0; i < 40; i++) if (w.hp[i] < w.segMax(i) - 0.5) n++; return n; }
   techHtml() {
     const E = this.sim.eco; let h = '<div class="tgrp">Où améliorer quoi ?</div><div class="where">' + [
-      ['forge', '🔨 Forge', 'attaque et défense de chaque type d\'unité (indépendantes du rang)'], ['university', '🎓 Université', 'outils, chariots, chemins pavés, charrue, maçonnerie, apprentissage'], ['infirmary', '🏥 Infirmerie', 'soigne les escouades au repos, sauve des blessés'], ['publicworks', '🛤 Travaux publics', 'trace des routes ; niveau = qualité de toutes les routes (terre battue, gravier, pavés)'], ['wizard', '🔮 Maison du sorcier', 'invoque le magicien ; son niveau = puissance du magicien ; Arcanes'],
+      ['forge', '🔨 Forge', 'attaque et défense de chaque type d\'unité (indépendantes du rang)'], ['university', '🎓 Université', 'outils, chariots, chemins pavés, charrue, maçonnerie, apprentissage, savoir-faire des allumeurs'], ['infirmary', '🏥 Infirmerie', 'soigne les escouades au repos, sauve des blessés'], ['publicworks', '🛤 Travaux publics', 'trace des routes ; niveau = qualité de toutes les routes (terre battue, gravier, pavés)'], ['wizard', '🔮 Maison du sorcier', 'invoque le magicien ; son niveau = puissance du magicien ; Arcanes'],
       ['barracks', '🪖 Caserne · 🐎 Écurie · 🎯 Champ de tir', 'leur niveau = rang des unités (Recrue → Légende)'], ['workshop', '🛠 Atelier de siège', 'baliste, catapulte, trébuchet ; aspect des machines'],
       ['sawmill', '🪚 Scierie · ⛏ Carrière · ⛓ Mine · 🌾 Ferme', 'niveau = places et rendement ; de nouvelles installations apparaissent'],
     ].map(([b, n, d]) => `<button class="wrow" data-a="goto:${b}"><b>${n}</b><small>${d}</small></button>`).join('') + '<div class="wrow"><b>🧱 Muraille</b><small>touche un secteur pour le renforcer · 🗼 touche une tour pour l\'améliorer</small></div></div>';
