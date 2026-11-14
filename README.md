@@ -43,3 +43,13 @@ Ancien jeu : tag `legacy-v2-backup`, branche `legacy/v2`.
 
 ## Crédits
 Three.js (MIT, `lib/THREE_LICENSE`). Packs assetfactory archivés dans `assets/archive/environment/` (Sketchfab Standard).
+
+## Phase 4 — Armée, escouades, formations, sorties
+- **Population partagée** : villageois + tous les militaires (file d'entraînement comprise) sont plafonnés par les **maisons** (base 20, +8 par maison, départ 4, max 60). Construction dans Village → Bâtiments.
+- **Onglet 🛡 Armée** : Escouades (formations, posture, garnison par secteur, sortie, compléter, dissoudre) · Entraîner (files Caserne / Écurie / Champ de tir, niveaux = plus vite et plus long) · Forge (armes, armures, archerie).
+- **Escouades** : une seule entité à points de vie communs, membres dessinés selon la formation (ligne, phalange, coin, carré, colonne) — chaque formation a des effets chiffrés (`FORMATIONS` dans `content/medieval.js`).
+- **Sorties** : « Sortir sur le terrain » puis toucher la zone orange ; l'escouade franchit la muraille **par la porte**, combat les zombies (posture Charge = poursuite + élan), et peut rentrer en garnison. Champ de bataille agrandi : z 90 → 142 (dégagé de forêts/rochers).
+- **Garnison** : les escouades défendent l'intérieur et interceptent les zombies entrés par une brèche (rayon `SQUAD.intercept`).
+- **Sauvegarde v3** avec migration depuis v2 (soldats → escouades de 10 max).
+- Tests : `npm test` (bot sur plusieurs vagues + sauvegarde) et `node tests/sortie.mjs` (sortie + comparaison des formations).
+- Reporté : ingénieurs / armes de siège, villageois attaquables, équilibrage fin (Phase 5).

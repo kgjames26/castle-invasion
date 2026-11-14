@@ -50,7 +50,7 @@ button:disabled { opacity:.4; cursor:default; }
 #nav button { flex:1; min-height:54px; background:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; font-size:20px; color:var(--dim); border-top:3px solid transparent; }
 #nav button span { font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
 #nav button.on { color:var(--gold); border-top-color:var(--gold); background:#1a150d; } #nav button.alert { color:var(--bad); animation:pulse .7s infinite alternate; }
-body[data-tab=village] #sectors { display:none; } body[data-tab=village] #panel { max-height:50dvh; }
+body[data-tab=village] #sectors, body[data-tab=army] #sectors { display:none; } body[data-tab=village] #panel { max-height:50dvh; }
 /* village */
 .subtabs { display:flex; gap:6px; } .subtabs button { flex:1; min-height:40px; border-radius:9px; background:#2a2316; border:1px solid var(--line); font-weight:700; font-size:13px; } .subtabs button.on { background:#4a3a1a; border-color:var(--gold); color:var(--gold); }
 .pop { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:15px; } .act.slim { flex:none; min-height:44px; padding:4px 12px; }
@@ -65,3 +65,12 @@ body[data-tab=village] #sectors { display:none; } body[data-tab=village] #panel 
   #top { grid-template-columns:auto 1fr auto auto; grid-template-areas:'res wave castle ctl'; } .res { gap:10px; }
 }
 .mini { white-space:nowrap; } body[data-tab=village] #panel { max-height:44dvh; }
+
+/* armée */
+body[data-tab=army] #panel { max-height:46dvh; }
+.sqlist { display:flex; gap:6px; flex-wrap:wrap; } .sqlist .chipb { min-height:40px; } .chipb.on { background:#4a3a18; border-color:var(--gold); color:var(--gold); }
+.fgrid { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; } .fbtn { min-height:52px; border-radius:10px; background:#2a2316; border:1px solid var(--line); font-size:11px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; } .fbtn b { font-size:20px; } .fbtn.on { border-color:var(--gold); background:#4a3a18; color:var(--gold); }
+.act.warnb { background:#4a1d17; border-color:var(--bad); }
+.card.col { flex-direction:column; align-items:stretch; } .row.wrapr { flex-wrap:wrap; }
+.queue { display:flex; gap:5px; align-items:center; flex-wrap:wrap; } .qi { position:relative; width:34px; height:34px; border-radius:8px; background:#2a2316; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; overflow:hidden; } .qi i { position:absolute; left:0; bottom:0; height:4px; background:var(--ok); }
+@media (min-aspect-ratio: 6/5) and (min-width: 700px) { body[data-tab=army] #panel { max-height:none; } }

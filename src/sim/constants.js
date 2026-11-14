@@ -10,8 +10,8 @@ export const SECTOR_SHORT = ['AG', 'CG', 'C', 'CD', 'AD'];
 export const CASTLE = { x: 100, z: 298, r: 15, hp: 6000 };
 export const TICK = 1 / 20;                                      // simulation à 20 Hz
 export const MAX_Z = 4000;                                       // capacité d'agents zombies simulés
-export const ARCHER_SLOTS = 12, SOLDIER_SLOTS = 10;              // par secteur
-export const ARCHER_Z = 146, SOLDIER_Z = 155;
+export const ARCHER_SLOTS = 40;                                 // archers par secteur (2 rangées sur le chemin de ronde)
+export const ARCHER_Z = 146, GARRISON_Z = 156, GATE_X = 100;
 export const STORE_CAP = 600;
 export const sectorOfX = x => Math.max(0, Math.min(SECTORS - 1, (x / SECTOR_W) | 0));
 export const segOfX = x => Math.max(0, Math.min(SEGS - 1, (x / SEG_W) | 0));

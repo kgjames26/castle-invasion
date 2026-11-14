@@ -2,6 +2,7 @@
 import { GW, GD, CELL, W, WALL_Z0 } from './constants.js';
 import { makeRng } from './rng.js';
 
+export const BATTLEFIELD_Z = 90;
 export const T = { GRASS: 0, FOREST: 1, HILL: 2, ROCK: 3, ROAD: 4 };
 export const COST = new Float32Array([1, 2, 1.5, Infinity, 0.7]);
 
@@ -29,7 +30,8 @@ export function generateTerrain(seed = 1337) {
     const x = 10 + rng() * 180, z = 45 + rng() * 73, r = 3 + rng() * 4.5;
     rocks.push({ x, z, r }); blob(x, z, r, T.ROCK);
   }
-  // glacis dégagé devant la muraille : pas de rocher dans les 24 derniers mètres
-  for (let gz = ((WALL_Z0 - 24) / CELL) | 0; gz < GD; gz++) for (let gx = 0; gx < GW; gx++) if (type[gz * GW + gx] === T.ROCK) type[gz * GW + gx] = T.GRASS;
+  // CHAMP DE BATAILLE agrandi : de z = 90 à la muraille (52 m de profondeur × 200 m de large), sans rochers, forêts ni collines.
+  // Il reste les chemins (déplacements plus rapides). C'est là que les escouades peuvent faire des sorties.
+  for (let gz = (BATTLEFIELD_Z / CELL) | 0; gz < GD; gz++) for (let gx = 0; gx < GW; gx++) { const t = type[gz * GW + gx]; if (t === T.ROCK || t === T.FOREST || t === T.HILL) type[gz * GW + gx] = T.GRASS; }
   return { type, rocks };
 }

@@ -32,11 +32,8 @@ export class Simulation {
     this.army = new Army();
     this.eco.reset();
     this.army.reserve = { ...START.reserve };
-    // affectation initiale gratuite (hors réserve)
-    for (let s = 0; s < SECTORS; s++) {
-      this.army.reserve.archer += START.perSector.archer; this.army.reserve.soldier += START.perSector.soldier;
-      this.army.assign(s, 'archer', START.perSector.archer); this.army.assign(s, 'soldier', START.perSector.soldier);
-    }
+    for (let s = 0; s < SECTORS; s++) { this.army.reserve.archer += START.perSector.archer; this.army.assignArchers(s, START.perSector.archer); }
+    for (const o of START.squads) { this.army.reserve[o.type] += o.n; this.army.formSquad(o.type, o.n, o.sector); }
     this.castleHp = CASTLE.hp; this.over = false; this.time = 0;
     this.wave = 1; this.phase = 'prep'; this.timer = TIMING.firstPrep; this.targets = [];
     this.spawn = null; this.assaultTime = 0; this.stats = { breaches: 0 };
@@ -46,7 +43,19 @@ export class Simulation {
   // ——— commandes (appelées par l'interface) ———
   assign(s, type, delta) { return this.army.assign(s, type, delta); }
   get res() { return this.eco.res; }
-  recruit(type) { if (!this.eco.pay(UNITS[type].cost)) return false; this.army.reserve[type]++; return true; }
+  // ——— armée ———
+  train(type, n = 1) { return this.army.enqueue(this, type, n); }
+  cancelTrain(b) { return this.army.cancel(this, b); }
+  assignArchers(s, delta) { return this.army.assignArchers(s, delta); }
+  squad(id) { return this.army.squads.find(q => q.id === id) || null; }
+  formSquad(type, size, sector) { return this.army.formSquad(type, size, sector); }
+  squadForm(id, f) { const q = this.squad(id); if (q) this.army.setForm(q, f); }
+  squadStance(id, st) { const q = this.squad(id); if (q) this.army.setStance(q, st); }
+  squadGarrison(id, s) { const q = this.squad(id); if (q) this.army.garrison(q, s); }
+  squadSortie(id, x, z) { const q = this.squad(id); if (q) this.army.sortie(q, x, z); }
+  squadReinforce(id) { const q = this.squad(id); return q ? this.army.reinforce(q) : 0; }
+  squadDisband(id) { const q = this.squad(id); if (q) this.army.disband(q); }
+  buildHouse() { return this.eco.buildHouse(); }
   upgrade(s) { const c = this.wall.upgradeCost(s); if (!c || !this.eco.pay(c)) return false; return this.wall.upgrade(s); }
   assignVillagers(task, delta) { return this.eco.setAssign(task, delta); }
   recruitVillager() { return this.eco.recruitVillager(); }

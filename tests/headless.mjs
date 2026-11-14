@@ -15,13 +15,19 @@ function bot() {
   const idle = () => E.idleCount();
   if (E.res.food < 120 || E.famine) E.setAssign('food', 1);
   if (idle() > 0) { for (const t of ['food', 'wood', 'stone', 'iron', 'gold']) if (idle() > 0) E.setAssign(t, 1); }
-  for (const b of ['mine', 'mill', 'warehouse', 'granary', 'houses', 'sawmill', 'quarry', 'farm']) E.upgradeBuilding(b);
+  for (const b of ['mine', 'mill', 'warehouse', 'granary', 'sawmill', 'quarry', 'farm']) E.upgradeBuilding(b);
   for (const u of ['tools', 'carts', 'boots', 'plow', 'masonry']) E.buyUpgrade(u);
   if (E.assign.repair < 2 && idle() > 0) E.setAssign('repair', 1);
-  // armée
-  for (let k = 0; k < 4; k++) sim.recruit(sim.rng() < 0.7 ? 'archer' : 'soldier');
+  // maisons (population partagée), puis armée : entraînement, escouades, archers
+  for (let k = 0; k < 3; k++) sim.buildHouse();
+  for (const [t, n] of [['archer', 3], ['soldier', 3], ['heavy', 1]]) sim.train(t, n);
+  const A = sim.army;
+  for (const b of ['barracks', 'range', 'forge']) E.upgradeBuilding(b);
+  for (const u of ['weapons', 'armor', 'archery']) E.buyUpgrade(u);
+  for (const t of ['soldier', 'heavy']) { const sec = Math.floor(sim.rng() * 5); if (A.reserve[t] >= 6 && A.squads.length < 12) sim.formSquad(t, Math.min(A.reserve[t], 10), sec); }
+  for (const q of A.squads) if (q.n < 10) sim.squadReinforce(q.id);
   const order = sim.phase === 'assault' || sim.phase === 'alert' ? sim.targets : [0, 1, 2, 3, 4];
-  for (const s of order) { sim.assign(s, 'archer', 12); sim.assign(s, 'soldier', 10); }
+  for (const s of order) sim.assignArchers(s, 4);
   for (let s = 0; s < 5; s++) sim.upgrade(s);
 }
 while (!sim.over && sim.wave <= maxWaves) {
@@ -37,8 +43,9 @@ while (!sim.over && sim.wave <= maxWaves) {
 const ms = performance.now() - t0;
 console.log(log.join('\n'));
 console.log(`fin: vague ${sim.wave}, ${sim.over ? 'DÉFAITE' : 'survie'}, ${ticks} ticks en ${ms.toFixed(0)} ms (${(ms / ticks).toFixed(3)} ms/tick), max zombies ${maxZ}`);
+console.log(`armée: escouades=${sim.army.squads.length} (${sim.army.squads.reduce((t,q)=>t+q.n,0)} soldats) archers=${sim.army.archers.reduce((t,a)=>t+a.n,0)} pop=${E.population()}/${E.popCap()}`);
 const snap = JSON.parse(JSON.stringify(serialize(sim))), sim2 = new Simulation(); restore(sim2, snap);
 const ok = sim2.wave === sim.wave && sim2.zombies.n === sim.zombies.n && Math.abs(sim2.castleHp - sim.castleHp) < 1
-  && sim2.eco.villagers.length === E.villagers.length && Math.abs(sim2.eco.res.wood - E.res.wood) < 1 && sim2.eco.level.mine === E.level.mine;
+  && sim2.army.squads.length === sim.army.squads.length && sim2.eco.population() === E.population() && sim2.eco.villagers.length === E.villagers.length && Math.abs(sim2.eco.res.wood - E.res.wood) < 1 && sim2.eco.level.mine === E.level.mine;
 console.log('sauvegarde/restauration:', ok ? 'OK' : 'ÉCHEC');
 process.exit(ok ? 0 : 1);

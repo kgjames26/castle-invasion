@@ -1,9 +1,20 @@
 // Sauvegarde versionnée. Format : { version, savedAt, state }. Les migrations s'ajoutent dans MIGRATIONS.
-import { SECTORS } from './constants.js';
-export const SAVE_VERSION = 2;
+
+export const SAVE_VERSION = 3;
 const KEY = 'castle-invasion.v3.save';
 // MIGRATIONS[n] : état de la version n → version n+1
 const MIGRATIONS = {
+  // v2 (soldats individuels, un seul bâtiment « maisons ») → v3 (escouades, population partagée, files d'entraînement)
+  2: st => {
+    const out = { ...st }, a = st.army, per = {};
+    for (const u of a.soldiers || []) (per[u.s] ||= []).push(u);
+    const squads = []; let id = 1;
+    for (const s in per) for (let i = 0; i < per[s].length; i += 10) {
+      const grp = per[s].slice(i, i + 10); squads.push({ id: id++, type: 'soldier', n: grp.length, hp: grp.reduce((t, u) => t + u.hp, 0), form: 'line', mode: 'garrison', sector: +s, x: 100, z: 156, tx: 0, tz: 0, stance: 'hold' });
+    }
+    out.army = { reserve: { archer: a.reserve.archer, soldier: a.reserve.soldier, heavy: 0, cavalry: 0 }, archers: a.archers, nextId: id, squads, queues: {} };
+    return out;
+  },
   // v1 (Phase 2 : or + pierre seulement) → v2 (économie à 5 ressources, villageois)
   1: st => {
     const out = { ...st }; delete out.res;
@@ -21,11 +32,7 @@ export function serialize(sim) {
     eco: sim.eco.serialize(), castleHp: sim.castleHp, kills: Z.kills, stats: { ...sim.stats },
     spawn: sim.spawn ? { ...sim.spawn, counts: [...sim.spawn.counts] } : null, assaultTime: sim.assaultTime,
     wall: { hp: Array.from(sim.wall.hp), level: Array.from(sim.wall.level) },
-    army: {
-      reserve: { ...sim.army.reserve },
-      archers: sim.army.archers.map(a => a.n),
-      soldiers: sim.army.soldiers.map(u => ({ s: u.s, hp: Math.round(u.hp) })),
-    },
+    army: sim.army.serialize(),
     zombies: zs,
   };
 }
@@ -37,10 +44,7 @@ export function restore(sim, st) {
   sim.wall.hp.set(st.wall.hp); sim.wall.level.set(st.wall.level);
   const Z = sim.zombies; Z.clear(); Z.kills = st.kills;
   for (const [x, z, hp, t, s] of st.zombies) { if (Z.spawn(t, x, z, s, sim.rng)) Z.hp[Z.n - 1] = hp; }
-  sim.army.reserve = { ...st.army.reserve };
-  for (let s = 0; s < SECTORS; s++) { sim.army.archers[s].n = st.army.archers[s]; sim.army.archers[s].cd.fill(0.3); }
-  sim.army.soldiers = st.army.soldiers.map(u => ({ s: u.s, hp: u.hp, x: 0, z: 0, px: 0, pz: 0, postX: 0, postZ: 0, cd: 0, fresh: true }));
-  sim.army.layoutPosts();
+  sim.army.restore(st.army);
   sim.flow.rebuildAll();
 }
 export function save(sim, storage = globalThis.localStorage) {

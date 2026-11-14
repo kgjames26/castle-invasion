@@ -1,7 +1,7 @@
 // Hordes : agents individuels en tableaux typés (SoA). Dans ce prototype tous les zombies sont simulés ;
 // l'architecture prévoit des cohortes agrégées au-delà (voir conception §6).
-import { MAX_Z, W, WALL_Z1, WALL_STAND_Z, GW, CELL, CASTLE, SECTORS, segOfX } from './constants.js';
-import { ZOMBIES } from '../content/medieval.js';
+import { MAX_Z, W, WALL_Z1, WALL_Z0, WALL_STAND_Z, GW, CELL, CASTLE, SECTORS, segOfX } from './constants.js';
+import { ZOMBIES, SQUAD } from '../content/medieval.js';
 import { COST, T } from './terrain.js';
 
 const INSIDE_Z = WALL_Z1 + 0.8;
@@ -43,7 +43,7 @@ export class ZombieSwarm {
     const X = this.x, Z = this.z, n = this.n;
     hash.rebuild(X, Z, n);
     this.near.fill(0); this.attacking.fill(0);
-    const soldiers = army.soldiers;
+    const squads = army.squads, outside = army.outside;
     for (let i = 0; i < n; i++) {
       this.px[i] = X[i]; this.pz[i] = Z[i];
       if (this.hp[i] <= 0) continue;
@@ -55,23 +55,36 @@ export class ZombieSwarm {
 
       if (z > INSIDE_Z) {                                   // ——— dans le royaume
         this.state[i] = 2;
-        // cible : soldat proche, sinon château
+        // cible : escouade proche (dans le royaume), sinon château
         let tx = CASTLE.x, tz = CASTLE.z - CASTLE.r * 0.6, ts = null, bd = 100;
-        for (let k = 0; k < soldiers.length; k++) {
-          const so = soldiers[k]; if (so.hp <= 0) continue;
+        for (let k = 0; k < squads.length; k++) {
+          const so = squads[k]; if (so.hp <= 0 || so.z < WALL_Z1) continue;
           const d = (so.x - x) * (so.x - x) + (so.z - z) * (so.z - z);
           if (d < bd) { bd = d; ts = so; }
         }
         if (ts) { tx = ts.x; tz = ts.z; }
         const vx = tx - x, vz = tz - z, d = Math.hypot(vx, vz) || 1;
-        if (ts && d < 1.3) { army.hurt(ts, t.unit * dt); continue; }
+        if (ts && d < ts.rad + 0.8) { if (ts.attackers < ts.cap) { ts.attackers++; army.hurtSquad(sim, ts, t.unit * dt); } continue; }
         if (!ts && d < CASTLE.r * 0.6 + 1.2) { sim.hurtCastle(t.wall * 0.5 * dt); continue; }
         X[i] = x + vx / d * speed * dt; Z[i] = z + vz / d * speed * dt;
         continue;
       }
-      // ——— à l'extérieur : champ de flux + séparation
-      let dx = 0, dz = 1;
-      if (flow.sample(s, x, z)) { dx = flow.sx; dz = flow.sz; }
+      // ——— à l'extérieur : escouade en sortie à proximité ? sinon champ de flux ; puis séparation
+      let dx = 0, dz = 1, engaged = null;
+      if (outside.length) {
+        let bd = Infinity;
+        for (let k = 0; k < outside.length; k++) {
+          const so = outside[k]; if (so.hp <= 0) continue;
+          const d = Math.hypot(so.x - x, so.z - z) - so.rad; if (d < SQUAD.aggro && d < bd) { bd = d; engaged = so; }
+        }
+      }
+      if (engaged) {
+        const ex = engaged.x - x, ez = engaged.z - z, ed = Math.hypot(ex, ez) || 1;
+        if (ed < engaged.rad + 0.8) {                       // au contact : frappe si une place est libre sur le front de l'escouade
+          if (engaged.attackers < engaged.cap) { engaged.attackers++; army.hurtSquad(sim, engaged, t.unit * dt); this.state[i] = 1; if (Z[i] > 95) this.near[s]++; continue; }
+          dx = 0; dz = 0;
+        } else { dx = ex / ed; dz = ez / ed; }
+      } else if (flow.sample(s, x, z)) { dx = flow.sx; dz = flow.sz; }
       let sx = 0, sz = 0;
       const m = hash.query(x, z, 1.1, X, Z, tmp);
       for (let k = 0, c = 0; k < m && c < 6; k++) {
