@@ -2,7 +2,8 @@
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
 import { SECTORS, SECTOR_NAMES, SECTOR_SHORT, ARCHER_SLOTS, CASTLE } from '../sim/constants.js';
-import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec } from '../content/medieval.js';
+import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, DIFFICULTY } from '../content/medieval.js';
+import { MAGE_TIERS } from '../render/Heroes.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -10,10 +11,12 @@ const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls)
 const fmt = n => Math.floor(n).toString();
 const TASK_ORDER = ['wood', 'stone', 'iron', 'gold', 'food'];
 const TB = { sawmill: ['wood'], quarry: ['stone'], mine: ['iron', 'gold'], farm: ['food'] };       // bâtiment → tâches de récolte
-const GROUPS = [['Économie', ['sawmill', 'quarry', 'mine', 'farm', 'mill', 'granary', 'warehouse', 'house']], ['Armée', ['barracks', 'range', 'stable', 'workshop', 'forge']], ['Défense', ['tower']]];
+const GROUPS = [['Économie', ['sawmill', 'quarry', 'mine', 'farm', 'mill', 'granary', 'warehouse', 'house']], ['Armée', ['barracks', 'range', 'stable', 'workshop', 'forge', 'wizard']], ['Défense', ['tower']]];
 import { VERSION } from '../version.js';
 // Réglages de l'interface : tutorial = astuces de premier lancement (aussi coupé par ?tuto=0) ; haptics = vibrations sur mobile.
 export const UI_FLAGS = { tutorial: !/[?&]tuto=0\b/.test(location.search), haptics: true };
+const PREF_KEY = 'castle-prefs';
+const loadPrefs = () => { try { return JSON.parse(localStorage.getItem(PREF_KEY)) || {}; } catch { return {}; } };
 const QUALITY_NAMES = { low: 'Bas', medium: 'Moyen', high: 'Élevé' };
 const SHEETS = { build: '⚒ Bâtir', army: '🛡 Armée', folk: '👥 Villageois', tech: '📜 Savoir' }, MENU_TITLE = '⚙ Paramètres';
 const snap = v => Math.round(v * 2) / 2;
@@ -51,8 +54,15 @@ export class UI {
     // glisser le fantôme de construction avec le doigt (au lieu de déplacer la caméra)
     this.cam.ghostHit = (x, z) => this.mode !== 'idle' && this.place && Math.abs(x - this.place.x) < this.halfW() + 4 && Math.abs(z - this.place.z) < this.halfD() + 4;
     this.cam.ghostMove = (x, z) => this.moveGhost(x, z);
+    this.prefs = { difficulty: 'normal', autoRepair: true, shake: true, fx: true, ...loadPrefs() }; this.applyPrefs(true);
     this.refresh(true);
     this.startTutorial();
+  }
+  // réglages persistants (difficulté, réparation auto, secousses, effets) : appliqués à la partie et au rendu
+  applyPrefs(init) {
+    const p = this.prefs, sim = this.sim; if (init && this.hooks.resumed) { p.difficulty = sim.difficulty; p.autoRepair = sim.autoRepair; }
+    sim.setDifficulty(p.difficulty); sim.autoRepair = p.autoRepair; this.rd.shakeOn = p.shake; if (this.rd.fx) this.rd.fx.setEnabled(p.fx);
+    try { localStorage.setItem(PREF_KEY, JSON.stringify(p)); } catch { /* sans stockage */ }
   }
   // ——— feuille ———
   toggleSheet(n) { if (this.sheet === n) this.closeSheet(); else this.openSheet(n); }
@@ -67,20 +77,33 @@ export class UI {
     this.rd.struct.setSelected(c.kind === 'struct' ? c.id : 0); this.rd.setSelected(c.kind === 'sector' ? c.id : -1); this.sel = c.kind === 'sector' ? c.id : -1;
     this.cardEl.classList.add('on'); this.refresh(true);
   }
-  closeCard() { this.card = null; this.sel = -1; this.cardEl.classList.remove('on'); this.rd.struct.setSelected(0); this.rd.setSelected(-1); }
+  closeCard() { if (this.card?.kind === 'squad') { this.selSq = 0; this.rd.setSquad(0); } this.card = null; this.sel = -1; this.cardEl.classList.remove('on'); this.rd.struct.setSelected(0); this.rd.setSelected(-1); }
   // ——— toucher la carte ———
   onMapTap(x, z) {
     const sim = this.sim;
     if (this.mode !== 'idle') { this.moveGhost(x, z); return; }
     if (this.rallying) { sim.army.setRally(x, z); this.rallying = false; this.toast && this.toast('📍 Point de ralliement placé'); this.refresh(true); return; }
+    // escouade choisie : toucher la carte = ordre de mouvement (devant la muraille : sortie ; derrière : nouveau poste) ; toucher une autre escouade = la choisir
+    const near = this.squadAt(x, z);
+    if (this.card?.kind === 'squad' && sim.squad(this.card.id)) {
+      if (near && near !== this.card.id) { this.openSquad(near); return; }
+      if (!near || near !== this.card.id) { this.orderSquad(this.card.id, x, z); return; }
+    }
     if (this.targeting && this.selSq && z >= SQUAD.sortieZ[0] - 6 && z <= SQUAD.sortieZ[1] + 4) { sim.squadSortie(this.selSq, x, z); this.setTargeting(false); this.refresh(true); return; }
     const s = this.pickStruct(x, z);
     if (s) { this.openCard({ kind: 'struct', id: s.id }); return; }
     if (Math.hypot(x - CASTLE.x, z - CASTLE.z) < 22) { this.openCard({ kind: 'castle', id: 0 }); return; }
-    let best = 0, bd = 36; for (const q of sim.army.squads) { const d = (q.x - x) ** 2 + (q.z - z) ** 2; if (d < bd) { bd = d; best = q.id; } }
-    if (best) { this.openSheet('army', 'squads'); this.pickSquad(best); return; }
+    if (near) { this.openSquad(near); return; }
     if (z > 70 && z < 168) { this.openCard({ kind: 'sector', id: Math.min(4, Math.max(0, (x / 40) | 0)) }); return; }
     this.closeCard(); if (this.sheet) this.closeSheet();
+  }
+  squadAt(x, z) { let best = 0, bd = Infinity; for (const q of this.sim.army.squads) { const d = Math.hypot(q.x - x, q.z - z); if (d < Math.max(4, q.rad + 1.5) && d < bd) { bd = d; best = q.id; } } return best; }
+  openSquad(id) { this.closeSheet(); this.pickSquad(id); this.openCard({ kind: 'squad', id }); this.buzz(10); }
+  orderSquad(id, x, z) {
+    const sim = this.sim, q = sim.squad(id); if (!q) return;
+    if (z > 212 + 4) { this.toast('⚠ Trop loin : poste une escouade dans la cour ou devant la muraille', 'warn'); return; }
+    sim.squadMove(id, x, z); this.rd.orderPing(q.mode === 'field' ? q.tx : q.postX, q.mode === 'field' ? q.tz : q.postZ, q.mode === 'field');
+    this.toast(q.mode === 'field' ? `⚔ ${UNITS[q.type].name} ×${q.n} : sortie !` : `🛡 ${UNITS[q.type].name} ×${q.n} : nouveau poste`, q.mode === 'field' ? 'warn' : 'info'); this.buzz(15); this.refresh(true);
   }
   pickStruct(x, z) {
     let best = null, bd = Infinity;
@@ -169,14 +192,18 @@ export class UI {
       case 'cancel': sim.cancelTrain(x); break;
       case 'asub': this.asub = x; break;
       case 'sq': this.pickSquad(+x); break;
-      case 'newsq': { const q = sim.formSquad(x, UNITS[x].squad, 2); if (q) this.pickSquad(q.id); break; }
+      case 'newsq': { const q = sim.formSquad(x, UNITS[x].squad, 2); if (q) { this.pickSquad(q.id); this.toast(`${UNITS[x].ico} Escouade formée — touche-la sur la carte pour lui donner un ordre`, 'ok'); } break; }
       case 'form': sim.squadForm(this.selSq, x); break;
       case 'stance': sim.squadStance(this.selSq, x); break;
       case 'gar': sim.squadGarrison(this.selSq, +x); this.setTargeting(false); break;
       case 'sqgo': sim.squadGarrison(+x, s); break;
       case 'sortie': { const on = !this.targeting; this.setTargeting(on); if (on) { const q = sim.squad(this.selSq); this.cam.focusOn(q ? q.x : 100, 118); } break; }
       case 'reinf': sim.squadReinforce(this.selSq); break;
-      case 'disb': sim.squadDisband(this.selSq); this.selSq = 0; this.rd.setSquad(0); this.setTargeting(false); break;
+      case 'disb': sim.squadDisband(this.selSq); this.selSq = 0; this.rd.setSquad(0); this.setTargeting(false); if (this.card?.kind === 'squad') this.closeCard(); break;
+      case 'sqcard': { const q = sim.squad(+x); if (q) { this.cam.focusOn(q.x, q.z); this.openSquad(q.id); } break; }
+      case 'summon': if (!sim.summonMage()) this.toast('Invocation impossible (or, vivres, une place de population)'); else this.toast('🔮 Invocation du magicien…', 'ok'); break;
+      case 'pref': { const p = this.prefs; if (x === 'difficulty') p.difficulty = y; else p[x] = !p[x]; this.applyPrefs(); this.html.sheet = ''; break; }
+      case 'goto': { const t = sim.build.of(x); if (t) { this.cam.focusOn(t.x, t.z); this.openCard({ kind: 'struct', id: t.id }); } else this.startPlace(x); break; }
     }
   }
   // toast : kind = 'info' | 'ok' | 'warn' | 'danger' (couleur et durée) ; les messages identiques consécutifs sont regroupés (×2, ×3…)
@@ -196,6 +223,9 @@ export class UI {
     else if (e.type === 'repair') this.toast(`🔧 Muraille réparée — ${SECTOR_NAMES[e.s]}`, 'ok');
     else if (e.type === 'waveStart') { const t = (sim.targets || []).map(s => SECTOR_SHORT[s]).join(' · '); this.toast(`🌊 Vague ${e.wave} — attaque : ${t || '?'}`, 'warn'); this.flashScreen('warn'); this.buzz(60); }
     else if (e.type === 'discovered') { this.toast(`🧭 Nouveau gisement de ${RES_INFO[e.res].name.toLowerCase()} découvert (${e.amount}) !`); this.cam.focusOn(e.x, e.z); }
+    else if (e.type === 'autoRepair') this.toast(`🔧 Réparation automatique : ${e.n} villageois empruntés`, 'info');
+    else if (e.type === 'autoRepairDone') this.toast(`🔧 Muraille réparée — ${e.n} villageois retournent à leur tâche`, 'ok');
+    else if (e.type === 'mage') this.toast(e.what === 'summoned' ? '🔮 Le magicien est arrivé ! Il agit seul : soins, réparations, sorts.' : '💀 Le magicien est tombé — il reviendra dans 30 s', e.what === 'summoned' ? 'ok' : 'danger');
     else if (e.type === 'waveEnd') { const r = e.reward || {}; this.toast(`🏆 Vague ${e.wave} repoussée · ${Object.keys(r).map(k => `+${r[k]} ${RES_INFO[k].ico}`).join(' ')}`, 'ok'); this.buzz([30, 30, 30]); }
   }
   // ——— mise à jour de l'affichage ———
@@ -238,13 +268,16 @@ export class UI {
     const audio = this.hooks.audio ? `<div class="vols"><div class="hint small"><b>Son</b></div>${sl('master', 'Général')}${sl('sfx', 'Effets')}${sl('music', 'Musique')}</div>` : '';
     const cq = this.hooks.rd.qualityName ? this.hooks.rd.qualityName() : '';
     const qual = `<div class="vols"><div class="hint small"><b>Qualité graphique</b> (ombres, lueurs)</div><div class="row">${Object.keys(QUALITY_NAMES).map(k => this.btn(QUALITY_NAMES[k], '', 'quality:' + k, false, 'act slim' + (k === cq ? '' : ' sec'))).join('')}</div></div>`;
-    return `<div class="hint">Castle Invasion · <b>v${VERSION}</b></div>${audio}${qual}<div class="row">${this.btn('🔄 Nouvelle partie', 'la partie en cours sera perdue', 'newgame', false, 'act warnb')}</div>`;
+    const p = this.prefs, tog = (k, l, sub) => this.btn(`${p[k] ? '✅' : '⬜'} ${l}`, sub, 'pref:' + k, false, 'act slim' + (p[k] ? '' : ' sec'));
+    const game = `<div class="vols"><div class="hint small"><b>Difficulté</b> (vagues suivantes)</div><div class="row">${Object.keys(DIFFICULTY).map(k => this.btn(DIFFICULTY[k].name, k === 'easy' ? '−25 % zombies' : k === 'hard' ? '+30 % zombies, +15 % PV' : '', 'pref:difficulty:' + k, false, 'act slim' + (k === p.difficulty ? '' : ' sec'))).join('')}</div>
+      <div class="row wrapr">${tog('autoRepair', 'Réparation auto', 'emprunte 2 villageois')}${tog('shake', 'Secousses', 'explosions')}${tog('fx', 'Effets', 'particules, feu')}</div></div>`;
+    return `<div class="hint">Castle Invasion · <b>v${VERSION}</b></div>${game}${audio}${qual}<div class="row">${this.btn('🔄 Nouvelle partie', 'la partie en cours sera perdue', 'newgame', false, 'act warnb')}</div>`;
   }
   renderCard() {
     const c = this.card; if (!c) return;
     let html = '';
     if (c.kind === 'struct') { const s = this.sim.build.get(c.id); if (!s) { this.closeCard(); return; } html = this.structCard(s); }
-    else if (c.kind === 'sector') html = this.sectorCard(c.id); else html = this.castleCard();
+    else if (c.kind === 'sector') html = this.sectorCard(c.id); else if (c.kind === 'squad') { const q = this.sim.squad(c.id); if (!q) { this.closeCard(); return; } html = this.squadCard(q); } else html = this.castleCard();
     html = `<button class="x" data-a="close">✕</button>` + html;
     this.setHtml('card', this.cardEl, html);
   }
@@ -298,7 +331,7 @@ export class UI {
     const c = this.card; if (!c) return;
     let a;
     if (c.kind === 'struct') { const s = this.sim.build.get(c.id); if (!s) return; a = this.rd.project(s.x, 4, s.z); }
-    else if (c.kind === 'sector') a = this.rd.project(c.id * 40 + 20, 6, 146); else a = this.rd.project(CASTLE.x, 14, CASTLE.z);
+    else if (c.kind === 'sector') a = this.rd.project(c.id * 40 + 20, 6, 146); else if (c.kind === 'squad') { const q = this.sim.squad(c.id); if (!q) return; a = this.rd.project(q.x, 4, q.z); } else a = this.rd.project(CASTLE.x, 14, CASTLE.z);
     const w = this.cardEl.offsetWidth, h = this.cardEl.offsetHeight, topMin = 96, botMax = vh - 90;
     let top = a.y - h - 26; if (top < topMin) top = Math.min(botMax - h, a.y + 30); if (top + h > botMax) top = Math.max(topMin, botMax - h);
     this.cardEl.style.left = Math.min(vw - w - 8, Math.max(8, a.x - w / 2)) + 'px'; this.cardEl.style.top = top + 'px';
@@ -334,6 +367,8 @@ export class UI {
     if (TRAIN_BUILDINGS.includes(s.type)) { const q = sim.army.queues[s.type]; h += `<div class="hint small">File d'entraînement : ${q.length}/${sim.army.queueMax(sim, s.type)}</div>` + this.btn('🪖 Entraîner', '', 'sheet:army:train', false, 'act sec'); }
     if (s.type === 'workshop') h += this.btn('🛠 Armes de siège', '', 'sheet:army:siege', false, 'act sec');
     if (s.type === 'forge') h += this.btn('🔨 Améliorations', '', 'sheet:army:forge', false, 'act sec');
+    if (s.type === 'wizard') h += this.mageHtml(true);
+    if (RANK_BUILDINGS.includes(s.type)) { const t = UNIT_ORDER.filter(u => UNITS[u].from === s.type), r = RANKS[Math.max(0, s.level - 1)], nx = RANKS[s.level]; h += `<div class="rank">⭐ Rang <b>${r.name}</b>${nx ? ` → <b>${nx.name}</b> au niv. ${s.level + 1} : force ×${nx.force}, résistance ×${nx.res}, tenue plus riche` : ' — rang maximum'}<small>${t.map(u => UNITS[u].ico).join(' ')} toutes les unités de ce bâtiment</small></div>`; }
     const uc = B.upCost(s), canMove = !s.fixed;
     h += `<div class="row">${uc ? this.btn(`⬆ Niv. ${s.level + 1}`, `${this.cost(uc)} · ⏱${Math.round(B.upTime(s))} s`, `up:${s.id}`, !E.afford(uc)) : (s.type === 'house' ? '' : '<span class="max">niveau max</span>')}${canMove ? this.btn('✥ Déplacer', 'gratuit', `mv:${s.id}`, false, 'act sec') : ''}</div>`;
     return h;
@@ -387,15 +422,17 @@ export class UI {
   // ——— ARMÉE ———
   popLine() { const E = this.sim.eco; return `<div class="hint small">👥 Population <b>${E.population()}</b>/${E.popCap()} (villageois ${E.villagers.length} · armée ${this.sim.army.popUsed()})</div>`; }
   armyHtml() {
-    const subs = [['squads', '🛡 Escouades'], ['train', '🪖 Entraîner'], ['siege', '🛠 Siège'], ['forge', '🔨 Forge']];
-    return `<div class="subtabs">${subs.map(([k, n]) => `<button data-a="asub:${k}" class="${this.asub === k ? 'on' : ''}">${n}</button>`).join('')}</div>${this.popLine()}${this.rallyLine()}` + (this.asub === 'squads' ? this.squadsHtml() : this.asub === 'train' ? this.trainHtml() : this.asub === 'siege' ? this.siegeHtml() : this.forgeHtml());
+    const subs = [['squads', '🛡 Escouades'], ['train', '🪖 Entraîner'], ['ranks', '⭐ Rangs'], ['magic', '🔮 Magie'], ['siege', '🛠 Siège'], ['forge', '🔨 Forge']];
+    const body = { squads: () => this.squadsHtml(), train: () => this.trainHtml(), ranks: () => this.ranksHtml(), magic: () => this.mageHtml(false), siege: () => this.siegeHtml(), forge: () => this.forgeHtml() }[this.asub] || (() => this.squadsHtml());
+    return `<div class="subtabs">${subs.map(([k, n]) => `<button data-a="asub:${k}" class="${this.asub === k ? 'on' : ''}">${n}</button>`).join('')}</div>${this.popLine()}${this.asub === 'squads' || this.asub === 'train' ? this.rallyLine() : ''}` + body();
   }
   rallyLine() { return `<div class="row">${this.btn(this.rallying ? '✖ Annuler' : '📍 Point de ralliement', this.rallying ? '' : 'par défaut : la placette', 'rally', false, this.rallying ? 'act warnb' : 'act')}${this.rallying ? '<div class="hint small">Touche la carte, dans la cour ou le village.</div>' : ''}</div>`; }
   squadsHtml() {
     const army = this.sim.army, q = army.squads.find(x => x.id === this.selSq);
     let h = '';
     if (!army.squads.length) h += '<div class="hint">Aucune escouade. Entraîne des soldats puis forme-en une avec ta réserve.</div>';
-    h += `<div class="sqlist">${army.squads.map(x => `<button class="chipb ${x.id === this.selSq ? 'on' : ''}" data-a="sq:${x.id}">${UNITS[x.type].ico}${x.n} <small>${x.mode === 'field' ? '⚔' : SECTOR_SHORT[x.sector]}</small></button>`).join('')}</div>`;
+    if (army.squads.length) h += '<div class="hint small">👆 Touche une escouade (ici ou sur la carte), puis <b>touche la carte</b> : derrière la muraille = nouveau poste, devant = sortie.</div>';
+    h += `<div class="sqlist">${army.squads.map(x => `<button class="chipb ${x.id === this.selSq ? 'on' : ''}" data-a="sqcard:${x.id}">${UNITS[x.type].ico}${x.n} <small>${x.mode === 'field' ? '⚔' : SECTOR_SHORT[x.sector]}</small></button>`).join('')}</div>`;
     if (q) {
       const U = UNITS[q.type], mx = army.maxN(q.type);
       h += `<div class="ptitle">${U.ico} ${U.name} ×${q.n}<span class="lvl">${q.mode === 'field' ? 'Sur le champ de bataille' : 'Garnison ' + SECTOR_SHORT[q.sector]}</span></div>
@@ -407,8 +444,50 @@ export class UI {
         <div class="row">${this.btn('➕ Compléter', `réserve ${army.reserve[q.type]}`, 'reinf', q.n >= mx || army.reserve[q.type] <= 0)}${this.btn('Dissoudre', 'retour en réserve', 'disb', false, 'act sec')}</div>`;
       if (this.targeting) h += '<div class="warn">Touche le champ de bataille au-dessus pour envoyer l\'escouade.</div>';
     }
-    h += `<div class="hint small">Nouvelle escouade (depuis la réserve) :</div><div class="row recruit">${['soldier', 'heavy', 'cavalry'].map(t => this.btn(`${UNITS[t].ico} ${UNITS[t].name}`, `réserve ${army.reserve[t]} · max ${UNITS[t].squad}`, 'newsq:' + t, army.reserve[t] <= 0 || army.squads.length >= SQUAD.maxSquads)).join('')}</div>`;
+    h += `<div class="hint small">Nouvelle escouade (depuis la réserve) :</div><div class="row recruit">${['soldier', 'heavy', 'knight', 'cavalry'].map(t => this.btn(`${UNITS[t].ico} ${UNITS[t].name}`, `réserve ${army.reserve[t]} · max ${UNITS[t].squad}`, 'newsq:' + t, army.reserve[t] <= 0 || army.squads.length >= SQUAD.maxSquads)).join('')}</div>`;
     return h;
+  }
+  // bulle d'escouade (ancrée sur la carte) : ordres directs
+  squadCard(q) {
+    const army = this.sim.army, U = UNITS[q.type], mx = army.maxN(q.type), rk = army.rank(this.sim, q.type), F = FORMATIONS[q.form];
+    const where = q.mode === 'field' ? '⚔ Sur le champ de bataille' : q.custom ? '🛡 Poste libre ' + SECTOR_SHORT[q.sector] : '🛡 Garnison ' + SECTOR_SHORT[q.sector];
+    return `<div class="ptitle">${U.ico} ${U.name} ×${q.n}<span class="lvl">⭐ ${rk.name}</span></div>
+      <div class="hpline"><div class="bar big"><i style="width:${Math.min(100, army.hpRatio(q) * 100)}%"></i></div><span>${Math.round(q.hp)} PV · ${q.n}/${mx}</span></div>
+      <div class="hint small">${where}${q.way.length ? ' · en marche' : ''}</div>
+      <div class="order">👆 <b>Touche la carte</b> pour l'envoyer : derrière la muraille = poste, devant = sortie.</div>
+      <div class="fgrid">${Object.keys(FORMATIONS).map(f => `<button class="fbtn ${q.form === f ? 'on' : ''}" data-a="form:${f}"><b>${FORMATIONS[f].ico}</b>${FORMATIONS[f].name}</button>`).join('')}</div>
+      <div class="hint small">${F.info}</div>
+      <div class="row">${this.btn(q.stance === 'charge' ? '🔥 Charge' : '🛡 Tenir', 'posture', 'stance:' + (q.stance === 'charge' ? 'hold' : 'charge'), false, 'act slim')}${this.btn('➕', `réserve ${army.reserve[q.type]}`, 'reinf', q.n >= mx || army.reserve[q.type] <= 0, 'act slim')}${this.btn('↩', 'dissoudre', 'disb', false, 'act slim sec')}</div>
+      <div class="prio"><span>Garnison :</span>${SECTOR_SHORT.map((x, i) => `<button class="chipb ${q.mode === 'garrison' && !q.custom && q.sector === i ? 'on' : ''}" data-a="gar:${i}">${x}</button>`).join('')}</div>`;
+  }
+  // ⭐ Rangs : où et comment faire monter chaque type d'unité ; ce que change le rang suivant
+  ranksHtml() {
+    const sim = this.sim, army = sim.army, E = sim.eco, B = sim.build; let h = '<div class="hint small">Le <b>niveau</b> de la caserne, de l\'écurie et du champ de tir est le <b>rang</b> de toutes leurs unités : plus fortes, plus résistantes, plus rapides — et une tenue de plus en plus imposante (de la tunique de recrue à l\'armure dorée de légende).</div>';
+    for (const b of RANK_BUILDINGS) {
+      const def = BUILDINGS[b], s = B.of(b), lv = E.level[b], types = UNIT_ORDER.filter(t => UNITS[t].from === b);
+      const r = RANKS[Math.max(0, lv - 1)], nx = RANKS[lv], uc = s && s.state === 'built' ? B.upCost(s) : null;
+      h += `<div class="card col"><div class="ct"><b>${def.ico} ${def.name}</b> <span class="lvl">${lv ? '⭐ ' + r.name : 'à construire'}</span><small>${types.map(t => `${UNITS[t].ico} ${UNITS[t].name}`).join(' · ')}</small></div>
+        <div class="ranks">${RANKS.map((R, i) => `<span class="${i < lv ? 'got' : ''}${i === lv - 1 ? ' cur' : ''}" title="${R.name}">${i < lv ? '★' : '☆'}<small>${R.name}</small></span>`).join('')}</div>
+        ${lv && nx ? `<div class="hint small">Rang suivant <b>${nx.name}</b> : force ×${nx.force} · résistance ×${nx.res} · vitesse ×${nx.speed} · coût des unités ×${nx.cost}</div>` : ''}
+        <div class="row">${!s ? this.btn('Construire', this.cost(B.newCost(b)), 'bld:' + b, !E.afford(B.newCost(b)), 'act slim') : uc ? this.btn(`⬆ ${nx.name}`, this.cost(uc), 'up:' + s.id, !E.afford(uc), 'act slim') : s.state !== 'built' ? '<span class="max">en travaux…</span>' : '<span class="max">Légende atteinte</span>'}${s ? this.btn('Voir', '', 'go:' + s.id, false, 'act slim sec') : ''}</div></div>`;
+    }
+    const w = B.of('workshop'); h += `<div class="card"><div class="ct"><b>🛠 Atelier de siège</b> <span class="lvl">niv. ${E.level.workshop || 0}/3</span><small>Le niveau débloque les armes ET leur aspect : bois brut → ferrures → dorures, bannière et brasero (boulets enflammés).</small></div>${w ? this.btn('Voir', '', 'go:' + w.id, false, 'act slim sec') : ''}</div>`;
+    return h;
+  }
+  // 🔮 Magicien : invocation, état, sorts (dans la fiche de la Maison du sorcier et l'onglet Magie)
+  mageHtml(inCard) {
+    const sim = this.sim, M = sim.mages, E = sim.eco, lv = M.level(sim), m = M.list[0];
+    if (!inCard) { const nb = this.needBuild('wizard'); if (nb) return nb + '<div class="hint small">Le magicien est AUTONOME : il soigne les escouades blessées, referme les brèches et lance ses sorts tout seul, toujours à distance des zombies.</div>'; }
+    const st = M.stats(sim), T = MAGE_TIERS[Math.max(0, Math.min(4, lv - 1))];
+    let h = `<div class="card col mage"><div class="ct"><b>🧙 ${T.name}</b> <span class="lvl">niv. ${lv}/5</span><small>Agit seul selon l'urgence : soigner, réparer, frapper.</small></div>`;
+    if (m) h += `<div class="hpline"><div class="bar"><i style="width:${100 * m.hp / st.hp}%"></i></div><span>❤ ${Math.round(m.hp)}</span></div><div class="hpline"><div class="bar mana"><i style="width:${100 * m.mana / st.mana}%"></i></div><span>✦ ${Math.round(m.mana)}</span></div><div class="hint small">En ce moment : <b>${m.action || '—'}</b></div>`;
+    else if (M.summon) h += `<div class="hpline"><div class="bar big"><i style="width:${100 * (1 - M.summon.t / M.summon.full)}%"></i></div><span>invocation…</span></div>`;
+    else if (M.respawn > 0) h += `<div class="hint">💀 Revient dans ${Math.ceil(M.respawn)} s</div>`;
+    else h += `<div class="row">${this.btn('🔮 Invoquer le magicien', `${this.cost(MAGE.summon)} · 👥1`, 'summon', !M.canSummon(sim))}</div>`;
+    h += `<div class="spells">${Object.entries(MAGE.spells).map(([k, S]) => `<span class="${S.level <= lv ? 'on' : 'off'}" title="${S.info}">${S.ico}<b>${S.name}</b><small>${S.level <= lv ? S.info : 'niv. ' + S.level}</small></span>`).join('')}</div>`;
+    const ac = E.upgradeCost('arcana'); h += `<div class="row">${ac ? this.btn(`📖 Arcanes ${E.up.arcana + 1}`, this.cost(ac) + ' · mana +20 %', 'upg:arcana', !E.afford(ac) || lv < 1, 'act slim') : '<span class="max">Arcanes max</span>'}</div>`;
+    if (!inCard) { const w = sim.build.of('wizard'); if (w) h += this.btn('Voir la maison', 'améliorer = magicien plus puissant', 'go:' + w.id, false, 'act slim sec'); }
+    return h + '</div>';
   }
   trainHtml() {
     const sim = this.sim, army = sim.army, E = sim.eco; let h = '';
@@ -445,8 +524,8 @@ export class UI {
     const nb = this.needBuild('forge'); if (nb) return nb;
     for (const id in UPGRADES) {
       const U = UPGRADES[id]; if (U.group !== 'army') continue;
-      const l = E.up[id], c = E.upgradeCost(id);
-      h += `<div class="card"><div class="ct"><b>${U.ico} ${U.name}</b> <span class="lvl">${l}/${U.max}</span><small>${U.info}</small></div>${c ? this.btn(`Niv. ${l + 1}`, this.cost(c), 'upg:' + id, !E.afford(c), 'act slim') : '<span class="max">max</span>'}</div>`;
+      const l = E.up[id], c = E.upgradeCost(id), locked = U.req && E.level[U.req] < 1;
+      h += `<div class="card"><div class="ct"><b>${U.ico} ${U.name}</b> <span class="lvl">${l}/${U.max}</span><small>${locked ? `Requiert : ${STRUCT[U.req].name}` : U.info}</small></div>${c ? this.btn(`Niv. ${l + 1}`, this.cost(c), 'upg:' + id, locked || !E.afford(c), 'act slim') : '<span class="max">max</span>'}</div>`;
     }
     return h;
   }
@@ -454,14 +533,15 @@ export class UI {
   workHtml() {
     const sim = this.sim, E = sim.eco, idle = E.idleCount(), pop = E.population(), cap = E.popCap(), builders = E.builderCount();
     let h = `<div class="pop"><span>👥 <b>${pop}</b>/${cap} · villageois ${E.villagers.length}<br>libres <b>${idle}</b> · 👷 ouvriers de chantier <b>${builders}</b></span>${this.btn('+ Villageois', this.cost(ECON.villagerCost), 'vil', pop >= cap || !E.afford(ECON.villagerCost), 'act slim')}</div>`;
-    h += `<div class="hint small">Les villageois <b>libres</b> deviennent ouvriers dès qu'un chantier en demande. Ils rapportent tout au château.</div>`;
+    h += `<div class="hint small">Les villageois <b>libres</b> deviennent ouvriers dès qu'un chantier en demande. Sans libre, <b>+</b> emprunte un villageois à la tâche la moins urgente (↺) ; il y retourne quand on le retire ou quand la réparation est finie (🔁).</div>`;
+    if (E.loans.length) h += `<div class="hint small">🔁 ${E.loans.length} villageois prêté${E.loans.length > 1 ? 's' : ''} : ${E.loans.map(l => `${l.from ? TASKS[l.from].ico : '💤'}→${TASKS[l.to].ico}`).join(' ')}</div>`;
     if (pop >= cap) h += `<div class="warn">Population au maximum : construis des 🏠 maisons (menu ⚒ Bâtir).</div>`;
     if (E.famine) h += `<div class="warn">⚠ Famine : la récolte est réduite de moitié. Ajoute des fermiers !</div>`;
     for (const t of TASK_ORDER) {
       const T = TASKS[t], n = E.assign[t], capT = E.taskCap(t), B = BUILDINGS[T.building], hasSlots = E.slots(T.building) > 0;
       let sub = `<i class="no">Construis : ${B.name}</i>`;
       if (hasSlots) { const left = T.deposit ? E.totalDeposit(t) : null, nx = E.extra[t] ? E.extra[t].filter(e => e.amount > 0).length : 0; sub = `+${E.rate[t].toFixed(2)}/s · places ${n}/${n + capT}` + (left !== null ? ` · gisement ${fmt(left)}` + (nx ? ` (+${nx} découvert${nx > 1 ? 's' : ''})` : '') + (t === 'wood' ? ' · 🌲 repousse' : '') + (left <= 0 ? ' ⚠ épuisé' : '') : ''); }
-      h += `<div class="row step task"><span class="lab">${T.ico} ${T.name}<small class="sub">${sub}</small></span>${this.btn('−', '', `as:${t}:-1`, n <= 0, 'sq')}<b class="val">${n}</b>${this.btn('+', '', `as:${t}:1`, idle <= 0 || n >= capT, 'sq')}</div>`;
+      h += `<div class="row step task"><span class="lab">${T.ico} ${T.name}<small class="sub">${sub}</small></span>${this.btn('−', '', `as:${t}:-1`, n <= 0, 'sq')}<b class="val">${n}${E.loans.some(l => l.to === t) ? '<small>🔁</small>' : ''}</b>${this.btn('+', idle <= 0 && E.donorFor(t) ? '↺' : '', `as:${t}:1`, (idle <= 0 && !E.donorFor(t)) || n >= capT, 'sq')}</div>`;
     }
     {
       const P = E.prospect;
@@ -469,13 +549,18 @@ export class UI {
       if (!P) h += `<div class="row">${PROSPECT.res.map(r => this.btn(`${RES_INFO[r].ico || ''} ${RES_INFO[r].name}`, this.cost(PROSPECT.cost), 'pro:' + r, !E.canProspect(r), 'act slim')).join('')}</div>`;
     }
     const dmg = this.damagedSegs(), n = E.assign.repair;
-    h += `<div class="row step task"><span class="lab">🔧 Réparation muraille<small class="sub">${dmg ? dmg + ' tronçon(s) à réparer' : 'muraille intacte'} · pierre</small></span>${this.btn('−', '', 'as:repair:-1', n <= 0, 'sq')}<b class="val">${n}</b>${this.btn('+', '', 'as:repair:1', idle <= 0 || n >= TASKS.repair.slots, 'sq')}</div>`;
+    h += `<div class="row step task"><span class="lab">🔧 Réparation muraille<small class="sub">${dmg ? dmg + ' tronçon(s) à réparer' : 'muraille intacte'} · pierre${sim.autoRepair ? ' · auto ✅' : ''}</small></span>${this.btn('−', '', 'as:repair:-1', n <= 0, 'sq')}<b class="val">${n}</b>${this.btn('+', idle <= 0 && E.donorFor('repair') ? '↺' : '', 'as:repair:1', (idle <= 0 && !E.donorFor('repair')) || n >= TASKS.repair.slots, 'sq')}</div>`;
     h += `<div class="prio"><span>Priorité :</span>${[['-1', 'Auto'], ...SECTOR_SHORT.map((x, i) => [String(i), x])].map(([v, l]) => `<button class="chipb ${E.repairPriority === +v ? 'on' : ''}" data-a="prio:${v}">${l}</button>`).join('')}</div>`;
     return h;
   }
   damagedSegs() { const w = this.sim.wall; let n = 0; for (let i = 0; i < 40; i++) if (w.hp[i] < w.segMax(i) - 0.5) n++; return n; }
   techHtml() {
-    const E = this.sim.eco; let h = '<div class="hint small">Les améliorations rendent les villageois plus rapides, plus chargés et plus efficaces — sans leur donner d\'ordre.</div>';
+    const E = this.sim.eco; let h = '<div class="tgrp">Où améliorer quoi ?</div><div class="where">' + [
+      ['forge', '🔨 Forge', 'armes, armures, arcs longs, lames d\'acier (chevaliers)'], ['wizard', '🔮 Maison du sorcier', 'invoque le magicien ; son niveau = puissance du magicien ; Arcanes'],
+      ['barracks', '🪖 Caserne · 🐎 Écurie · 🎯 Champ de tir', 'leur niveau = rang des unités (Recrue → Légende)'], ['workshop', '🛠 Atelier de siège', 'baliste, catapulte, trébuchet ; aspect des machines'],
+      ['sawmill', '🪚 Scierie · ⛏ Carrière · ⛓ Mine · 🌾 Ferme', 'niveau = places et rendement ; de nouvelles installations apparaissent'],
+    ].map(([b, n, d]) => `<button class="wrow" data-a="goto:${b}"><b>${n}</b><small>${d}</small></button>`).join('') + '<div class="wrow"><b>🧱 Muraille</b><small>touche un secteur pour le renforcer · 🗼 touche une tour pour l\'améliorer</small></div></div>';
+    h += '<div class="tgrp">Village</div><div class="hint small">Les améliorations rendent les villageois plus rapides, plus chargés et plus efficaces — et se voient : outils plus beaux, brouettes puis charrettes, chemins pavés.</div>';
     for (const id in UPGRADES) {
       if (UPGRADES[id].group === 'army') continue;
       const U = UPGRADES[id], lv = E.up[id], c = E.upgradeCost(id);

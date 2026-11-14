@@ -177,6 +177,19 @@ export class Build {
       s.cd = st.rate * (0.9 + sim.rng() * 0.2);
     }
   }
+  // anciennes sauvegardes : une structure posée là où les règles actuelles l'interdisent est déplacée vers l'emplacement libre le plus proche
+  relocateInvalid() {
+    let moved = 0;
+    for (const s of this.items) {
+      if (s.fixed || this.canPlace(s.type, s.x, s.z, s.rot, s.id).ok) continue;
+      if (s.type === 'mine') { const o = this.ores().find(q => q.res !== 'stone' && !this.items.some(t => t !== s && t.type === 'mine' && Math.hypot(t.x - q.x, t.z - q.z) < 3)); if (o) { s.x = o.x; s.z = o.z; moved++; } continue; }
+      search: for (let r = 2; r <= 120; r += 2) for (let k = 0; k < 24; k++) {
+        const a = k / 24 * Math.PI * 2, x = Math.round((s.x + Math.cos(a) * r) * 2) / 2, z = Math.round((s.z + Math.sin(a) * r) * 2) / 2;
+        if (this.canPlace(s.type, x, z, s.rot, s.id).ok) { s.x = x; s.z = z; moved++; break search; }
+      }
+    }
+    this.relocated = moved; return moved;
+  }
   finish(s) {
     const was = s.state; this.releaseJob(s.id); s.progress = 1; s.paid = null; s.born = this.sim.time;
     if (was === 'site') s.level = 1; else if (was === 'upgrading') s.level++;
@@ -195,6 +208,7 @@ export class Build {
       else this.items.push({ ...this.make(o.type, o.x, o.z, o.rot, { level: o.level, state: o.state, progress: o.progress, work: o.work, workers: o.workers, paid: o.paid }), id: o.id });   // mêmes ids : les ouvriers retrouvent leur chantier
     }
     let mx = 0; for (const s of this.items) mx = Math.max(mx, s.id); this.nextId = Math.max(mx + 1, st.next || 1);
+    this.relocateInvalid();
     this.version++; this.syncLevels();
   }
 }

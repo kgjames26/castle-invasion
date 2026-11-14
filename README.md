@@ -146,3 +146,15 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Environnement : sapins à deux étages aux teintes variées (neige seulement au nord), forêt et sol prolongés autour de la carte (plus de vide noir), herbe givrée claire au nord.
 - Personnages : ombres de contact sous zombies, villageois, recrues et escouades ; teintes de zombies plus marquées par type, blessés rougeâtres.
 - Jouabilité : colosse à partir de la vague 6 (au lieu de 4) ; alerte quand la muraille est abîmée sans réparateur.
+
+## Phase 18 — Guerre spectaculaire, magicien, chevaliers, rangs visibles
+- **Magicien** (`src/sim/mage.js`) : la Maison du sorcier (🔮, 5 niveaux) invoque UN magicien autonome. Il choisit seul selon l'urgence : soin d'escouade, rempart magique (referme une brèche), boule de feu, éclair en chaîne, pluie de météores, nova de givre (`MAGE` dans medieval.js). Il garde ses distances, revient 30 s après sa chute. Amélioration de forge-magie : Arcanes.
+- **Chevalier** (`UNITS.knight`, caserne niv. 3) : frappe plusieurs zombies à la fois (`cleave`), lames d'acier à la forge. Modèle tiré du GLB fourni, décimé et découpé en pièces animées (`tools/bake_knight.py` → `assets/characters/knight.bin`).
+- **Objets** du pack FBX convertis (`tools/fbx_items.py` → `assets/items/items.bin`) : épées (recrue → légende dorée), cristaux, grimoire, potions.
+- **Explosions et feu** : `sim.explode` (dégâts de zone + feu au sol `sim.fires`), boulets de catapulte et trébuchet enflammés ; `sim.blasts` publie chaque effet pour le rendu. `Effects.js` : flammes, fumée, ondes de choc, brûlures au sol, éclairs, soins, givre, secousse de caméra.
+- **Hordes** : chaque zombie garde sa place dans son groupe (cohésion + allure commune) → front large, plus de file indienne.
+- **Rangs visibles** (Recrue → Légende) : tenue des fantassins, lourds, cavaliers, chevaliers et archers ; machines de siège selon l'atelier (ferrures, dorures, brasero) ; magicien de l'apprenti à l'archimage ; coups de mêlée plus impressionnants (étincelles, arcs de taille, onde de choc) — sans magie.
+- **Village** : chaque niveau de scierie, carrière, mine, ferme… ajoute des installations (`Village.js`) ; « Chemins pavés » pave vraiment les chemins ; « Chariots » = brouettes puis charrettes ; « Outils » change la teinte des fers.
+- **Muraille** : châtelets (tours, salle de herse, bannières) et herses de fer qui montent ; créneaux et contreforts.
+- **Jouabilité** : emprunt de villageois pour toute tâche (retour automatique), réparation automatique, difficulté (facile/normal/difficile), ordres directs aux escouades (toucher la carte), onglets ⭐ Rangs et 🔮 Magie, « Où améliorer quoi ? » dans Savoir, échelles harmonisées (humains ≈ 2,3 m), herbe masquée sous les bâtiments, qualité adaptative (`?fps=1` affiche les images/s).
+- Sauvegarde v5 (structures mal placées replacées au chargement). Test : `tests/magie.mjs`.

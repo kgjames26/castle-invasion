@@ -7,14 +7,14 @@ import { applyNorthFog } from './fog.js';
 
 const _c = new THREE.Color();
 // boîte colorée (couleurs de sommets, léger bruit par face pour casser les aplats) placée en coordonnées « modèle »
-function bx(w, h, d, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
+export function bx(w, h, d, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
   const g = new THREE.BoxGeometry(w, h, d).toNonIndexed(); g.deleteAttribute('uv'); g.deleteAttribute('normal');
   g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(1, 1, 1)));
   _c.set(color); const n = g.attributes.position.count, col = new Float32Array(n * 3);
   for (let i = 0; i < n; i += 3) { const f = 0.93 + ((i * 7919) % 100) / 100 * 0.14; for (let k = 0; k < 3; k++) { col[(i + k) * 3] = _c.r * f; col[(i + k) * 3 + 1] = _c.g * f; col[(i + k) * 3 + 2] = _c.b * f; } }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g;
 }
-function cyl(r, h, color, x, y, z, rx = 0, rz = 0, seg = 8) {   // cylindre coloré
+export function cyl(r, h, color, x, y, z, rx = 0, rz = 0, seg = 8) {   // cylindre coloré
   const g = new THREE.CylinderGeometry(r, r, h, seg).toNonIndexed(); g.deleteAttribute('uv'); g.deleteAttribute('normal');
   g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, rz)), new THREE.Vector3(1, 1, 1)));
   _c.set(color); const n = g.attributes.position.count, col = new Float32Array(n * 3);
@@ -22,26 +22,38 @@ function cyl(r, h, color, x, y, z, rx = 0, rz = 0, seg = 8) {   // cylindre colo
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g;
 }
 // pièce : géométrie fusionnée, exprimée relativement à son pivot ; mode 'rot' (rotation autour de x) ou 'slide' (translation en z) ou 'fix'
-function part(name, pivot, list, mode = 'fix', rel = false) {
+export function part(name, pivot, list, mode = 'fix', rel = false) {
   const g = mergeGeometries(list, false); if (!rel) g.translate(-pivot[0], -pivot[1], -pivot[2]); g.computeBoundingSphere();
   g.boundingSphere.radius = 12; return { name, pivot: new THREE.Vector3(...pivot), geo: g, mode };
 }
 
 const SKIN = 0xe0b48c, STEEL = 0xcfd6dd, DARKSTEEL = 0x8e98a4, LEATHER = 0x5a3a22, WOODC = 0x7a5a3a, DARKWOOD = 0x4a3426, IRON = 0x6f7780;
 
-// ——— fantassin : tunique, bouclier, casque, épée ; « lourd » = armure d'acier, grand bouclier, cimier ———
-function footParts(P) {
-  const heavy = !!P.heavy;
+// ——— RANGS (0 Recrue … 4 Légende) : la tenue s'étoffe avec le rang ———
+//  Recrue : tunique, calotte de cuir, petit écu de bois, épée courte · Régulier : casque d'acier · Vétéran : cotte de mailles, cimier
+//  Élite : plastron, cape, dorures · Légende : armure dorée, heaume à couronne, grand cimier, épée longue étincelante.
+const GOLDT = 0xf2c94a, MAIL = 0x7d858f;
+function footParts(P, tier = 1) {
+  const heavy = !!P.heavy, t = tier, helm = t === 0 ? 0x6b4a2c : t >= 4 ? GOLDT : P.helm, shield = t === 0 ? 0x8a6a3a : P.shield, trim = t >= 3 ? GOLDT : P.trim;
   const body = [
-    bx(0.5, 0.62, 0.3, P.cloth, 0, 1.06, 0), bx(0.54, 0.12, 0.34, LEATHER, 0, 0.78, 0),
-    bx(0.28, 0.28, 0.28, SKIN, 0, 1.55, 0.01), bx(0.34, 0.15, 0.36, P.helm, 0, 1.69, 0.01), bx(0.07, 0.2, 0.3, P.plume, 0, 1.8, 0, 0.0),
-    bx(0.12, 0.5, 0.12, P.cloth, -0.31, 1.0, 0),                                               // bras gauche
-    heavy ? bx(0.1, 0.78, 0.5, P.shield, -0.4, 1.0, 0.1) : bx(0.08, 0.52, 0.42, P.shield, -0.38, 1.05, 0.1),
-    bx(0.06, 0.34, 0.06, P.trim, -0.43, 1.05, 0.1, 0, 0, 0), bx(0.1, 0.06, 0.34, P.trim, -0.43, 1.05, 0.1),   // croix sur l'écu
+    bx(0.5, 0.62, 0.3, t >= 2 ? MAIL : P.cloth, 0, 1.06, 0), bx(0.52, 0.5, 0.06, P.cloth, 0, 0.98, 0.16),                       // corps (mailles dès Vétéran) + tabard
+    bx(0.54, 0.12, 0.34, LEATHER, 0, 0.78, 0),
+    bx(0.28, 0.28, 0.28, SKIN, 0, 1.55, 0.01), bx(0.34, t === 0 ? 0.1 : 0.15, 0.36, helm, 0, t === 0 ? 1.66 : 1.69, 0.01),
+    bx(0.12, 0.5, 0.12, P.cloth, -0.31, 1.0, 0),                                                                                 // bras gauche
+    heavy ? bx(0.1, 0.78, 0.5, shield, -0.4, 1.0, 0.1) : bx(0.08, t === 0 ? 0.42 : 0.52, t === 0 ? 0.36 : 0.42, shield, -0.38, 1.05, 0.1),
   ];
-  if (heavy) body.push(bx(0.6, 0.2, 0.38, DARKSTEEL, 0, 1.3, 0), bx(0.18, 0.14, 0.34, DARKSTEEL, 0.34, 1.34, 0), bx(0.18, 0.14, 0.34, DARKSTEEL, -0.34, 1.34, 0));
-  const leg = () => [bx(0.18, 0.7, 0.2, P.legs, 0, -0.35, 0), bx(0.2, 0.12, 0.28, LEATHER, 0, -0.66, 0.03)];
-  const sword = [bx(0.12, 0.5, 0.12, P.cloth, 0, -0.18, 0), bx(0.07, 0.07, 0.95, STEEL, 0, -0.42, 0.5), bx(0.22, 0.06, 0.07, P.trim, 0, -0.42, 0.04)];   // relatif à l'épaule
+  if (t >= 1) body.push(bx(0.06, 0.34, 0.06, trim, -0.43, 1.05, 0.1), bx(0.1, 0.06, 0.34, trim, -0.43, 1.05, 0.1));             // croix sur l'écu
+  if (t >= 1) body.push(bx(0.36, 0.05, 0.05, 0x1b1d22, 0, 1.62, 0.18));                                                          // nasal / visière
+  if (t >= 2) body.push(bx(0.07, 0.22 + 0.06 * t, 0.3 + 0.04 * t, t >= 4 ? GOLDT : P.plume, 0, 1.82 + 0.03 * t, -0.02));       // cimier
+  if (t >= 2 || heavy) body.push(bx(0.6, 0.2, 0.38, t >= 4 ? GOLDT : DARKSTEEL, 0, 1.3, 0), bx(0.2, 0.14, 0.36, t >= 3 ? trim : DARKSTEEL, 0.34, 1.34, 0), bx(0.2, 0.14, 0.36, t >= 3 ? trim : DARKSTEEL, -0.34, 1.34, 0));   // épaulières
+  if (t >= 3) body.push(bx(0.46, 0.44, 0.08, t >= 4 ? 0xe8edf2 : STEEL, 0, 1.12, 0.17), bx(0.5, 0.05, 0.09, trim, 0, 0.9, 0.18));   // plastron + liseré
+  if (t >= 3) body.push(bx(0.56, 0.9, 0.05, t >= 4 ? 0x8a1f24 : P.shield, 0, 1.0, -0.19), bx(0.58, 0.07, 0.06, trim, 0, 0.56, -0.19));   // cape
+  if (t >= 4) for (let k = 0; k < 5; k++) body.push(bx(0.05, 0.1, 0.05, GOLDT, -0.14 + k * 0.07, 1.8, 0.17));                     // couronne du heaume
+  if (t >= 3) body.push(bx(0.12, 0.12, 0.04, GOLDT, -0.44, 1.05, 0.11));                                                         // umbo doré
+  const leg = () => [bx(0.18, 0.7, 0.2, t >= 3 ? DARKSTEEL : P.legs, 0, -0.35, 0), bx(0.2, 0.12, 0.28, t >= 4 ? GOLDT : LEATHER, 0, -0.66, 0.03)];
+  const L = [0.7, 0.85, 0.95, 1.05, 1.25][t] * (heavy ? 1.08 : 1);
+  const sword = [bx(0.12, 0.5, 0.12, t >= 2 ? MAIL : P.cloth, 0, -0.18, 0), bx(0.07, 0.07, L, t >= 4 ? 0xf6f2e0 : STEEL, 0, -0.42, 0.04 + L / 2), bx(0.22 + 0.04 * t, 0.06, 0.07, trim, 0, -0.42, 0.04)];
+  if (t >= 4) sword.push(bx(0.09, 0.09, 0.09, 0xff5a3a, 0, -0.42, -0.04));                                                       // pommeau serti
   return [
     part('body', [0, 0, 0], body),
     part('legL', [-0.12, 0.72, 0], leg(), 'rot', true), part('legR', [0.12, 0.72, 0], leg(), 'rot', true),
@@ -50,24 +62,47 @@ function footParts(P) {
 }
 // ——— cavalier : seul le cavalier est une pièce de boîtes (le cheval est le modèle GLB animé en VAT, voir Renderer.renderSquads) ———
 //  repère : selle en (0, 1.6, 0) — dos du cheval cuit par tools/bake_horse.py ; le cavalier est posé dessus et suit le tangage du cheval.
-function horseParts(P) {
-  const dy = 0.15;
+//  rangs : caparaçon de plus en plus long et riche, lance plus longue, armure et heaume dorés pour la Légende.
+function horseParts(P, tier = 1) {
+  const dy = 0.15, t = tier, helm = t === 0 ? 0x6b4a2c : t >= 4 ? GOLDT : P.helm, trim = t >= 3 ? GOLDT : P.trim;
   const body = [
-    bx(0.7, 0.1, 0.9, P.cloth, 0, 1.6, 0), bx(0.1, 0.1, 0.1, LEATHER, 0, 1.68, 0.3),                                   // caparaçon + pommeau de selle
-    bx(0.4, 0.55, 0.26, P.cloth, 0, 1.78 + dy, 0), bx(0.26, 0.26, 0.26, SKIN, 0, 2.2 + dy, 0.01), bx(0.32, 0.14, 0.34, P.helm, 0, 2.34 + dy, 0.01), bx(0.06, 0.24, 0.3, P.plume, 0, 2.5 + dy, 0),
-    bx(0.1, 0.42, 0.34, P.shield, -0.3, 1.72 + dy, 0.1),
+    bx(0.7, 0.1, 0.9, P.cloth, 0, 1.6, 0), bx(0.1, 0.1, 0.1, LEATHER, 0, 1.68, 0.3),
+    bx(0.4, 0.55, 0.26, t >= 2 ? MAIL : P.cloth, 0, 1.78 + dy, 0), bx(0.42, 0.45, 0.05, P.cloth, 0, 1.76 + dy, 0.14), bx(0.26, 0.26, 0.26, SKIN, 0, 2.2 + dy, 0.01), bx(0.32, 0.14, 0.34, helm, 0, 2.34 + dy, 0.01),
+    bx(0.1, 0.42, 0.34, t === 0 ? 0x8a6a3a : P.shield, -0.3, 1.72 + dy, 0.1),
     bx(0.11, 0.4, 0.11, P.cloth, -0.26, 1.66 + dy, 0.05),
-    bx(0.14, 0.5, 0.16, P.legs, 0.38, 1.55, 0.06, 0, 0, -0.12), bx(0.14, 0.5, 0.16, P.legs, -0.38, 1.55, 0.06, 0, 0, 0.12),     // jambes de part et d'autre de la monture
+    bx(0.14, 0.5, 0.16, P.legs, 0.38, 1.55, 0.06, 0, 0, -0.12), bx(0.14, 0.5, 0.16, P.legs, -0.38, 1.55, 0.06, 0, 0, 0.12),
     bx(0.17, 0.12, 0.22, DARKWOOD, 0.42, 1.27, 0.08), bx(0.17, 0.12, 0.22, DARKWOOD, -0.42, 1.27, 0.08),
   ];
-  return [
-    part('body', [0, 0, 0], body),
-    part('arm', [0.3, 1.92 + dy, 0.02], [bx(0.11, 0.38, 0.11, P.cloth, 0.3, 1.74 + dy, 0.02), bx(0.07, 1.05, 0.07, STEEL, 0.3, 2.35 + dy, 0.02), bx(0.22, 0.06, 0.07, P.trim, 0.3, 1.9 + dy, 0.02)], 'rot'),
-  ];
+  if (t >= 1) body.push(bx(0.06, 0.24 + 0.05 * t, 0.3 + 0.04 * t, t >= 4 ? GOLDT : P.plume, 0, 2.5 + dy + 0.02 * t, 0));
+  if (t >= 2) { const drop = 0.35 + 0.15 * t; for (const sx of [-1, 1]) { body.push(bx(0.05, drop, 1.3, P.cloth, sx * 0.5, 1.6 - drop / 2, 0.05), bx(0.06, 0.07, 1.32, trim, sx * 0.51, 1.6 - drop + 0.04, 0.05)); } }   // caparaçon tombant
+  if (t >= 3) body.push(bx(0.36, 0.34, 0.06, t >= 4 ? 0xe8edf2 : STEEL, 0, 1.84 + dy, 0.17), bx(0.5, 0.75, 0.05, t >= 4 ? 0x8a1f24 : P.shield, 0, 1.75 + dy, -0.17));   // plastron + cape
+  if (t >= 4) for (let k = 0; k < 5; k++) body.push(bx(0.05, 0.1, 0.05, GOLDT, -0.12 + k * 0.06, 2.45 + dy, 0.17));
+  const L = [0.85, 1.05, 1.2, 1.35, 1.6][t];
+  const arm = [bx(0.11, 0.38, 0.11, P.cloth, 0.3, 1.74 + dy, 0.02), bx(0.07, L, 0.07, t >= 4 ? 0xf6f2e0 : STEEL, 0.3, 1.82 + dy + L / 2, 0.02), bx(0.22 + 0.04 * t, 0.06, 0.07, trim, 0.3, 1.9 + dy, 0.02)];
+  if (t >= 3) arm.push(bx(0.04, 0.32, 0.22, t >= 4 ? GOLDT : P.plume, 0.3, 1.82 + dy + L - 0.1, 0.13));     // fanion de lance
+  return [part('body', [0, 0, 0], body), part('arm', [0.3, 1.92 + dy, 0.02], arm, 'rot')];
+}
+export const tierOf = rankIndex => Math.max(0, Math.min(4, rankIndex | 0));
+export function siegeRig(scene, type, t) { return new Rig(scene, ({ ballista: ballistaParts, catapult: catapultParts, trebuchet: trebuchetParts })[type](t), 24); }
+export function troopRig(scene, type, tier) {
+  if (type === 'cavalry') return new Rig(scene, horseParts(PALETTES.cavalry, tier), 600);
+  return new Rig(scene, footParts(PALETTES[type], tier), type === 'heavy' ? 600 : 900);
 }
 
+// ——— niveaux de l'atelier de siège : 1 bois brut · 2 ferrures et clous de fer, roues cerclées · 3 dorures, bannière, brasero ———
+function siegeDeco(t, hw, hd, h) {
+  const out = [];
+  if (t >= 2) for (const sx of [-1, 1]) for (const sz of [-1, 1]) out.push(bx(0.36, 0.36, 0.36, IRON, sx * hw, h, sz * hd), bx(0.08, 0.08, 0.08, 0x2a2c30, sx * hw, h + 0.2, sz * hd));
+  if (t >= 2) out.push(bx(hw * 2 + 0.2, 0.1, 0.12, IRON, 0, h - 0.1, -hd), bx(hw * 2 + 0.2, 0.1, 0.12, IRON, 0, h - 0.1, hd));
+  if (t >= 3) {
+    out.push(bx(0.1, 3.2, 0.1, DARKWOOD, hw + 0.3, h + 1.4, hd), bx(0.06, 0.9, 1.1, 0x8a1f24, hw + 0.3, h + 2.5, hd - 0.6), bx(0.07, 0.12, 1.12, 0xf2c94a, hw + 0.31, h + 2.0, hd - 0.6), bx(0.2, 0.2, 0.2, 0xf2c94a, hw + 0.3, h + 3.1, hd));
+    out.push(bx(0.5, 0.5, 0.5, 0x3a3a3e, -hw - 0.6, 0.25, hd + 0.4), bx(0.4, 0.25, 0.4, 0xff7a2a, -hw - 0.6, 0.6, hd + 0.4), bx(0.22, 0.25, 0.22, 0xffd24a, -hw - 0.6, 0.85, hd + 0.4));   // brasero : boulets enflammés
+    for (const sx of [-1, 1]) out.push(bx(0.1, 0.1, hd * 2, 0xf2c94a, sx * (hw + 0.17), h + 0.2, 0));
+  }
+  return out;
+}
 // ——— catapulte : châssis à roues, montants, bras à cuillère, contrepoids (regarde vers -z) ———
-function catapultParts() {
+function catapultParts(t = 1) {
   const frame = [
     bx(0.3, 0.3, 3.4, WOODC, -0.7, 0.9, 0), bx(0.3, 0.3, 3.4, WOODC, 0.7, 0.9, 0), bx(1.7, 0.28, 0.3, DARKWOOD, 0, 0.95, -1.2), bx(1.7, 0.28, 0.3, DARKWOOD, 0, 0.95, 1.2),
     bx(0.3, 1.6, 0.3, DARKWOOD, -0.7, 1.7, 0.3), bx(0.3, 1.6, 0.3, DARKWOOD, 0.7, 1.7, 0.3), bx(1.7, 0.26, 0.3, DARKWOOD, 0, 2.45, 0.3),
@@ -77,10 +112,11 @@ function catapultParts() {
   ];
   // bras : le long côté (cuillère) part vers -z, le court côté porte le contrepoids vers +z
   const arm = [bx(0.26, 0.26, 3.1, 0x8a6a3a, 0, 0, -1.1), bx(0.7, 0.2, 0.8, DARKWOOD, 0, 0.1, -2.8), bx(0.5, 0.35, 0.5, 0x8a8a88, 0, 0.35, -2.8), bx(0.8, 0.8, 0.8, 0x5d5d62, 0, -0.1, 0.55)];
+  frame.push(...siegeDeco(t, 0.7, 1.2, 1.1));
   return [part('base', [0, 0, 0], frame), part('arm', [0, 2.25, 0.3], arm, 'rot', true)];
 }
 // ——— trébuchet : portique en A, grand bras, contrepoids en caisse, fronde ———
-function trebuchetParts() {
+function trebuchetParts(t = 1) {
   const frame = [
     bx(0.4, 0.4, 4.4, DARKWOOD, -1.2, 0.3, 0), bx(0.4, 0.4, 4.4, DARKWOOD, 1.2, 0.3, 0), bx(2.8, 0.36, 0.4, DARKWOOD, 0, 0.3, -2.0), bx(2.8, 0.36, 0.4, DARKWOOD, 0, 0.3, 2.0),
     // montants en A (deux de chaque côté, penchés)
@@ -89,13 +125,15 @@ function trebuchetParts() {
     bx(0.5, 0.5, 0.5, 0x8a8a88, 0, 0.7, -1.7),                                                                           // boulet posé
   ];
   const arm = [bx(0.34, 0.34, 6.6, 0x8a6a3a, 0, 0, -1.6), bx(0.16, 0.16, 1.4, LEATHER, 0, -0.1, -5.2), bx(0.6, 0.5, 0.6, LEATHER, 0, -0.35, -5.9), bx(0.9, 0.9, 1.1, 0x5d5d62, 0, -0.1, 1.9), bx(1.4, 0.5, 1.6, DARKSTEEL, 0, -0.9, 1.9)];
+  frame.push(...siegeDeco(t, 1.2, 2.0, 0.5));
   return [part('base', [0, 0, 0], frame), part('arm', [0, 4.7, 0], arm, 'rot', true)];
 }
 // ——— baliste : grand arc sur affût à roues, trait ———
-function ballistaParts() {
+function ballistaParts(t = 1) {
   const frame = [bx(0.4, 0.3, 2.6, WOODC, 0, 0.9, 0), bx(0.3, 0.9, 0.3, DARKWOOD, 0, 0.45, 0.4), bx(2.4, 0.18, 0.2, 0x7a4f2a, 0, 1.4, -0.6, 0, 0.0), bx(0.18, 0.18, 1.0, 0x7a4f2a, -1.2, 1.4, -0.3, 0, 0.5), bx(0.18, 0.18, 1.0, 0x7a4f2a, 1.2, 1.4, -0.3, 0, -0.5),
     ...[-1, 1].map(s => cyl(0.55, 0.22, DARKWOOD, s * 0.7, 0.55, 0.9, 0, Math.PI / 2, 10))];
   const bolt = [bx(0.08, 0.08, 1.7, 0xf5e6b0, 0, 1.55, -0.2), bx(0.16, 0.16, 0.3, STEEL, 0, 1.55, -1.1), bx(1.9, 0.04, 0.04, 0xe8e8e0, 0, 1.45, 0.4)];
+  frame.push(...siegeDeco(t, 0.25, 1.2, 1.0));
   return [part('base', [0, 0, 0], frame), part('bolt', [0, 0, 0], bolt, 'slide')];
 }
 
@@ -138,7 +176,7 @@ export const PALETTES = {
   heavy: { cloth: 0x6f7f9c, legs: 0x4a5266, helm: DARKSTEEL, plume: 0x2a2f3a, shield: 0x8e98a4, trim: 0xc0392b, heavy: true },
   cavalry: { cloth: 0x8c3fb0, legs: 0x4a3426, helm: STEEL, plume: 0xf2d65e, shield: 0x6b2d8a, trim: 0xf2d65e, horse: 0x8b5a2b, mane: 0x3a2a1c },
 };
-const MAT = applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+export const MAT = applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
 
 // Jeu de pièces instanciées pour un modèle.
 export class Rig {

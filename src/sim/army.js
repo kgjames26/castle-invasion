@@ -1,9 +1,10 @@
 // Armée : réserve, archers de garnison (chemin de ronde), ESCOUADES avec formations (garnison ou sortie sur le champ de bataille),
 // files d'entraînement. Les escouades agissent comme une seule entité : points de vie en réserve commune, membres dessinés par formation.
-import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_XS, WALL_Z0, WALL_Z1, WALK_H, PLAZA } from './constants.js';
-import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN, RANKS } from '../content/medieval.js';
+import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_XS, WALL_Z0, WALL_Z1, WALK_H, PLAZA, sectorOfX } from './constants.js';
+import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN, RANKS, UPGRADES } from '../content/medieval.js';
 
 const tmp = new Int32Array(1024), tmp2 = new Int32Array(1024);
+export const MOVE_Z0 = WALL_Z1 + 4, MOVE_Z1 = 208;          // zone où l'on peut poster une escouade à l'intérieur (cour + placette)
 export const archerPos = (s, k) => ({ x: s * SECTOR_W + ((k >> 1) + 0.5) * SECTOR_W / (ARCHER_SLOTS / 2), z: ARCHER_Z + (k & 1) * 2.4 - 1.2 });
 // ——— archers : montée par l'escalier le plus proche, puis marche sur le chemin de ronde jusqu'à leur créneau ———
 export const STAIR_Z0 = 159, STAIR_Z1 = 150.2, ARCHER_SPEED = 5;
@@ -42,7 +43,7 @@ export function formationLayout(form, n, size = 1) {
 
 export class Army {
   constructor() {
-    this.reserve = { archer: 0, soldier: 0, heavy: 0, cavalry: 0 };
+    this.reserve = { archer: 0, soldier: 0, heavy: 0, knight: 0, cavalry: 0 };
     this.archers = Array.from({ length: SECTORS }, () => ({ n: 0, cd: new Float32Array(ARCHER_SLOTS), prog: new Float32Array(ARCHER_SLOTS).fill(1e9) }));
     this.rally = { x: PLAZA.x, z: PLAZA.z }; this.walkers = []; this.gate = GATE_XS.map(() => 0); this.gateT = GATE_XS.map(() => 0); this.gateReq = GATE_XS.map(() => 0);
     this.squads = []; this.nextId = 1; this.outside = [];
@@ -133,7 +134,13 @@ export class Army {
   disband(q) { this.reserve[q.type] += q.n; this.squads.splice(this.squads.indexOf(q), 1); this.layoutPosts(); }
   setForm(q, f) { if (FORMATIONS[f]) q.form = f; }
   setStance(q, st) { q.stance = st; }
-  garrison(q, s) { q.mode = 'garrison'; q.sector = s; this.layoutPosts(); this.route(q, q.postX, q.postZ); }
+  garrison(q, s) { q.mode = 'garrison'; q.sector = s; q.custom = null; this.layoutPosts(); this.route(q, q.postX, q.postZ); }
+  // ordre direct : un point touché sur la carte. Devant la muraille = sortie ; derrière = nouveau poste de garnison à cet endroit précis.
+  moveTo(q, x, z) {
+    if (z < WALL_Z0 - 1) return this.sortie(q, x, z);
+    x = Math.min(196, Math.max(4, x)); z = Math.min(MOVE_Z1, Math.max(MOVE_Z0, z));
+    q.mode = 'garrison'; q.sector = sectorOfX(x); q.custom = { x, z }; this.layoutPosts(); this.route(q, x, z);
+  }
   sortie(q, x, z) {
     q.mode = 'field'; q.tx = Math.min(196, Math.max(4, x)); q.tz = Math.min(SQUAD.sortieZ[1], Math.max(SQUAD.sortieZ[0], z));
     this.layoutPosts(); this.route(q, q.tx, q.tz);
@@ -149,6 +156,7 @@ export class Army {
     const idx = new Array(SECTORS).fill(0);
     for (const q of this.squads) {
       if (q.mode !== 'garrison') continue;
+      if (q.custom) { q.postX = q.custom.x; q.postZ = q.custom.z; if (q.fresh) { q.x = q.px = q.postX; q.z = q.pz = q.postZ; q.fresh = false; } continue; }
       const k = idx[q.sector]++, col = k % 4, row = (k / 4) | 0;
       q.postX = q.sector * SECTOR_W + 5 + col * 10; q.postZ = GARRISON_Z + row * 7 + (UNITS[q.type].size > 1.2 && q.type === 'cavalry' ? 3 : 0);
       if (q.fresh) { q.x = q.px = q.postX; q.z = q.pz = q.postZ; q.fresh = false; }
@@ -161,6 +169,9 @@ export class Army {
     q.hp -= dmg * FORMATIONS[q.form].def * (1 - 0.08 * sim.eco.up.armor) / this.rank(sim, q.type).res; q.hit = 0.3;
     q.n = Math.max(0, Math.ceil(q.hp / this.unitHp(q.type)));
   }
+  // soin (magicien) : rend une part des PV maximum ; les membres tombés ne reviennent pas
+  healSquad(q, frac) { const mx = q.n * this.unitHp(q.type), before = q.hp; q.hp = Math.min(mx, q.hp + frac * mx); q.healed = 1; return q.hp - before; }
+  hpRatio(q) { return q.n ? q.hp / (q.n * this.unitHp(q.type)) : 1; }
   // ——— tick ———
   update(dt, sim) {
     const Z = sim.zombies, hash = sim.hash, eco = sim.eco, w = eco.up.weapons, ar = eco.up.archery;
@@ -191,7 +202,7 @@ export class Army {
   }
   updateSquad(q, dt, sim, weaponsLvl) {
     const Z = sim.zombies, hash = sim.hash, U = UNITS[q.type], F = FORMATIONS[q.form];
-    q.px = q.x; q.pz = q.z; if (q.hit > 0) q.hit -= dt; if (q.fight > 0) q.fight -= dt;
+    q.px = q.x; q.pz = q.z; if (q.hit > 0) q.hit -= dt; if (q.fight > 0) q.fight -= dt; if (q.healed > 0) q.healed -= dt; if (q.swing > 0) q.swing -= dt;
     const L = formationLayout(q.form, Math.max(1, q.n), U.size), rad = L.radius; q.rad = rad;
     const rk = this.rank(sim, q.type), speed = U.speed * F.speed * rk.speed;
     let moving = false;
@@ -227,19 +238,20 @@ export class Army {
       const mult = F.atk * (1 + (F.charge + (U.charge || 0)) * q.mom) * (1 + 0.1 * weaponsLvl) * rk.force * (moving ? 0.5 : 1);
       q.atkAcc += q.n * F.engage * dt / U.rate;
       let hits = q.atkAcc | 0; q.atkAcc -= hits;
-      while (hits-- > 0) { let i = tmp[q.rot++ % live]; Z.hit(i, U.dmg * mult); }
+      const cleave = (U.cleave || 1) + (q.type === 'knight' ? sim.eco.up.blades : 0), km = q.type === 'knight' ? 1 + UPGRADES.blades.per * sim.eco.up.blades : 1;
+      while (hits-- > 0) { for (let c = 0; c < Math.min(cleave, live); c++) { const i = tmp[q.rot++ % live]; Z.hit(i, U.dmg * mult * km * (c ? 0.6 : 1)); } if (cleave > 1) q.swing = 0.45; }
     }
   }
   // ——— sauvegarde ———
   serialize() {
     return {
       reserve: { ...this.reserve }, archers: this.archers.map(a => a.n), nextId: this.nextId, rally: { ...this.rally },
-      squads: this.squads.map(q => ({ id: q.id, type: q.type, n: q.n, hp: Math.round(q.hp), form: q.form, mode: q.mode, sector: q.sector, x: +q.x.toFixed(2), z: +q.z.toFixed(2), tx: q.tx, tz: q.tz, stance: q.stance })),
+      squads: this.squads.map(q => ({ id: q.id, type: q.type, n: q.n, hp: Math.round(q.hp), form: q.form, mode: q.mode, sector: q.sector, x: +q.x.toFixed(2), z: +q.z.toFixed(2), tx: q.tx, tz: q.tz, stance: q.stance, custom: q.custom || null })),
       queues: Object.fromEntries(TRAIN_BUILDINGS.map(b => [b, this.queues[b].map(i => ({ type: i.type, t: +i.t.toFixed(2), full: i.full }))])),
     };
   }
   restore(st) {
-    Object.assign(this.reserve, st.reserve); this.nextId = st.nextId || 1;
+    Object.assign(this.reserve, { knight: 0 }, st.reserve); this.nextId = st.nextId || 1;
     for (let s = 0; s < SECTORS; s++) { this.archers[s].n = st.archers[s]; this.archers[s].cd.fill(0.3); this.archers[s].prog.fill(1e9); }
     if (st.rally) { this.rally.x = st.rally.x; this.rally.z = st.rally.z; } this.walkers = [];
     this.squads = [];
@@ -248,5 +260,5 @@ export class Army {
     for (const q of this.squads) { const o = st.squads.find(s => s.id === q.id); q.x = q.px = o.x; q.z = q.pz = o.z; q.fresh = false; if (o.mode === 'field') this.route(q, o.tx, o.tz); else this.route(q, q.postX, q.postZ); }
     for (const b of TRAIN_BUILDINGS) this.queues[b] = (st.queues?.[b] || []).map(i => ({ ...i }));
   }
-  formSquadRaw(o) { return { id: o.id, type: o.type, n: o.n, hp: o.hp, form: o.form, mode: o.mode, sector: o.sector, x: o.x, z: o.z, px: o.x, pz: o.z, postX: 0, postZ: 0, tx: o.tx, tz: o.tz, way: [], stance: o.stance || 'hold', atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: false, rad: 3 }; }
+  formSquadRaw(o) { return { id: o.id, type: o.type, n: o.n, hp: o.hp, form: o.form, mode: o.mode, sector: o.sector, x: o.x, z: o.z, px: o.x, pz: o.z, postX: 0, postZ: 0, tx: o.tx, tz: o.tz, custom: o.custom || null, way: [], stance: o.stance || 'hold', atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: false, rad: 3 }; }
 }

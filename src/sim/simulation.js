@@ -8,7 +8,8 @@ import { Wall } from './wall.js';
 import { ZombieSwarm } from './zombies.js';
 import { Army } from './army.js';
 import { Siege } from './siege.js';
-import { START, UNITS, TIMING, waveSpec, giantsFor, PACK } from '../content/medieval.js';
+import { START, UNITS, TIMING, waveSpec, giantsFor, PACK, FIRE, DIFFICULTY } from '../content/medieval.js';
+import { Mages } from './mage.js';
 import { Economy } from './economy.js';
 import { Build } from './build.js';
 
@@ -23,16 +24,16 @@ export class Simulation {
     this.army = new Army(); this.siege = new Siege();
     this.eco = new Economy(this);
     this.build = new Build(this);
-    this.scratch = new Int32Array(256);
+    this.scratch = new Int32Array(4096);
     this.arrows = [];             // événements visuels (consommés par le rendu)
     this.events = [];             // 'breach', 'repair', 'waveStart', 'waveEnd', 'gameOver'
-    this.speed = 1;
+    this.speed = 1; this.difficulty = 'normal'; this.autoRepair = true;
     this.newGame();
   }
   newGame() {
     this.rng = makeRng(this.seed);
     this.wall.reset(); this.zombies.clear(); this.zombies.kills = 0;
-    this.army = new Army(); this.siege = new Siege();
+    this.army = new Army(); this.siege = new Siege(); this.mages = new Mages(); this.blasts = []; this.blastId = 0; this.fires = [];
     this.eco.reset(); this.build.reset();
     this.army.reserve = { ...START.reserve };
     for (let s = 0; s < SECTORS; s++) { this.army.reserve.archer += START.perSector.archer; this.army.assignArchers(s, START.perSector.archer); }
@@ -55,6 +56,7 @@ export class Simulation {
   squadStance(id, st) { const q = this.squad(id); if (q) this.army.setStance(q, st); }
   squadGarrison(id, s) { const q = this.squad(id); if (q) this.army.garrison(q, s); }
   squadSortie(id, x, z) { const q = this.squad(id); if (q) this.army.sortie(q, x, z); }
+  squadMove(id, x, z) { const q = this.squad(id); if (q) this.army.moveTo(q, x, z); }
   squadReinforce(id) { const q = this.squad(id); return q ? this.army.reinforce(q) : 0; }
   squadDisband(id) { const q = this.squad(id); if (q) this.army.disband(q); }
   buildSiege(type, s) { return this.siege.build(this, type, s); }
@@ -72,6 +74,24 @@ export class Simulation {
   recruitVillager() { return this.eco.recruitVillager(); }
   buyUpgrade(u) { return this.eco.buyUpgrade(u); }
   setRepairPriority(s) { this.eco.setRepairPriority(s); }
+  summonMage() { return this.mages.startSummon(this); }
+  setDifficulty(d) { if (DIFFICULTY[d]) this.difficulty = d; }
+  // ——— effets de zone (explosions, feu) : dégâts dans la simulation, trace visuelle dans `blasts` (lue par le rendu) ———
+  blast(kind, x, z, r, extra) { this.blasts.push({ id: ++this.blastId, kind, x, z, r, t: 0, ...extra }); if (this.blasts.length > 160) this.blasts.shift(); }
+  explode(x, z, r, dmg, kind = 'rock') {
+    const Z = this.zombies, k = this.hash.query(x, z, r, Z.x, Z.z, this.scratch);
+    for (let q = 0; q < k; q++) { const i = this.scratch[q]; if (Z.hp[i] <= 0) continue; const d = Math.hypot(Z.x[i] - x, Z.z[i] - z); if (d <= r) Z.hit(i, dmg * (1 - 0.5 * d / r)); }
+    if (kind === 'fire' || kind === 'meteor') this.fires.push({ x, z, r: r * 0.75, t: FIRE.time * (kind === 'meteor' ? 1.4 : 1) });
+    this.blast(kind, x, z, r);
+  }
+  burn(dt) {
+    const Z = this.zombies;
+    for (let f = this.fires.length - 1; f >= 0; f--) {
+      const F = this.fires[f]; F.t -= dt; if (F.t <= 0) { this.fires.splice(f, 1); continue; }
+      const k = this.hash.query(F.x, F.z, F.r, Z.x, Z.z, this.scratch);
+      for (let q = 0; q < k; q++) { const i = this.scratch[q]; if (Z.hp[i] > 0 && (Z.x[i] - F.x) ** 2 + (Z.z[i] - F.z) ** 2 <= F.r * F.r) Z.hit(i, FIRE.dps * dt); }
+    }
+  }
   skipPrep() { if (this.phase === 'prep') this.timer = 0; }
 
   // ——— événements internes ———
@@ -89,7 +109,8 @@ export class Simulation {
     this.targets = out.sort();
   }
   startAssault() {
-    const spec = waveSpec(this.wave), counts = spec.frac.map(f => Math.round(f * spec.n));
+    const spec = waveSpec(this.wave), D = DIFFICULTY[this.difficulty] || DIFFICULTY.normal; spec.n = Math.round(spec.n * D.n); this.zombies.hpMult = D.hp;
+    const counts = spec.frac.map(f => Math.round(f * spec.n));
     counts[0] += spec.n - counts.reduce((a, b) => a + b, 0);
     const giants = giantsFor(this.wave, this.rng()); counts[5] = giants;
     this.spawn = { counts, left: spec.n + giants, total: spec.n + giants, rate: spec.n / spec.duration, acc: 0, next: this.packSize(spec.n) };
@@ -122,11 +143,13 @@ export class Simulation {
     const rng = this.rng, s = this.targets[(rng() * this.targets.length) | 0], cx = s * SECTOR_W + SECTOR_W / 2;
     const gx = Math.min(W - 6, Math.max(6, cx + (rng() - 0.5) * 70)), gz = 3 + rng() * 22, rad = 2 + Math.sqrt(size) * PACK.spread;
     let primary = this.pickType(sp), done = 0; if (primary < 0) return 0;
+    const grp = this.nextGroup = (this.nextGroup || 0) % 1000000 + 1;
     for (let i = 0; i < size && sp.left > 0; i++) {
       let t = i === 0 && primary === 5 ? 5 : (primary === 5 ? 0 : (rng() < 0.2 ? this.pickType(sp) : primary));
       if (t < 0 || sp.counts[t] <= 0) t = this.pickType(sp); if (t < 0) break;
-      const r = rad * Math.sqrt(rng()), a = rng() * Math.PI * 2, x = Math.min(W - 1, Math.max(1, gx + Math.cos(a) * r)), z = Math.max(1, gz + Math.sin(a) * r * 0.8);
-      if (!this.zombies.spawn(t, x, z, s, rng)) break;
+      // horde en front large (plus large que profonde) : elle arrive sur plusieurs tronçons à la fois
+      const r = rad * Math.sqrt(rng()), a = rng() * Math.PI * 2, ox = Math.cos(a) * r * 1.5, oz = Math.sin(a) * r * 0.6, x = Math.min(W - 1, Math.max(1, gx + ox)), z = Math.max(1, gz + oz);
+      if (!this.zombies.spawn(t, x, z, s, rng, grp, ox, oz)) break;
       sp.counts[t]--; sp.left--; done++;
     }
     return done;
@@ -146,9 +169,12 @@ export class Simulation {
     this.zombies.update(dt, this);
     this.army.update(dt, this);
     this.siege.update(dt, this);
+    this.mages.update(dt, this);
+    this.burn(dt);
     this.build.update(dt);
     this.eco.update(dt);
     this.zombies.compact();
+    for (let i = this.blasts.length - 1; i >= 0; i--) { this.blasts[i].t += dt; if (this.blasts[i].t > 2.5) this.blasts.splice(i, 1); }
     for (let i = this.arrows.length - 1; i >= 0; i--) { this.arrows[i].t += dt; if (this.arrows[i].t > 0.4) this.arrows.splice(i, 1); }
   }
   // Danger d'un secteur : 0 calme, 1 menace proche, 2 attaque en cours

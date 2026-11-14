@@ -6,6 +6,7 @@ import { Renderer } from './render/Renderer.js';
 import { loadKit } from './render/Kit.js';
 import { loadWall } from './render/WallView.js';
 import { loadCharacters } from './render/Characters.js';
+import { loadItems, loadKnight } from './render/Heroes.js';
 import { CameraController } from './camera/CameraController.js';
 import { UI } from './ui/UI.js';
 import { VERSION } from './version.js';
@@ -19,6 +20,8 @@ const resumed = load(sim);
 const view = document.getElementById('view');
 const rd = new Renderer(view, sim);
 loadCharacters().then(c => rd.useCharacters(c)).catch(e => console.warn('Personnages indisponibles, géométrie provisoire conservée', e));
+loadItems().then(() => rd.useItems()).catch(e => console.warn('Objets indisponibles, formes simples conservées', e))
+  .then(() => loadKnight()).then(() => rd.useKnight()).catch(e => console.warn('Chevalier GLB indisponible, modèle simple conservé', e));
 loadKit().then(k => rd.useKit(k)).catch(e => console.warn('Décor du kit indisponible, géométrie provisoire conservée', e));
 loadWall('assets/wall/dungeon_wall.glb').then(w => rd.useWall(w)).catch(e => console.warn('Muraille GLB indisponible, muraille provisoire conservée', e));
 let ui;
@@ -26,7 +29,7 @@ const cam = new CameraController(rd.camera, rd.renderer.domElement, (x, z) => ui
 const audio = new AudioManager();   // sons synthétisés (Web Audio) : lit l'état, ne le modifie pas
 addEventListener('pointerdown', () => audio.unlock()); addEventListener('keydown', () => audio.unlock());
 const hooks = {
-  rd, cam, audio,
+  rd, cam, audio, resumed,
   newGame: () => { clearSave(); sim.newGame(); ui.sel = -1; ui.cancelPlace(); ui.closeCard(); ui.closeSheet(); ui.showOver(false); ui.refresh(true); save(sim); },
 };
 ui = new UI(sim, hooks);
@@ -37,6 +40,16 @@ new ResizeObserver(onResize).observe(view); onResize();
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(sim); }); addEventListener('pagehide', () => save(sim));
 
 let last = performance.now(), acc = 0, autosave = 0, wasOver = false, lastWave = sim.wave;
+// qualité adaptative : si l'appareil peine (moins de 24 images/s en moyenne sur 6 s), on baisse d'un cran (une fois par cran, jamais au-dessus du choix)
+const perf = { t: 0, n: 0, warm: 4, done: /[?&]q=/.test(location.search) };
+function adapt(dt) {
+  if (perf.done || document.hidden) return; perf.warm -= dt; if (perf.warm > 0) return;
+  perf.t += dt; perf.n++; if (perf.t < 6) return;
+  const fps = perf.n / perf.t; perf.t = 0; perf.n = 0;
+  if (fps < 24) { const q = rd.qualityName(), down = q === 'high' ? 'medium' : q === 'medium' ? 'low' : null; if (down) { rd.setQuality(down); ui.toast(`⚙ Qualité réduite (${Math.round(fps)} img/s) — réglable dans ☰`, 'info'); perf.warm = 3; } else perf.done = true; }
+  else perf.done = true;
+}
+if (/[?&]fps=1\b/.test(location.search)) { const f = document.createElement('div'); f.style.cssText = 'position:fixed;left:4px;bottom:22px;z-index:99;font:11px monospace;color:#fff;background:#0008;padding:2px 4px'; document.body.appendChild(f); let c = 0, t0 = performance.now(); (function tick() { c++; const n = performance.now(); if (n - t0 > 1000) { f.textContent = `${Math.round(c * 1000 / (n - t0))} img/s · ${rd.renderer.info.render.calls} appels · ${(rd.renderer.info.render.triangles / 1000).toFixed(0)}k tri`; c = 0; t0 = n; } requestAnimationFrame(tick); })(); }
 function frame(now) {
   const dt = Math.min(0.25, (now - last) / 1000); last = now;
   if (!document.hidden) {
@@ -47,7 +60,7 @@ function frame(now) {
     for (const e of sim.events.splice(0)) { ui.onEvent(e); audio.onEvent(e); if (e.type === 'waveEnd' || e.type === 'built') save(sim); if (e.type === 'gameOver') clearSave(); }
     if (autosave > 30) { autosave = 0; if (!sim.over) save(sim); }
     if (sim.over !== wasOver) { wasOver = sim.over; ui.showOver(sim.over); }
-    cam.update(dt); ui.tick(dt);
+    cam.update(dt); ui.tick(dt); adapt(dt);
     audio.frame(sim, dt);
     rd.render(sim.speed ? acc / TICK : 1, dt);
   }

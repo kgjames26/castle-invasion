@@ -1,6 +1,6 @@
 // Économie : villageois autonomes (aucun ordre individuel). Le joueur fixe seulement les EFFECTIFS par tâche.
 // Chaque villageois sait quoi faire : aller au site → récolter → TOUT rapporter au château → recommencer.
-import { TASKS, BUILDINGS, UPGRADES, ECON, START, RES, RES_INFO, PROSPECT, START_DEPOSITS } from '../content/medieval.js';
+import { TASKS, BUILDINGS, UPGRADES, ECON, START, RES, RES_INFO, PROSPECT, START_DEPOSITS, AUTO_REPAIR } from '../content/medieval.js';
 import { SEGS, SEG_W, SECTORS, SEGS_PER_SECTOR } from './constants.js';
 import { WALL } from '../content/medieval.js';
 
@@ -23,13 +23,13 @@ export class Economy {
     for (let i = 0; i < START.villagers; i++) this.addVillager();
     this.rate = {}; this.acc = {}; for (const t of GATHER) { this.rate[t] = 0; this.acc[t] = 0; }
     this.rateTimer = 0; this.famine = false; this.lost = 0; this.claims = new Int8Array(SEGS);
-    this.counts = {}; this.syncTasks();
+    this.counts = {}; this.loans = []; this.loanTimer = 0; this.syncTasks();
   }
   // ——— grandeurs dérivées ———
   cap(r) { return ECON.baseStore + ECON.storePerLevel * this.level[r === 'food' ? 'granary' : 'warehouse']; }
   // Population PARTAGÉE : villageois + toutes les unités militaires (réserve, escouades, garnisons, file d'entraînement)
   popCap() { return ECON.popBase + ECON.popPerHouse * this.houses; }
-  population() { return this.villagers.length + this.sim.army.popUsed() + this.sim.siege.popUsed(); }
+  population() { return this.villagers.length + this.sim.army.popUsed() + this.sim.siege.popUsed() + (this.sim.mages ? this.sim.mages.popUsed() : 0); }
   popRoom() { return this.popCap() - this.population(); }
   speed() { return ECON.villagerSpeed * (1 + UPGRADES.boots.per * this.up.boots); }
   carryCap() { return ECON.carry * (1 + UPGRADES.carts.per * this.up.carts); }
@@ -108,13 +108,42 @@ export class Economy {
   scaled(base, mult) { const o = {}; for (const r in base) o[r] = Math.round(base[r] * mult); return o; }
   upgradeCost(u) { return this.up[u] >= UPGRADES[u].max ? null : this.scaled(UPGRADES[u].cost, this.up[u] + 1); }
   // ——— commandes ———
-  setAssign(t, delta) {
+  // Effectifs d'une tâche. Sans villageois libre, on en EMPRUNTE un à la tâche la moins urgente (comme pour les chantiers) ;
+  // l'emprunt est noté : quand on retire ce villageois (ou quand la réparation est finie), il retourne à sa tâche d'origine.
+  setAssign(t, delta, auto = false) {
     let moved = 0;
     for (let k = 0; k < Math.abs(delta); k++) {
-      if (delta > 0) { if (this.idleCount() <= 0 || this.assign[t] >= this.taskCap(t)) break; this.assign[t]++; moved++; }
-      else { if (this.assign[t] <= 0) break; this.assign[t]--; moved++; }
+      if (delta > 0) {
+        if (this.assign[t] >= this.taskCap(t)) break;
+        if (this.idleCount() > 0) { this.assign[t]++; moved++; if (auto) this.loans.push({ from: null, to: t }); continue; }
+        const donor = this.donorFor(t); if (!donor) break;
+        this.assign[donor]--; this.assign[t]++; this.loans.push({ from: donor, to: t }); moved++;
+      } else {
+        if (this.assign[t] <= 0) break;
+        this.assign[t]--; moved++; this.giveBack(t);
+      }
     }
     this.syncTasks(); return moved;
+  }
+  donorFor(t) {
+    let donor = null, du = Infinity;          // la tâche la moins urgente qui a du monde
+    for (const u of TASK_IDS) { if (u === t || this.assign[u] <= 0) continue; const v = this.urgency(u); if (v < du) { du = v; donor = u; } }
+    return donor;
+  }
+  // un villageois emprunté pour `t` quitte la tâche : il retourne là d'où il vient (si la place existe encore)
+  giveBack(t) {
+    const i = this.loans.findIndex(l => l.to === t); if (i < 0) return; const l = this.loans.splice(i, 1)[0];
+    if (l.from) this.assign[l.from]++;                    // sa place d'origine lui revient
+  }
+  // réparation automatique : personne ne répare et un tronçon souffre → on emprunte une petite équipe ; elle repart une fois le mur réparé
+  updateLoans(dt) {
+    this.loanTimer -= dt; if (this.loanTimer > 0) return; this.loanTimer = 1;
+    const W = this.sim.wall; let worst = 1, damaged = false;
+    for (let i = 0; i < W.hp.length; i++) { const r = W.hp[i] / W.segMax(i); if (r < 0.999) damaged = true; if (r < worst) worst = r; }
+    if (!damaged) { let n = 0; for (const l of this.loans) if (l.to === 'repair') n++; if (n) { for (let k = 0; k < n; k++) { if (this.assign.repair > 0) { this.assign.repair--; this.giveBack('repair'); } } this.syncTasks(); this.sim.events.push({ type: 'autoRepairDone', n }); } return; }
+    if (this.sim.autoRepair && this.assign.repair === 0 && worst < AUTO_REPAIR.threshold && this.res.stone >= 5) {
+      const n = this.setAssign('repair', AUTO_REPAIR.crew, true); if (n) this.sim.events.push({ type: 'autoRepair', n });
+    }
   }
   recruitVillager() {
     if (this.popRoom() <= 0 || !this.pay(ECON.villagerCost)) return false;
@@ -160,7 +189,7 @@ export class Economy {
     const eat = (this.villagers.length * ECON.upkeep.villager + this.military() * ECON.upkeep.unit) * dt;
     this.res.food -= eat; if (this.res.food <= 0) { this.res.food = 0; this.famine = true; } else if (this.res.food > 5) this.famine = false;
     for (const t of GATHER) { const T = TASKS[t]; if (T.regen && this.deposit[t] < T.deposit) this.deposit[t] = Math.min(T.deposit, this.deposit[t] + T.regen * dt); }   // la forêt repousse
-    this.updateProspect(dt);
+    this.updateProspect(dt); this.updateLoans(dt);
     this.claims.fill(0); for (const v of this.villagers) if (v.task === 'repair' && v.seg >= 0) this.claims[v.seg]++;
     for (let i = 0; i < this.villagers.length; i++) this.updateVillager(this.villagers[i], i, dt);
     this.rateTimer += dt;
@@ -238,14 +267,14 @@ export class Economy {
   serialize() {
     return {
       res: { ...this.res }, houses: this.houses, level: { ...this.level }, up: { ...this.up }, assign: { ...this.assign }, repairPriority: this.repairPriority,
-      deposit: { ...this.deposit }, extra: JSON.parse(JSON.stringify(this.extra)), prospect: this.prospect ? { ...this.prospect } : null, lost: this.lost, famine: this.famine,
+      deposit: { ...this.deposit }, extra: JSON.parse(JSON.stringify(this.extra)), loans: this.loans.map(l => ({ ...l })), prospect: this.prospect ? { ...this.prospect } : null, lost: this.lost, famine: this.famine,
       villagers: this.villagers.map(v => ({ task: v.task, state: v.state, x: +v.x.toFixed(2), z: +v.z.toFixed(2), carry: v.carry, carryRes: v.carryRes, timer: v.timer, seg: v.seg, leaving: v.leaving, job: v.job, bx: v.bx, bz: v.bz, home: v.home || null })),
     };
   }
   restore(st) {
     this.reset();
     Object.assign(this.res, st.res); Object.assign(this.level, st.level); Object.assign(this.up, st.up); Object.assign(this.assign, st.assign);
-    Object.assign(this.deposit, st.deposit); if (st.extra) this.extra = { stone: [], iron: [], gold: [], ...st.extra }; this.prospect = st.prospect || null; this.repairPriority = st.repairPriority ?? -1; this.lost = st.lost || 0; this.famine = !!st.famine;
+    Object.assign(this.deposit, st.deposit); if (st.extra) this.extra = { stone: [], iron: [], gold: [], ...st.extra }; this.loans = (st.loans || []).map(l => ({ ...l })); this.prospect = st.prospect || null; this.repairPriority = st.repairPriority ?? -1; this.lost = st.lost || 0; this.famine = !!st.famine;
     this.villagers = []; this.nextId = 1;
     for (const o of st.villagers) { const v = this.addVillager(o.x, o.z); Object.assign(v, { task: o.task, state: o.state, carry: o.carry, carryRes: o.carryRes, timer: o.timer, seg: o.seg, leaving: o.leaving, job: o.job || 0, bx: o.bx || 0, bz: o.bz || 0, home: o.home || null }); }
     this.syncTasks();

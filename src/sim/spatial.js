@@ -3,7 +3,7 @@ import { W, D } from './constants.js';
 export class SpatialHash {
   constructor(cell = 4, capacity = 4096) {
     this.cell = cell; this.cw = Math.ceil(W / cell); this.ch = Math.ceil(D / cell);
-    this.head = new Int32Array(this.cw * this.ch);
+    this.head = new Int32Array(this.cw * this.ch).fill(-1);      // vide tant qu'aucune reconstruction n'a eu lieu
     this.next = new Int32Array(capacity);
   }
   rebuild(xs, zs, n) {

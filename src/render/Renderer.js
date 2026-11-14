@@ -1,5 +1,6 @@
 // Rendu Three.js : lit l'état de la simulation, ne le modifie jamais. Géométrie provisoire (low-poly basique).
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, GATE_SEGS, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT, PLAZA } from '../sim/constants.js';
 import { T } from '../sim/terrain.js';
 import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/medieval.js';
@@ -11,12 +12,18 @@ import { stoneMaterial, kitMaterial } from './Stone.js';
 import { Effects, EFFECTS } from './Effects.js';
 import { ATMOS, CAMERA, quality, setQualityName } from './config.js';
 import { fogUniforms, patchNorthFog } from './fog.js';
-import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry } from './Troops.js';
+import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry, troopRig, siegeRig, bx } from './Troops.js';
+import { buildKnightRigs, makeMage, poseMage, knightRig } from './Heroes.js';
+import { Paving, carrierGeometry, TOOL_TINT } from './Village.js';
+import { RANKS } from '../content/medieval.js';
 const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1]];      // variantes de modèle par type de zombie
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
 
 const lam = (color, opts = {}) => applyNorthFog(new THREE.MeshLambertMaterial({ color, flatShading: true, ...opts }));
-const ASC = 0.95;   // archers nettement plus petits (v1.1)
+// Échelles (v1.8) : tous les humains mesurent ≈ 2,3 m (un peu plus grands que nature pour rester lisibles de haut) ;
+// zombie classique = humain ; colosse ≈ 10 m. Muraille 6,4 m, porte 4,4 m : un cavalier passe sous la herse.
+export const HUMAN_H = 2.3;
+const ASC = HUMAN_H / 1.69;
 const ZSCALE = 1.45, USCALE = 1.75;   // personnages à l'échelle des bâtiments (v3.1 : réduits d'environ 35 % pour éviter l'effet « maquette »)
 
 export class Renderer {
@@ -33,8 +40,8 @@ export class Renderer {
     sun.target.position.set(A.x, 0, A.z); sun.position.set(A.x + ATMOS.sunPos[0], ATMOS.sunPos[1], A.z + ATMOS.sunPos[2]); this.scene.add(sun, sun.target);
     Object.assign(sun.shadow.camera, { left: -A.hw, right: A.hw, top: A.hd, bottom: -A.hd, near: 10, far: 420 }); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.35; sun.shadow.radius = 3;
     this.dummy = new THREE.Object3D(); this.tmpColor = new THREE.Color();
-    this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildSiege(); this.rigs = buildTroopRigs(this.scene); this.vrigs = buildVillagerRigs(this.scene); this.vMesh.visible = false; this.buildHighlight();
-    this.buildGrass(); this.buildBlobs();
+    this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildSiege(); this.rigs = buildTroopRigs(this.scene); Object.assign(this.rigs, buildKnightRigs(this.scene)); this.rigs.knightGold = this.rigs.knight; this.mageViews = new Map(); this.rigTier = {}; this.vrigs = buildVillagerRigs(this.scene); this.vMesh.visible = false; this.buildHighlight();
+    this.buildGrass(); this.buildBlobs(); this.paving = new Paving(this.scene); this.cartLevel = -1;
     this.applyQuality();
     this.buildTorches(); this.buildRangeIndicator();
     this.fx = new Effects(this.scene, { enabled: EFFECTS.enabled });   // particules (flèches, zombies, muraille, siège) : vue seule
@@ -78,6 +85,18 @@ export class Renderer {
       d.position.set(x, 0, z); d.rotation.set(0, r() * 6.28, 0); d.scale.set(k, k * (0.8 + r() * 0.5), k); d.updateMatrix(); im.setMatrixAt(n, d.matrix); im.setColorAt(n, c.setRGB(col[0] * v, col[1] * v, col[2] * v)); n++;
     }
     im.userData.max = n; im.count = n; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; this.scene.add(im); this.grass = im;
+    this.grassBase = im.instanceMatrix.array.slice(0, n * 16); this.grassVer = -1;
+  }
+  // pas d'herbe à travers les bâtiments : les touffes sous une emprise (et sur les chemins pavés) sont masquées quand la construction change
+  maskGrass() {
+    const B = this.sim.build, key = B.version * 10 + (this.sim.eco.up.boots >= 2 ? 1 : 0); if (!this.grass || key === this.grassVer) return; this.grassVer = key;
+    const base = this.grassBase, arr = this.grass.instanceMatrix.array, n = base.length / 16, boxes = B.items.map(s => { const [hw, hd] = B.half(s.type, s.rot); return [s.x, s.z, hw + 0.9, hd + 0.9]; });
+    for (let i = 0; i < n; i++) {
+      const o = i * 16, x = base[o + 12], z = base[o + 14]; let hide = false;
+      for (const b of boxes) if (Math.abs(x - b[0]) < b[2] && Math.abs(z - b[1]) < b[3]) { hide = true; break; }
+      for (let k = 0; k < 16; k++) arr[o + k] = hide && k !== 15 && k < 12 ? 0 : base[o + k];
+    }
+    this.grass.instanceMatrix.needsUpdate = true;
   }
   // ——— ombres de contact sous les personnages (ils ne projettent pas d'ombre) : disques sombres instanciés, très bon marché ———
   buildBlobs() {
@@ -388,17 +407,19 @@ export class Renderer {
   }
   // ——— troupes : fantassins, lourds, cavaliers (pièces animées : jambes, bras, bras d'épée) ———
   renderSquads(alpha) {
-    const R = this.rigs, d = this.dummy, t = this.clock, sel = this.selSquad, tint = this.tmpColor, SCALE = { soldier: 1.6, heavy: 1.8, cavalry: 1.35 };
-    R.soldier.begin(); R.heavy.begin(); R.cavalry.begin();
+    const R = this.rigs, d = this.dummy, t = this.clock, sel = this.selSquad, tint = this.tmpColor, SCALE = { soldier: HUMAN_H / 1.85, heavy: HUMAN_H * 1.08 / 1.85, cavalry: 1.3, knight: HUMAN_H * 1.1 / 2.0 };
+    this.syncTierRigs();
+    R.soldier.begin(); R.heavy.begin(); R.cavalry.begin(); R.knight.begin();
+    const gold = RANKS.indexOf(this.sim.army.rank(this.sim, 'knight')) >= 3;
     const hh = this.hh; if (hh) for (const k of hh.hg.skins) hh.cnt[k] = 0;
     const lerpAng = (a, b, k) => { let dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
     for (const q of this.sim.army.squads) {
-      const U = UNITS[q.type], rig = R[q.type] || R.soldier, horse = q.type === 'cavalry', L = formationLayout(q.form, Math.max(1, q.n), U.size);
+      const U = UNITS[q.type], rig = q.type === 'knight' ? (gold ? R.knightGold : R.knight) : (R[q.type] || R.soldier), horse = q.type === 'cavalry', knight = q.type === 'knight', L = formationLayout(q.form, Math.max(1, q.n), U.size);
       const cx = q.px + (q.x - q.px) * alpha, cz = q.pz + (q.z - q.pz) * alpha, dx = q.x - q.px, dz = q.z - q.pz, mv = dx * dx + dz * dz > 1e-4, fight = q.fight > 0;
       q.rmv = (q.rmv || 0) + ((mv ? 1 : 0) - (q.rmv || 0)) * 0.2;
       q.rrot = mv ? lerpAng(q.rrot ?? Math.PI, Math.atan2(dx, dz), 0.25) : lerpAng(q.rrot ?? Math.PI, Math.PI, 0.05);   // à l'arrêt : face au nord (zombies)
       const sc = SCALE[q.type] || 2.4, mvs = q.rmv, flash = q.hit > 0, isSel = q.id === sel;
-      if (flash) tint.setRGB(1.9, 1.2, 1.2); else if (isSel) tint.setRGB(1.3, 1.3, 1.0); else tint.setRGB(1, 1, 1);
+      if (flash) tint.setRGB(1.9, 1.2, 1.2); else if (q.healed > 0) tint.setRGB(1.1, 1.7, 1.15); else if (isSel) tint.setRGB(1.3, 1.3, 1.0); else tint.setRGB(1, 1, 1);
       for (let k = 0; k < q.n; k++) {
         const ph = t * (horse ? 11 : 9) + k * 1.7, ph2 = t * 8 + k * 2.3, sw = Math.sin(ph) * (horse ? 0.8 : 0.75) * mvs;
         d.position.set(cx + L.xs[k], Math.abs(Math.sin(ph)) * (horse ? 0.1 : 0.06) * mvs * sc, cz + L.zs[k]); d.scale.set(sc, sc, sc); d.rotation.set(0, q.rrot, 0); d.updateMatrix();
@@ -409,20 +430,81 @@ export class Renderer {
           const arm = fight ? 0.5 + (Math.sin(ph2) * 0.5 + 0.5) * 1.8 : 0.35 + 0.12 * Math.sin(ph); this._hm.multiplyMatrices(d.matrix, hg.seat[Math.floor(an)]).multiply(this._rs); rig.push(this._hm, tint, [0, arm]);
         }
         else if (horse) { const arm = fight ? 0.5 + (Math.sin(ph2) * 0.5 + 0.5) * 1.8 : 0.35 + 0.12 * Math.sin(ph); rig.push(d.matrix, tint, [0, arm]); }
+        else if (knight) {   // grande épée : moulinets amples au-dessus de la tête ; cape qui flotte
+          const ph3 = t * 5.5 + k * 1.9, arm = fight ? -1.5 + Math.sin(ph3) * 1.35 : -0.3 - 0.25 * mvs + 0.25 * Math.sin(ph + Math.PI) * mvs, cape = 0.12 + 0.35 * mvs + 0.06 * Math.sin(t * 3 + k);
+          rig.push(d.matrix, tint, [0, sw * 0.8, -sw * 0.8, arm, cape]);
+        }
         else { const arm = fight ? -1.1 + Math.sin(ph2) * 0.8 : -0.35 - 0.3 * mvs + 0.3 * Math.sin(ph + Math.PI) * mvs; rig.push(d.matrix, tint, [0, sw, -sw, arm]); }
       }
+      if (fight) this.meleeFx(q, cx, cz, knight);
     }
-    for (const type of ['soldier', 'heavy', 'cavalry']) this.renderWalkers(alpha, type, (x, z, rot, mv, i) => {      // recrues en marche vers la placette / à l'attente
-      const rig = R[type], sc = SCALE[type], ph = t * 9 + i * 1.7, sw = Math.sin(ph) * 0.75 * (mv ? 1 : 0); tint.setRGB(1, 1, 1);
+    for (const type of ['soldier', 'heavy', 'knight', 'cavalry']) this.renderWalkers(alpha, type, (x, z, rot, mv, i) => {      // recrues en marche vers la placette / à l'attente
+      const rig = type === 'knight' ? (gold ? R.knightGold : R.knight) : R[type], sc = SCALE[type], ph = t * 9 + i * 1.7, sw = Math.sin(ph) * 0.75 * (mv ? 1 : 0); tint.setRGB(1, 1, 1);
       d.position.set(x, mv ? Math.abs(Math.sin(ph)) * 0.06 : 0, z); d.scale.set(sc, sc, sc); d.rotation.set(0, rot, 0); d.updateMatrix();
       if (type === 'cavalry') {
         if (hh) { const hg = hh.hg, clip = mv ? 'walk' : 'idle', [c0, cn] = hg.clips[clip], fr = ((t * (mv ? 1 : 0.4) + i * 0.173) % 1 + 1) % 1, an = c0 + fr * cn, skin = hg.skins[(i * 3 + 1) % hg.skins.length], im = hh.meshes[skin], n = hh.cnt[skin]++;
           if (n < 120) { im.setMatrixAt(n, d.matrix); im.anim.array[n] = an; im.setColorAt(n, tint); } this._hm.multiplyMatrices(d.matrix, hg.seat[Math.floor(an)]).multiply(this._rs); rig.push(this._hm, tint, [0, 0.35]); }
         else rig.push(d.matrix, tint, [0, 0.35]);
-      } else rig.push(d.matrix, tint, [0, sw, -sw, -0.35 - 0.3 * (mv ? 1 : 0) + 0.3 * Math.sin(ph + Math.PI) * (mv ? 1 : 0)]);
+      } else rig.push(d.matrix, tint, [0, sw, -sw, -0.35 - 0.3 * (mv ? 1 : 0) + 0.3 * Math.sin(ph + Math.PI) * (mv ? 1 : 0), 0.2 + 0.3 * (mv ? 1 : 0)]);
     });
-    R.soldier.end(); R.heavy.end(); R.cavalry.end();
+    R.soldier.end(); R.heavy.end(); R.cavalry.end(); R.knight.end();
     if (hh) for (const k of hh.hg.skins) { const im = hh.meshes[k]; im.count = Math.min(120, hh.cnt[k]); im.instanceMatrix.needsUpdate = true; im.anim.needsUpdate = true; im.instanceColor.needsUpdate = true; }
+  }
+  // ——— objets du pack (épée du chevalier, cristaux, grimoire…) : reconstruit les modèles qui les utilisent ———
+  // coups de mêlée selon le rang : étincelles (Vétéran), arcs de taille dorés (Élite), onde de choc au sol (Légende) — jamais de magie
+  meleeFx(q, cx, cz, knight) {
+    const fx = this.fx; if (!fx.enabled) return;
+    const tier = RANKS.indexOf(this.sim.army.rank(this.sim, q.type)); if (tier < 1) return;
+    const rot = q.rrot ?? Math.PI, fx0 = cx + Math.sin(rot) * (q.rad * 0.8), fz0 = cz + Math.cos(rot) * (q.rad * 0.8), rate = 0.02 * q.n * (knight ? 1.6 : 1) * fx.q.particles;
+    if (Math.random() < rate) { const x = fx0 + (Math.random() - 0.5) * q.rad * 1.6, z = fz0 + (Math.random() - 0.5) * 1.5; fx.burst(x, 1.4, z, tier >= 3 ? 6 : 4, 2.5, 2, 0.3, 0.15, 10, tier >= 3 ? [1, 0.85, 0.4] : [0.95, 0.95, 0.85], true); }
+    if (tier >= 3 && Math.random() < rate * 0.6) {      // arc de taille : particules additives le long d'un demi-cercle devant le combattant
+      const x = fx0 + (Math.random() - 0.5) * q.rad * 1.4, z = fz0 + (Math.random() - 0.5), r = knight ? 1.8 : 1.2, a0 = rot - 1.3, c = tier >= 4 ? [1, 0.82, 0.3] : [0.85, 0.9, 1];
+      for (let k = 0; k < 9; k++) { const a = a0 + k / 8 * 2.6; fx.A.emit(x + Math.sin(a) * r, 1.0 + 0.8 * Math.sin(k / 8 * Math.PI), z + Math.cos(a) * r, 0, 0.2, 0, 0.25, 0.32 - k * 0.015, 0, c); }
+    }
+    if (tier >= 4) { q.slamT = (q.slamT ?? Math.random() * 2) - 1 / 60; if (q.slamT <= 0) { q.slamT = knight ? 1.4 : 2.2; fx.ring(fx0, fz0, q.rad * 2.2 + 3, 0.5, [1, 0.8, 0.35]); fx.burst(fx0, 0.4, fz0, 14, 4, 2, 0.8, 0.5, 8, [0.8, 0.74, 0.62]); fx.flash(fx0, 1.2, fz0, 3, 0.25, [1, 0.8, 0.4]); fx.addShake(0.05); } }
+  }
+  // rangs : chaque type d'unité a UN rang à la fois (niveau de son bâtiment) → on reconstruit son rig quand le rang change
+  swapRig(key, tier, make) {
+    if (this.rigTier[key] === tier) return; this.rigTier[key] = tier;
+    const old = this.rigs[key]; if (old) for (const m of old.meshes) { this.scene.remove(m); m.dispose(); }
+    this.rigs[key] = make();
+  }
+  syncTierRigs() {
+    const sim = this.sim, tierOf = t => RANKS.indexOf(sim.army.rank(sim, t));
+    for (const t of ['soldier', 'heavy', 'cavalry']) { const k = tierOf(t); this.swapRig(t, k, () => troopRig(this.scene, t, k)); }
+    const kk = tierOf('knight') + (this.knightGlb ? 10 : 0); this.swapRig('knight', kk, () => knightRig(this.scene, kk % 10)); this.rigs.knightGold = this.rigs.knight;
+    const w = Math.max(1, sim.eco.level.workshop || 1); for (const t of ['ballista', 'catapult', 'trebuchet']) this.swapRig(t, w, () => siegeRig(this.scene, t, w));
+  }
+  useKnight() { this.knightGlb = true; this.rigTier.knight = -1; }
+  useItems() {
+    this.rigTier = {};
+    for (const v of this.mageViews.values()) this.scene.remove(v.root); this.mageViews.clear();
+    this.struct.setKit(this.struct.kit);
+  }
+  // ——— magicien : un groupe articulé par magicien ; pose selon l'action (marche, incantation, soin) ; lueur du cristal ———
+  renderMages(alpha) {
+    const M = this.sim.mages; if (!M) return; const seen = new Set(), t = this.clock;
+    for (const m of M.list) {
+      let v = this.mageViews.get(m.id);
+      const lvl = Math.max(1, M.level(this.sim));
+      if (v && v.level !== lvl) { this.scene.remove(v.root); this.mageViews.delete(m.id); v = null; }      // nouveau niveau : nouvelle tenue
+      if (!v) { v = makeMage(lvl); v.walk = 0; v.cast = 0; v.heal = 0; v.rot = m.face; this.scene.add(v.root); this.mageViews.set(m.id, v); }
+      seen.add(m.id);
+      const x = m.px + (m.x - m.px) * alpha, z = m.pz + (m.z - m.pz) * alpha, mv = Math.hypot(m.x - m.px, m.z - m.pz) > 0.004, healing = m.cast && (m.cast.k === 'heal' || m.cast.k === 'mend');
+      const k = 0.15; v.walk += ((mv ? 1 : 0) - v.walk) * k; v.cast += ((m.cast && !healing ? 1 : 0) - v.cast) * 0.25; v.heal += ((healing ? 1 : 0) - v.heal) * 0.25;
+      let dr = ((m.face - v.rot + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; v.rot += dr * 0.2;
+      const sc = HUMAN_H / 2.05; v.root.position.set(x, 0, z); v.root.scale.setScalar(sc); v.body.rotation.y = v.rot;
+      poseMage(v, { t: t + m.id, walk: v.walk, cast: v.cast, heal: v.heal }); if (v.halo) v.halo.rotation.y = t * 2;
+      if (lvl >= 5 && Math.random() < 0.3 * this.fx.q.particles) this.fx.A.emit(x + (Math.random() - 0.5) * 1.6, 0.3, z + (Math.random() - 0.5) * 1.6, 0, 1.2, 0, 1.2, 0.18, -0.2, [1, 0.85, 0.4]);   // archimage : poussière d'or
+      v.root.updateMatrixWorld(true); const p = this._tipV || (this._tipV = new THREE.Vector3()); v.tip.getWorldPosition(p);
+      const c = m.cast ? m.cast.k : '', pulse = 0.8 + 0.2 * Math.sin(t * 6);
+      const col = c === 'heal' ? [0.3, 1, 0.4] : c === 'mend' ? [0.5, 0.7, 1] : c === 'nova' ? [0.5, 0.9, 1] : c === 'fireball' || c === 'meteor' ? [1, 0.5, 0.15] : c === 'lightning' ? [0.7, 0.8, 1] : [0.6, 0.35, 1];
+      this.fx.glowNow(p.x, p.y, p.z, (m.cast ? 1.5 : 0.7) * pulse, col[0] * 0.7, col[1] * 0.7, col[2] * 0.7);
+      if (m.cast && Math.random() < 0.5) this.fx.A.emit(p.x, p.y, p.z, (Math.random() - 0.5) * 1.5, 0.8, (Math.random() - 0.5) * 1.5, 0.5, 0.25, -0.5, col);
+      v.circle.material.color.setRGB(col[0], col[1], col[2]);
+      const st = M.stats(this.sim); v.hp.scale.x = Math.max(0.01, m.hp / st.hp); v.mp.scale.x = Math.max(0.01, m.mana / st.mana); v.bars.quaternion.copy(this.camera.quaternion);
+    }
+    for (const [id, v] of this.mageViews) if (!seen.has(id)) { this.scene.remove(v.root); this.mageViews.delete(id); }
   }
   // ——— machines de siège : le bras de lancer suit le cycle de tir (armé → détente → remontée) ———
   renderMachines(S) {
@@ -453,7 +535,7 @@ export class Renderer {
   }
   // ——— muraille GLB (assets/wall) : remplace la muraille provisoire / du kit, ajoute escaliers et porte à deux battants ———
   useWall(asset) {
-    this.wv = new WallView(this.scene, asset, this.sim, applyNorthFog); for (const m of [this.wv.outer, this.wv.inner, this.wv.core, this.wv.leaves, this.wv.steps]) this.shadowize(m); this.wallMesh.visible = false; if (this.kw) for (const k in this.kw) this.kw[k].visible = false;
+    this.wv = new WallView(this.scene, asset, this.sim, applyNorthFog); for (const m of [this.wv.outer, this.wv.inner, this.wv.core, this.wv.leaves, this.wv.steps, this.wv.merlons, this.wv.butt, this.wv.portcullis]) this.shadowize(m); this.wallMesh.visible = false; if (this.kw) for (const k in this.kw) this.kw[k].visible = false;
     if (this.towerKit) for (const t of this.towerKit) t.scale.setScalar(1);
   }
   // ——— décor issu du kit (assets/world) : remplace les boîtes provisoires quand il est chargé ———
@@ -500,6 +582,7 @@ export class Renderer {
     this.zTint = ZOMBIES.map(z => new THREE.Color(0xffffff).lerp(new THREE.Color(z.color), 0.62));   // types plus reconnaissables
     const mk = geo => { const im = new THREE.InstancedMesh(geo, ch.archerMat, SECTORS * ARCHER_SLOTS + 150); im.frustumCulled = false; im.count = 0; this.scene.add(im); return im; };
     this.ab = mk(ch.archer.body); this.abow = mk(ch.archer.bow); this.aMesh.visible = false;
+    ch.archer.body.computeBoundingBox(); this.archerBB = ch.archer.body.boundingBox.clone(); this.aGear = null; this.aGearTier = -1;
     this.vMesh.geometry = ch.villagerGeo; this.vMesh.material = ch.villagerMat;
     if (ch.villager) this.useVillagerGLB(ch.villager);
     if (ch.horse) this.useHorseGLB(ch.horse);
@@ -527,8 +610,18 @@ export class Renderer {
     this.vv = vv; this.vMesh.visible = false; for (const r in this.vrigs) for (const m of this.vrigs[r].meshes) m.visible = false;
     this._ty = new THREE.Matrix4().makeTranslation(0, -vg.miny, 0); this._gm = new THREE.Matrix4();
   }
+  // améliorations du village rendues visibles : chariots (brouettes/charrettes), chemins pavés, outils (teinte des fers)
+  syncVillageUpgrades() {
+    const up = this.sim.eco.up; this.paving.set(up.boots);
+    if (this.cartLevel !== up.carts) {
+      this.cartLevel = up.carts; if (this.cart) { this.scene.remove(this.cart.mesh); this.cart = null; }
+      if (up.carts > 0) { const c = carrierGeometry(up.carts), m = new THREE.InstancedMesh(c.geo, this.chars ? this.chars.archerMat : lam(0xffffff), 160); m.frustumCulled = false; m.count = 0; this.scene.add(m); this.cart = { mesh: m, load: c.load }; }
+    }
+    if (this.vv && this.toolLevel !== up.tools) { this.toolLevel = up.tools; const c = new THREE.Color(TOOL_TINT[Math.min(4, up.tools)]); for (const k in this.vv.tools) { const g = this.vv.tools[k]; if (!g) continue; if (!g.userData.base) g.userData.base = g.geometry.attributes.color.array.slice(); const a = g.geometry.attributes.color.array, b0 = g.userData.base; for (let i = 0; i < a.length; i += 3) { const grey = Math.abs(b0[i] - b0[i + 2]) < 0.08 && b0[i] > 0.35; if (grey) { a[i] = c.r; a[i + 1] = c.g; a[i + 2] = c.b; } } g.geometry.attributes.color.needsUpdate = true; } }
+  }
   updateVillagersVAT(alpha) {
-    const E = this.sim.eco, d = this.dummy, vv = this.vv, vg = vv.vg, t = this.clock, vs = E.villagers, SC = 0.0105;
+    this.syncVillageUpgrades();
+    const E = this.sim.eco, d = this.dummy, vv = this.vv, vg = vv.vg, t = this.clock, vs = E.villagers, SC = 0.0105 * HUMAN_H / 1.99;
     const SPEED = { walk: 1.3, carry: 1.2, idle: 0.35 }, WORK = { wood: 0.9, stone: 0.8, iron: 0.8, gold: 0.8, food: 0.55, build: 1.0, repair: 1.0 };
     for (const k in vv.meshes) { vv.cnt[k] = 0; }
     const lerpAng = (a, b, k) => { const dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
@@ -550,35 +643,56 @@ export class Renderer {
       if (tl) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.hand[f0]); tl.setMatrixAt(k, this._gm); }
       if (ht) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.head[f0]); ht.setMatrixAt(k, this._gm); }
       if (carrying) {
-        d.position.set(x + Math.sin(v.rrot) * 0.8, 1.5, z + Math.cos(v.rrot) * 0.8); d.scale.set(1.05, 0.85, 1.05); d.rotation.set(0, v.rrot, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
+        const cart = this.cart, cs = cart ? cart.load : null;
+        if (cart) {   // brouette / charrette poussée devant le porteur, chargement teinté par-dessus
+          const fx = x + Math.sin(v.rrot) * 1.1, fz = z + Math.cos(v.rrot) * 1.1; d.position.set(fx, 1.15, fz); d.scale.set(1, 1, 1); d.rotation.set(0, v.rrot, 0); d.updateMatrix(); cart.mesh.setMatrixAt(nc, d.matrix);
+          const lx = cs[0], ly = cs[1], lz = cs[2], s1 = Math.sin(v.rrot), c1 = Math.cos(v.rrot); d.position.set(fx + lx * c1 + lz * s1, 1.15 + ly, fz - lx * s1 + lz * c1); d.scale.set(cs[3] / 0.7, cs[4] / 0.7, cs[5] / 0.7);
+        } else { d.position.set(x + Math.sin(v.rrot) * 0.8, 1.5, z + Math.cos(v.rrot) * 0.8); d.scale.set(1.05, 0.85, 1.05); }
+        d.rotation.set(0, v.rrot, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
         this.tmpColor.setHex(RES_INFO[v.carryRes].color); this.cMesh.setColorAt(nc, this.tmpColor); nc++;
       }
     }
     for (const k in vv.meshes) { const n = vv.cnt[k], im = vv.meshes[k]; im.count = n; im.instanceMatrix.needsUpdate = true; im.anim.needsUpdate = true; for (const g of [vv.tools[k], vv.hats[k]]) if (g) { g.count = n; g.instanceMatrix.needsUpdate = true; } }
     this.cMesh.count = nc; this.cMesh.instanceMatrix.needsUpdate = true; if (nc) this.cMesh.instanceColor.needsUpdate = true;
+    if (this.cart) { this.cart.mesh.count = nc; this.cart.mesh.instanceMatrix.needsUpdate = true; }
   }
   renderZombies(alpha) {
     const Z = this.sim.zombies, n = Z.n, cnt = this.zvCount.fill(0), clock = this.clock, tc = this.tmpColor;
     for (let i = 0; i < n; i++) {
       const t = Z.type[i], Zt = ZOMBIES[t], pool = ZVAR[t], vi = pool[((Z.phase[i] * 1000) | 0) % pool.length], im = this.zv[vi], k = cnt[vi]++;
       const x = Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, z = Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, dx = Z.x[i] - Z.px[i], dz = Z.z[i] - Z.pz[i];
-      const rot = dx * dx + dz * dz > 4e-6 ? Math.atan2(dx, dz) : 0, c = Math.cos(rot), s2 = Math.sin(rot), sc = Zt.size * 1.9, o = k * 16, m = im.instanceMatrix.array;
+      const rot = dx * dx + dz * dz > 4e-6 ? Math.atan2(dx, dz) : 0, c = Math.cos(rot), s2 = Math.sin(rot), sc = Zt.size * HUMAN_H / 1.6, o = k * 16, m = im.instanceMatrix.array;
       m[o] = c * sc; m[o + 1] = 0; m[o + 2] = -s2 * sc; m[o + 3] = 0; m[o + 4] = 0; m[o + 5] = sc; m[o + 6] = 0; m[o + 7] = 0; m[o + 8] = s2 * sc; m[o + 9] = 0; m[o + 10] = c * sc; m[o + 11] = 0; m[o + 12] = x; m[o + 13] = 0; m[o + 14] = z; m[o + 15] = 1;
-      const cps = Z.state[i] === 1 ? 1.3 : Math.max(0.25, Zt.speed / (2.2 * sc));
+      const cps = Z.state[i] === 1 ? 1.3 : Math.max(0.25, Zt.speed * (Z.slow[i] > 0 ? 0.4 : 1) / (1.6 * sc));
       im.anim.array[k] = ((clock * cps + Z.phase[i] / 6.2832) % 1) * 16;
-      const hurt = Z.hp[i] / Zt.hp < 0.5 ? 0.72 : 1, tt = this.zTint[t], ca = im.instanceColor.array; ca[k * 3] = tt.r * hurt + (1 - hurt) * 0.5; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt;   // blessé : plus sombre, rougeâtre
+      const hurt = Z.hp[i] / Zt.hp < 0.5 ? 0.72 : 1, tt = this.zTint[t], ca = im.instanceColor.array; if (Z.slow[i] > 0) { ca[k * 3] = 0.6; ca[k * 3 + 1] = 0.85; ca[k * 3 + 2] = 1.3; } else { ca[k * 3] = tt.r * hurt + (1 - hurt) * 0.5; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt; }   // gelé : bleuté   // blessé : plus sombre, rougeâtre
     }
     this.zv.forEach((im, v) => { im.count = cnt[v]; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.anim.needsUpdate = true; });
   }
+  // équipement des archers selon leur rang : capuche → calotte d'acier → cape → heaume doré à cimier et cape pourpre
+  archerGear(tier) {
+    if (this.aGearTier === tier) return this.aGear; this.aGearTier = tier;
+    if (this.aGear) { this.scene.remove(this.aGear); this.aGear.geometry.dispose(); this.aGear = null; }
+    const bb = this.archerBB, top = bb.max.y, cx = (bb.min.x + bb.max.x) / 2, cz = (bb.min.z + bb.max.z) / 2, h = top - bb.min.y, k = h / 1.78, G = 0xf2c94a, list = [];
+    const B = (w, hh, dd, c, x, y, z) => list.push(bx(w * k, hh * k, dd * k, c, cx + x * k, top + y * k, cz + z * k));
+    if (tier === 0) B(0.34, 0.14, 0.34, 0x6b5236, 0, -0.1, 0);
+    if (tier === 1) { B(0.36, 0.16, 0.36, 0x3d6b3a, 0, -0.08, 0); B(0.2, 0.18, 0.08, 0x3d6b3a, 0, -0.26, -0.16); }
+    if (tier >= 2) { B(0.36, 0.14, 0.38, tier >= 4 ? G : 0xb8c0c8, 0, -0.06, 0); B(0.42, 0.04, 0.44, tier >= 4 ? G : 0x8e98a4, 0, -0.13, 0); }
+    if (tier >= 3) { B(0.5, 0.95, 0.05, tier >= 4 ? 0x7a1f6a : 0x2f5f3a, 0, -1.05, -0.2); B(0.52, 0.06, 0.06, G, 0, -1.5, -0.2); }
+    if (tier >= 4) B(0.06, 0.3, 0.3, G, 0, 0.12, -0.02);
+    if (!list.length) return null;
+    const m = new THREE.InstancedMesh(mergeGeometries(list, false), this.chars.archerMat, SECTORS * ARCHER_SLOTS + 150); m.frustumCulled = false; m.count = 0; this.scene.add(m); this.aGear = m; return m;
+  }
   renderArchers(alpha) {
     const sim = this.sim, d = this.dummy, W = sim.army.walkers; let ai = 0, k = 0; const slot = { x: 0, z: 0 };
+    const gear = this.archerGear(RANKS.indexOf(sim.army.rank(sim, 'archer')));
     for (let s = 0; s < SECTORS; s++) { const A = sim.army.archers[s]; for (k = 0; k < A.n; k++) {
       const p = archerPose(s, k, A.prog[k]), moving = A.prog[k] < 1e8, bob = moving ? Math.abs(Math.sin(this.clock * 9 + k)) * 0.08 : 0;
       d.position.set(p.x, p.y + bob, p.z); d.scale.set(ASC, ASC, ASC); d.rotation.set(0, p.rot, 0); d.updateMatrix();
-      this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); ai++;
+      this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); if (gear) gear.setMatrixAt(ai, d.matrix); ai++;
     } }
-    this.renderWalkers(alpha, 'archer', (x, z, rot, mv) => { d.position.set(x, mv ? Math.abs(Math.sin(this.clock * 9 + ai)) * 0.08 : 0, z); d.scale.set(ASC, ASC, ASC); d.rotation.set(0, rot, 0); d.updateMatrix(); this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); ai++; });
-    this.ab.count = this.abow.count = ai; this.ab.instanceMatrix.needsUpdate = this.abow.instanceMatrix.needsUpdate = true;
+    this.renderWalkers(alpha, 'archer', (x, z, rot, mv) => { d.position.set(x, mv ? Math.abs(Math.sin(this.clock * 9 + ai)) * 0.08 : 0, z); d.scale.set(ASC, ASC, ASC); d.rotation.set(0, rot, 0); d.updateMatrix(); this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); if (gear) gear.setMatrixAt(ai, d.matrix); ai++; });
+    this.ab.count = this.abow.count = ai; this.ab.instanceMatrix.needsUpdate = this.abow.instanceMatrix.needsUpdate = true; if (gear) { gear.count = ai; gear.instanceMatrix.needsUpdate = true; }
   }
   // recrues : chaque unité créée marche de son bâtiment au point de ralliement ; draw(x, z, rotY, enMarche, indexDansLaListe)
   renderWalkers(alpha, only, draw) {
@@ -592,6 +706,7 @@ export class Renderer {
   // point du monde → pixels écran (pour les bulles d'interface ancrées sur la carte)
   project(x, y, z) { const v = this._pv || (this._pv = new THREE.Vector3()); v.set(x, y, z).project(this.camera); const r = this.renderer.domElement.getBoundingClientRect(); return { x: (v.x * 0.5 + 0.5) * r.width + r.left, y: (-v.y * 0.5 + 0.5) * r.height + r.top, vis: v.z > -1 && v.z < 1 }; }
   setSquad(id) { this.selSquad = id || 0; }
+  orderPing(x, z, field) { this.fx.ring(x, z, 6, 0.6, field ? [1, 0.45, 0.2] : [0.4, 0.8, 1]); this.fx.flash(x, 1, z, 2, 0.3, field ? [1, 0.5, 0.2] : [0.4, 0.8, 1]); }
   setTargeting(on) { this.targetMode = on; }
   setSelected(s) { this.selected = s; this.hl.visible = s >= 0; if (s >= 0) this.hl.position.set(s * SECTOR_W + SECTOR_W / 2, 0.2, 112); }
 
@@ -609,14 +724,15 @@ export class Renderer {
     }
     zm.count = n; zm.instanceMatrix.needsUpdate = true; zm.instanceColor.needsUpdate = true;
     }
-    this.renderSquads(alpha); const sel = this.selSquad;
+    this.renderSquads(alpha); this.renderMages(alpha); const sel = this.selSquad;
     // anneau de l'escouade choisie + marqueur de sortie
     const sq = sel ? sim.army.squads.find(q => q.id === sel) : null;
     this.ring.visible = !!sq;
     if (sq) {
       const cx = sq.px + (sq.x - sq.px) * alpha, cz = sq.pz + (sq.z - sq.pz) * alpha, r = sq.rad + 1.5;
       this.ring.position.set(cx, 0.35, cz); this.ring.scale.set(r, r, r);
-      this.mark.visible = sq.mode === 'field'; this.mark.position.set(sq.tx, 0.35, sq.tz); const pu = 1 + 0.12 * Math.sin(this.clock * 6); this.mark.scale.set(pu, pu, pu);
+      const dest = sq.way.length ? sq.way[sq.way.length - 1] : sq.mode === 'field' ? { x: sq.tx, z: sq.tz } : null;
+      this.mark.visible = !!dest; if (dest) this.mark.position.set(dest.x, 0.35, dest.z); this.mark.material.color.setHex(sq.mode === 'field' ? 0xff6a3d : 0x6fd0ff); const pu = 1 + 0.12 * Math.sin(this.clock * 6); this.mark.scale.set(pu, pu, pu);
     } else this.mark.visible = false;
     this.targeting.visible = this.targetMode;
     if (!this.rallyG) {                                                         // fanion du point de ralliement
@@ -647,9 +763,13 @@ export class Renderer {
       this.threat[s].material.opacity = o;
     }
     this.updateWall(); this.updateEconomy(alpha); this.updateSiege(alpha); this.struct.update(dtReal, this.clock);
-    this.updateAtmosphere(dtReal); this.updateBlobs(sim.speed ? alpha : 1);
+    this.updateAtmosphere(dtReal); this.updateBlobs(sim.speed ? alpha : 1); this.maskGrass();
     this.fx.setTorches(this.torchPos, sim.army.gate, this.clock);
     this.fx.frame(sim, dtReal);   // effets : lit l'état, ne le modifie pas
-    this.renderer.render(this.scene, this.camera);
+    for (const v of this.struct.map.values()) { const o = v.model && v.model.userData.spin; if (o) { o.rotation.y = this.clock * 0.6; o.children.forEach((c, i) => { c.position.y = Math.sin(this.clock * 1.4 + i * 1.7) * 0.7; c.rotation.y = this.clock * 1.5; }); } }
+    // secousse de caméra (explosions, brèches) : décalage le temps du rendu seulement
+    const sh = this.fx.shake * (this.shakeOn === false ? 0 : 1), cp = this.camera.position;
+    if (sh > 0.01) { const ox = (Math.random() - 0.5) * sh, oy = (Math.random() - 0.5) * sh * 0.6, oz = (Math.random() - 0.5) * sh; cp.x += ox; cp.y += oy; cp.z += oz; this.camera.updateMatrixWorld(); this.renderer.render(this.scene, this.camera); cp.x -= ox; cp.y -= oy; cp.z -= oz; this.camera.updateMatrixWorld(); }
+    else this.renderer.render(this.scene, this.camera);
   }
 }

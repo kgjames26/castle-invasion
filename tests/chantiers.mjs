@@ -19,7 +19,7 @@ const run = (sim, s) => { for (let i = 0; i < s * 20; i++) sim.tick(); };
 
 // 2) emprunt : on demande des ouvriers sans personne de libre → pris sur la tâche la moins urgente, rendus à la fin
 {
-  const sim = new Simulation(), E = sim.eco, B = sim.build;
+  const sim = new Simulation(), E = sim.eco, B = sim.build; sim.autoRepair = false;   // la réparation automatique emprunterait aussi des villageois
   E.res.wood = 9999; E.res.stone = 9999; E.res.food = 9999; E.res.gold = 9999;
   const hz = sim.place('house', 60, 262, 0, 1);
   // tout le monde est affecté (aucun libre) : bois 2, pierre 2, nourriture le reste
@@ -45,4 +45,20 @@ const run = (sim, s) => { for (let i = 0; i < s * 20; i++) sim.tick(); };
   ok(q.way[0].gi === 0, 'sortie de l\'aile gauche : porte gauche');
   const r = { x: 175, z: 164, way: [] }; A.route(r, 175, 120);
   ok(r.way[0].gi === 2, 'sortie de l\'aile droite : porte droite');
+}
+
+// 4) emprunt pour une TÂCHE (pas seulement un chantier) : sans libre, + sur une tâche prend sur la moins urgente, − le rend
+{
+  const sim = new Simulation(), E = sim.eco; sim.autoRepair = false;
+  E.assign.food = E.villagers.length - 4; E.assign.wood = 2; E.assign.stone = 2; E.syncTasks();
+  E.res.wood = 5; E.res.food = E.cap('food');            // le bois manque, la nourriture déborde → les fermiers sont les moins urgents
+  const f0 = E.assign.food, n = sim.assignVillagers('repair', 1);
+  ok(n === 1 && E.assign.food === f0 - 1 && E.assign.repair === 1, `emprunt de tâche : réparation ${E.assign.repair}, fermiers ${E.assign.food}/${f0}`);
+  sim.assignVillagers('repair', -1);
+  ok(E.assign.food === f0 && E.assign.repair === 0, `rendu : fermiers ${E.assign.food}/${f0}`);
+  // réparation automatique : personne ne répare, un tronçon souffre → équipe empruntée, rendue une fois le mur réparé
+  sim.autoRepair = true; sim.wall.hp[12] = 50; run(sim, 2);
+  ok(E.assign.repair >= 1 && E.loans.length >= 1, `réparation auto : ${E.assign.repair} réparateurs empruntés`);
+  sim.wall.hp[12] = sim.wall.segMax(12); run(sim, 2);
+  ok(E.assign.repair === 0 && E.assign.food === f0, `réparation auto terminée : équipe rendue (fermiers ${E.assign.food}/${f0})`);
 }

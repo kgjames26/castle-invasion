@@ -3,7 +3,7 @@
 export const ZOMBIES = [
   // id, nom, pv, vitesse m/s, dégâts/s sur structures, dégâts/s sur unités, taille visuelle, couleur
   { id: 0, name: 'Classique',   hp: 40,  speed: 2.2, wall: 2,  unit: 6,  size: 1.0, color: 0x7a9a5a },
-  { id: 1, name: 'Rapide',      hp: 25,  speed: 4.0, wall: 1,  unit: 5,  size: 0.8, color: 0xc8d24a },
+  { id: 1, name: 'Rapide',      hp: 25,  speed: 4.0, wall: 1,  unit: 5,  size: 0.88, color: 0xc8d24a },
   { id: 2, name: 'Résistant',   hp: 120, speed: 2.0, wall: 3,  unit: 8,  size: 1.15, color: 0x4f7f7a },
   { id: 3, name: 'Lourd',       hp: 400, speed: 1.3, wall: 10, unit: 18, size: 1.7, color: 0x8a4f3a },
   { id: 4, name: 'Briseur',     hp: 150, speed: 1.8, wall: 45, unit: 8,  size: 1.25, color: 0xd9822b },
@@ -14,6 +14,7 @@ export const UNITS = {
   archer:  { name: 'Archer',   ico: '🏹', hp: 60,  dmg: 14, rate: 1.2, range: 34, pop: 1, cost: { gold: 14, wood: 15 },           train: 7,  from: 'range',    color: 0x2fae6a, size: 1 },
   soldier: { name: 'Fantassin', ico: '⚔', hp: 140, dmg: 11, rate: 0.8, reach: 1.7, speed: 3.6, pop: 1, cost: { gold: 16, iron: 15 },           train: 8,  from: 'barracks', color: 0x3d7bd6, size: 1,   squad: 10, form: 'line' },
   heavy:   { name: 'Lourd',    ico: '🛡', hp: 380, dmg: 22, rate: 1.1, reach: 2.0, speed: 2.6, pop: 2, cost: { gold: 33, iron: 50 },           train: 16, from: 'barracks', color: 0x7d8cab, size: 1.3, squad: 8,  form: 'phalanx', minLevel: 2 },
+  knight:  { name: 'Chevalier', ico: '🗡', hp: 620, dmg: 34, rate: 1.0, reach: 2.4, speed: 3.0, pop: 3, cost: { gold: 70, iron: 60 },           train: 22, from: 'barracks', color: 0xd9b43a, size: 1.25, squad: 5,  form: 'wedge', minLevel: 3, cleave: 3, charge: 0.4 },
   cavalry: { name: 'Cavalier', ico: '🐎', hp: 200, dmg: 18, rate: 0.9, reach: 2.2, speed: 6.5, pop: 2, cost: { gold: 28, food: 30, iron: 10 }, train: 14, from: 'stable',   color: 0xa855c9, size: 1.3, squad: 8,  form: 'wedge', charge: 0.8 },
 };
 // Rangs militaires : le NIVEAU du bâtiment d'entraînement (caserne, écurie, champ de tir) est le rang de toutes ses unités.
@@ -28,7 +29,7 @@ export const RANKS = [
 ];
 export const RANK_BUILDINGS = ['barracks', 'stable', 'range'];
 export const RANK_UP = { mult: [0, 0, 2, 3.5, 6, 10], extra: { iron: 20, gold: 20 } };   // coût de passage au niveau N = (coût de base + extra) × mult[N]
-export const UNIT_ORDER = ['soldier', 'heavy', 'cavalry', 'archer'];
+export const UNIT_ORDER = ['soldier', 'heavy', 'knight', 'cavalry', 'archer'];
 // Formations d'escouade : effets mesurables (engage = part des membres qui combattent, contact = attaquants max par membre,
 // def = multiplicateur de dégâts reçus, atk = multiplicateur de dégâts infligés, speed = vitesse, charge = bonus d'élan).
 export const FORMATIONS = {
@@ -47,7 +48,7 @@ export const WALL = {
 };
 export const START = {
   res: { wood: 240, stone: 170, iron: 40, food: 200, gold: 80 },
-  reserve: { archer: 0, soldier: 0, heavy: 0, cavalry: 0 },
+  reserve: { archer: 0, soldier: 0, heavy: 0, knight: 0, cavalry: 0 },
   perSector: { archer: 0 },
   squads: [],
   villagers: 10,
@@ -96,11 +97,13 @@ export const BUILDINGS = {   // group: 'eco' (onglet Village) ou 'army' (onglet 
 };
 // Bâtiments militaires (onglet Armée) : le niveau accélère l'entraînement (+25 %/niveau) et agrandit la file.
 export const ARMY_BUILDINGS = {
-  barracks: { time: 45, base: 0, name: 'Caserne',      ico: '🪖', group: 'army', start: 0, cost: { wood: 100, stone: 50 }, max: 5, pos: { x: 36,  z: 224 }, size: [16, 5, 11], color: 0x8a4545, info: 'Fantassins · Lourds dès le niveau 2' },
+  barracks: { time: 45, base: 0, name: 'Caserne',      ico: '🪖', group: 'army', start: 0, cost: { wood: 100, stone: 50 }, max: 5, pos: { x: 36,  z: 224 }, size: [16, 5, 11], color: 0x8a4545, info: 'Fantassins · Lourds dès le niveau 2 · Chevaliers dès le niveau 3' },
   stable:   { time: 45, base: 0, name: 'Écurie',       ico: '🐎', group: 'army', start: 0, cost: { wood: 120, stone: 40 }, max: 5, pos: { x: 164, z: 224 }, size: [16, 5, 11], color: 0x7a5a3a, info: 'Cavaliers' },
   range:    { time: 35, base: 0, name: 'Champ de tir', ico: '🎯', group: 'army', start: 0, cost: { wood: 90, stone: 30 },  max: 5, pos: { x: 100, z: 224 }, size: [18, 3, 9],  color: 0x4a6f4a, info: 'Archers' },
   forge:    { time: 50, base: 0, name: 'Forge',        ico: '🔨', group: 'army', start: 0, max: 1, cost: { wood: 80, stone: 80, iron: 40 }, pos: { x: 66, z: 236 }, size: [10, 6, 8], color: 0x5a4f58, info: 'Débloque les améliorations militaires' },
 };
+// Maison du sorcier : invoque UN magicien autonome (il choisit seul de soigner ou d'attaquer). Le niveau du bâtiment = niveau du magicien.
+ARMY_BUILDINGS.wizard = { time: 60, base: 0, name: 'Maison du sorcier', ico: '🔮', group: 'army', start: 0, max: 5, cost: { wood: 120, stone: 140, gold: 80 }, pos: { x: 100, z: 280 }, size: [10, 14, 10], color: 0x5a4a8a, info: 'Invoque un magicien autonome · chaque niveau le rend plus puissant' };
 ARMY_BUILDINGS.workshop = { time: 55, base: 0, name: 'Atelier de siège', ico: '🛠', group: 'army', start: 0, max: 3, cost: { wood: 140, stone: 100, iron: 30 }, pos: { x: 136, z: 236 }, size: [14, 6, 10], color: 0x6a5a45, info: '2 armes déployables par niveau · Niv.1 baliste · Niv.2 catapulte · Niv.3 trébuchet' };
 Object.assign(BUILDINGS, ARMY_BUILDINGS);
 // ——— Phase 6 : construction libre ———
@@ -110,6 +113,27 @@ export const MULTI = {
   tower: { name: 'Tour de défense', ico: '🗼', group: 'def', time: 30, size: [5, 14, 5], cost: { wood: 70, stone: 110 }, max: 5, info: 'Tire seule sur les zombies à portée · améliorable' },
 };
 export const STRUCT = { ...BUILDINGS, ...MULTI };
+// ——— Magicien (Maison du sorcier) ———
+// Il se tient à distance derrière la muraille, choisit seul son action selon l'urgence : soigner une escouade blessée, refermer une brèche,
+// frapper la plus grosse menace. Mana : chaque sort en coûte ; régénération continue. Niveau = niveau de la Maison du sorcier.
+export const MAGE = {
+  summon: { gold: 120, food: 60 }, summonTime: 18, respawn: 30, hp: 260, hpPerLevel: 90, speed: 4.2, mana: 100, manaPerLevel: 25, regen: 7, regenPerLevel: 1.5,
+  keepAway: 14, range: 48, rangePerLevel: 3, homeZ: 166,
+  spells: {
+    fireball:  { name: 'Boule de feu',      ico: '🔥', level: 1, mana: 18, cd: 1.6, dmg: 70,  dmgPerLevel: 0.30, aoe: 4.5, speed: 30, info: 'Explosion de zone, enflamme le sol' },
+    lightning: { name: 'Éclair en chaîne',  ico: '⚡', level: 2, mana: 26, cd: 3.5, dmg: 55,  dmgPerLevel: 0.30, chain: 6, jump: 9, info: 'Frappe jusqu\'à 6 zombies à la suite' },
+    heal:      { name: 'Soin',              ico: '💚', level: 1, mana: 22, cd: 4.0, heal: 0.30, healPerLevel: 0.06, info: 'Rend 30 % des PV d\'une escouade (+6 %/niv.)' },
+    mend:      { name: 'Rempart magique',   ico: '🧱', level: 2, mana: 30, cd: 6.0, hp: 260, hpPerLevel: 0.25, info: 'Referme une brèche ou consolide un tronçon' },
+    meteor:    { name: 'Pluie de météores', ico: '☄', level: 3, mana: 60, cd: 22, dmg: 120, dmgPerLevel: 0.30, aoe: 6, count: 7, spread: 12, info: 'Ultime : 7 météores sur la plus grosse horde' },
+    nova:      { name: 'Nova de givre',     ico: '❄', level: 4, mana: 35, cd: 12, dmg: 40, aoe: 9, slow: 0.4, slowTime: 4, info: 'Gèle et ralentit les zombies autour de lui' },
+  },
+};
+// Feu au sol (boules de feu, catapultes) : dégâts par seconde aux zombies dans la zone
+export const FIRE = { dps: 14, time: 4, catapultFire: true };
+// Difficulté : multiplie le nombre de zombies et leurs PV
+export const DIFFICULTY = { easy: { name: 'Facile', n: 0.75, hp: 0.85 }, normal: { name: 'Normal', n: 1, hp: 1 }, hard: { name: 'Difficile', n: 1.3, hp: 1.15 } };
+// Réparation automatique : si personne ne répare et qu'un tronçon passe sous ce seuil, des villageois sont empruntés (puis rendus)
+export const AUTO_REPAIR = { threshold: 0.7, crew: 2 };
 export const BUILD = {
   minX: 5, maxX: 195, minZ: 212, towerMinZ: 154, maxZ: 312, gap: 1.2,
   refund: 0.8, moveWork: 6, workerExp: 0.85, maxWorkers: 4, upgradeTime: 0.7,
@@ -137,6 +161,8 @@ export const UPGRADES = {
   masonry: { name: 'Maçonnerie',        ico: '🧱', max: 3, cost: { stone: 80, iron: 30 }, per: 0.30, info: 'Réparation +30 % vitesse, −10 % pierre par niveau' },
   // — Forge (onglet Armée) —
   weapons: { name: 'Armes affûtées',    ico: '🗡', group: 'army', req: 'forge', max: 4, cost: { iron: 40, gold: 40 }, per: 0.10, info: 'Dégâts de toutes les unités +10 % par niveau' },
+  blades:  { name: 'Lames d\'acier',    ico: '⚔', group: 'army', req: 'forge', max: 3, cost: { iron: 70, gold: 50 }, per: 0.15, info: 'Chevaliers : frappe +1 cible et +15 % de dégâts par niveau' },
+  arcana:  { name: 'Arcanes',           ico: '📖', group: 'army', req: 'wizard', max: 3, cost: { gold: 90, food: 40 }, per: 0.20, info: 'Magicien : mana +20 % et récupération +20 % par niveau' },
   armor:   { name: 'Armures',           ico: '🦺', group: 'army', req: 'forge', max: 4, cost: { iron: 50, gold: 30 }, per: 0.08, info: 'Dégâts reçus par les escouades −8 % par niveau' },
   archery: { name: 'Arcs longs',        ico: '🏹', group: 'army', req: 'forge', max: 3, cost: { wood: 60, iron: 30, gold: 30 }, per: 0.10, info: 'Archers : dégâts +10 %, portée +3 m par niveau' },
 };

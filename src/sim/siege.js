@@ -2,7 +2,7 @@
 // construites par l'Atelier de siège (niveau = 2 armes déployables par niveau, et accès aux armes plus lourdes).
 // Les munitions sont prélevées dans les stocks ; les équipages comptent dans la population partagée.
 import { SECTORS, SECTOR_W } from './constants.js';
-import { SIEGE, SIEGE_ORDER, SIEGE_RULES } from '../content/medieval.js';
+import { SIEGE, SIEGE_ORDER, SIEGE_RULES, FIRE } from '../content/medieval.js';
 
 export const SIEGE_Z = 166;
 export const siegePos = (s, slot) => ({ x: s * SECTOR_W + 10 + slot * 10, z: SIEGE_Z });
@@ -71,8 +71,8 @@ export class Siege {
     // projectiles en vol : impact = dégâts de zone
     for (let i = this.shots.length - 1; i >= 0; i--) {
       const p = this.shots[i]; p.t += dt; if (p.t < p.dur) continue;
-      const m = hash.query(p.x1, p.z1, p.aoe, Z.x, Z.z, tmp);
-      for (let k = 0; k < m; k++) { const j = tmp[k]; if (Z.hp[j] > 0) Z.hit(j, p.dmg); }
+      if (p.type === 'ballista') { const m = hash.query(p.x1, p.z1, p.aoe, Z.x, Z.z, tmp); for (let k = 0; k < m; k++) { const j = tmp[k]; if (Z.hp[j] > 0) Z.hit(j, p.dmg); } sim.blast('bolt', p.x1, p.z1, p.aoe); }
+      else sim.explode(p.x1, p.z1, p.aoe, p.dmg, FIRE.catapultFire ? 'fire' : 'rock');      // boulets enflammés : explosion + feu au sol
       p.landed = true; p.t = p.dur; this.impacts.push({ x: p.x1, z: p.z1, r: p.aoe, t: 0 }); this.shots.splice(i, 1);
     }
     for (let i = this.impacts.length - 1; i >= 0; i--) { this.impacts[i].t += dt; if (this.impacts[i].t > 0.5) this.impacts.splice(i, 1); }

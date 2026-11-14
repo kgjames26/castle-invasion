@@ -6,6 +6,7 @@ import { COST, T } from './terrain.js';
 
 const INSIDE_Z = WALL_Z1 + 0.8;
 const tmp = new Int32Array(64);
+const GROUPS = 1024;     // identifiants de hordes (cycliques)
 
 export class ZombieSwarm {
   constructor() {
@@ -13,17 +14,21 @@ export class ZombieSwarm {
     this.x = new Float32Array(n); this.z = new Float32Array(n); this.px = new Float32Array(n); this.pz = new Float32Array(n);
     this.hp = new Float32Array(n); this.type = new Uint8Array(n); this.sector = new Uint8Array(n); this.state = new Uint8Array(n);
     this.phase = new Float32Array(n);
+    // hordes : chaque zombie garde sa place (ox, oz) autour du centre de son groupe → ils avancent en masse, pas à la file
+    this.grp = new Int32Array(n); this.ox = new Float32Array(n); this.oz = new Float32Array(n); this.slow = new Float32Array(n);
+    this.gx = new Float32Array(GROUPS); this.gz = new Float32Array(GROUPS); this.gn = new Int32Array(GROUPS); this.hpMult = 1;
     this.n = 0; this.kills = 0;
     this.near = new Int16Array(SECTORS);      // zombies proches (z>95) par secteur ciblé
     this.attacking = new Int16Array(SECTORS);
     this.dead = false;
   }
   clear() { this.n = 0; this.near.fill(0); this.attacking.fill(0); }
-  spawn(type, x, z, sector, rng) {
+  spawn(type, x, z, sector, rng, grp = 0, ox = 0, oz = 0) {
     if (this.n >= MAX_Z) return false;
     const i = this.n++;
     this.x[i] = this.px[i] = x; this.z[i] = this.pz[i] = z;
-    this.hp[i] = ZOMBIES[type].hp; this.type[i] = type; this.sector[i] = sector; this.state[i] = 0;
+    this.hp[i] = ZOMBIES[type].hp * this.hpMult; this.type[i] = type; this.sector[i] = sector; this.state[i] = 0;
+    this.grp[i] = grp; this.ox[i] = ox; this.oz[i] = oz; this.slow[i] = 0;
     this.phase[i] = rng() * 6.28;
     return true;
   }
@@ -36,6 +41,7 @@ export class ZombieSwarm {
     const l = --this.n; if (i === l) return;
     this.x[i] = this.x[l]; this.z[i] = this.z[l]; this.px[i] = this.px[l]; this.pz[i] = this.pz[l];
     this.hp[i] = this.hp[l]; this.type[i] = this.type[l]; this.sector[i] = this.sector[l]; this.state[i] = this.state[l]; this.phase[i] = this.phase[l];
+    this.grp[i] = this.grp[l]; this.ox[i] = this.ox[l]; this.oz[i] = this.oz[l]; this.slow[i] = this.slow[l];
   }
 
   update(dt, sim) {
@@ -44,6 +50,10 @@ export class ZombieSwarm {
     hash.rebuild(X, Z, n);
     this.near.fill(0); this.attacking.fill(0);
     const squads = army.squads, outside = army.outside;
+    // centre de chaque horde (zombies encore dehors et en marche)
+    const GX = this.gx, GZ = this.gz, GN = this.gn; GN.fill(0); GX.fill(0); GZ.fill(0);
+    for (let i = 0; i < n; i++) { const g = this.grp[i]; if (!g || this.hp[i] <= 0 || Z[i] > WALL_STAND_Z - 1 || this.state[i] === 1) continue; const k = g % GROUPS; GX[k] += X[i] - this.ox[i]; GZ[k] += Z[i] - this.oz[i]; GN[k]++; }
+    for (let k = 0; k < GROUPS; k++) if (GN[k]) { GX[k] /= GN[k]; GZ[k] /= GN[k]; }
     for (let i = 0; i < n; i++) {
       this.px[i] = X[i]; this.pz[i] = Z[i];
       if (this.hp[i] <= 0) continue;
@@ -51,7 +61,8 @@ export class ZombieSwarm {
       let x = X[i], z = Z[i];
       const gx = Math.min(GW - 1, (x / CELL) | 0), gz = Math.min(159, (z / CELL) | 0);
       const cost = Math.min(2, COST[terrainType(terrain, gx, gz)]);
-      const speed = t.speed / cost;
+      let speed = t.speed / cost;
+      if (this.slow[i] > 0) { this.slow[i] -= dt; speed *= 0.4; }
 
       if (z > INSIDE_Z) {                                   // ——— dans le royaume
         this.state[i] = 2;
@@ -84,7 +95,17 @@ export class ZombieSwarm {
           if (engaged.attackers < engaged.cap) { engaged.attackers++; army.hurtSquad(sim, engaged, t.unit * dt); this.state[i] = 1; if (Z[i] > 95) this.near[s]++; continue; }
           dx = 0; dz = 0;
         } else { dx = ex / ed; dz = ez / ed; }
-      } else if (flow.sample(s, x, z)) { dx = flow.sx; dz = flow.sz; }
+      } else if (flow.sample(s, x, z)) {
+        dx = flow.sx; dz = flow.sz;
+        const g = this.grp[i], k = g % GROUPS;
+        if (g && GN[k] > 1 && z < WALL_STAND_Z - 3) {
+          // cohésion : rejoindre sa place dans la horde ; ceux qui sont devant ralentissent, ceux qui traînent accélèrent
+          const px = GX[k] + this.ox[i] - x, pz = GZ[k] + this.oz[i] - z, pl = Math.hypot(px, pz);
+          if (pl > 0.4) { const f = Math.min(0.85, pl * 0.18); dx += px / pl * f; dz += pz / pl * f; const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl; }
+          const ahead = -(px * flow.sx + pz * flow.sz);
+          speed *= ahead > 1.5 ? 0.7 : ahead < -1.5 ? 1.2 : 1;
+        }
+      }
       let sx = 0, sz = 0;
       const m = hash.query(x, z, 1.1, X, Z, tmp);
       for (let k = 0, c = 0; k < m && c < 6; k++) {
