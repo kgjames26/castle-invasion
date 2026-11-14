@@ -121,3 +121,11 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Archers** nettement plus petits (`ASC` = 0,95).
 - **Recrues** : chaque unité entraînée sort de son bâtiment et marche jusqu'à la placette (par défaut) ou jusqu'au point choisi via Armée → 📍 Point de ralliement.
 - **Disposition (nord → sud)** : armée en formation sur le champ de bataille · muraille (z 142-150) · armée de garnison (z 160-185) · placette (z 188-208) · village (constructible à partir de z 212). Casernes, écurie, champ de tir, forge et atelier déplacés dans le village.
+
+## Phase 14 — Trois portes, chantiers en file, ressources, château gris
+- **Trois portes** (`GATE_SEGS` dans constants.js) : gauche (x 15-25), centre (x 95-105), droite (x 175-185). Chaque escouade passe par la porte la plus proche de sa position, cavalerie comprise. Chaque porte s'ouvre à son propre rythme (`army.gate[]`). Les portes latérales évitent les escaliers des archers.
+- **File de construction** : plusieurs bâtiments identiques (maisons, tours) se construisent un par un, avec une seule équipe ; les suivants attendent sans prendre d'ouvriers (`build.js`, `update`).
+- **Emprunt d'ouvriers** : si un chantier demande des ouvriers et qu'aucun n'est libre, un villageois est pris à la tâche la moins urgente (`eco.borrow`, urgence = stock rare ou muraille blessée) puis retourne à sa tâche d'origine à la fin du chantier (`eco.returnHome`, `home` sauvegardé).
+- **Ressources** : forêt plus dense, arbres plus grands (environ 55 % de hauteur en plus, 46 arbres repoussants au bûcheron) ; gisements de départ (`START_DEPOSITS`) : 2 fer, 1 or, 1 pierre sur les bords de la zone constructible.
+- **Château** : échelle 0,8 → 0,96 (+20 %) ; matériau `Stone.js` (pierre grise procédurale projetée sur les faces verticales et horizontales), à la place du blanc neige du kit.
+- Tests : `tests/chantiers.mjs` (file, emprunt et retour, portes). `tests/build.mjs` tient compte des gisements de départ.

@@ -1,5 +1,6 @@
-import { SEGS, SEGS_PER_SECTOR, SECTORS } from './constants.js';
+import { SEGS, SEGS_PER_SECTOR, SECTORS, GATE_SEGS } from './constants.js';
 import { WALL } from '../content/medieval.js';
+const GATE_FLAT = GATE_SEGS.flat();
 
 export class Wall {
   constructor() {
@@ -8,7 +9,7 @@ export class Wall {
     this.reset();
   }
   reset() { this.level.fill(1); for (let i = 0; i < SEGS; i++) this.hp[i] = this.segMax(i); }
-  isGate(seg) { return WALL.gateSegs.includes(seg); }
+  isGate(seg) { return GATE_FLAT.includes(seg); }
   sectorOf(seg) { return (seg / SEGS_PER_SECTOR) | 0; }
   segMax(seg) { return (this.isGate(seg) ? WALL.gateHp : WALL.segHp) * (1 + WALL.levelHpBonus * (this.level[this.sectorOf(seg)] - 1)); }
   sectorHp(s) { let t = 0; for (let k = 0; k < SEGS_PER_SECTOR; k++) t += this.hp[s * SEGS_PER_SECTOR + k]; return t; }

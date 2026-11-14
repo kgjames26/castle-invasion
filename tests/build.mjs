@@ -24,8 +24,8 @@ ok(s2.build.items.length === sim.build.items.length && s2.eco.houses === E.house
 // gisements : mines uniquement sur le minerai, rien d'autre dessus
 ok(!B.canPlace('mine', 182, 243, 0).ok, 'mine refusée hors gisement'); ok(B.canPlace('mine', 182, 236, 0).ok, 'mine acceptée sur le fer');
 ok(!B.canPlace('farm', 170, 250, 0).ok, 'ferme refusée sur un gisement'); ok(B.canPlace('farm', 100, 232, 0).ok, 'ferme libre ailleurs');
-E.res.gold = 500; E.res.food = 500; ok(E.startProspect('iron') && (() => { for (let i = 0; i < 20 * 46; i++) sim.tick(); return E.extra.iron.length === 1; })(), 'prospection : gisement découvert');
-const ex = E.extra.iron[0]; ok(B.canPlace('mine', ex.x, ex.z, 0).ok, 'mine possible sur un gisement découvert'); ok(!B.canPlace('farm', ex.x, ex.z, 0).ok, 'ferme interdite sur gisement découvert');
+E.res.gold = 500; E.res.food = 500; const n0 = E.extra.iron.length; ok(E.startProspect('iron') && (() => { for (let i = 0; i < 20 * 46; i++) sim.tick(); return E.extra.iron.length === n0 + 1; })(), 'prospection : gisement découvert');
+const ex = E.extra.iron[n0]; ok(B.canPlace('mine', ex.x, ex.z, 0).ok, 'mine possible sur un gisement découvert'); ok(!B.canPlace('farm', ex.x, ex.z, 0).ok, 'ferme interdite sur gisement découvert');
 // défense seule : aucune construction, 5 vagues
 const d = new Simulation(); let lost = 0;
 for (let i = 0; i < 20 * 60 * 14 && !d.over; i++) { d.tick(); }

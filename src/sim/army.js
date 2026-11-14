@@ -1,6 +1,6 @@
 // Armée : réserve, archers de garnison (chemin de ronde), ESCOUADES avec formations (garnison ou sortie sur le champ de bataille),
 // files d'entraînement. Les escouades agissent comme une seule entité : points de vie en réserve commune, membres dessinés par formation.
-import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_X, WALL_Z0, WALL_Z1, WALK_H, PLAZA } from './constants.js';
+import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_XS, WALL_Z0, WALL_Z1, WALK_H, PLAZA } from './constants.js';
 import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN } from '../content/medieval.js';
 
 const tmp = new Int32Array(1024), tmp2 = new Int32Array(1024);
@@ -44,7 +44,7 @@ export class Army {
   constructor() {
     this.reserve = { archer: 0, soldier: 0, heavy: 0, cavalry: 0 };
     this.archers = Array.from({ length: SECTORS }, () => ({ n: 0, cd: new Float32Array(ARCHER_SLOTS), prog: new Float32Array(ARCHER_SLOTS).fill(1e9) }));
-    this.rally = { x: PLAZA.x, z: PLAZA.z }; this.walkers = []; this.gate = 0; this.gateT = 0; this.gateReq = 0;
+    this.rally = { x: PLAZA.x, z: PLAZA.z }; this.walkers = []; this.gate = GATE_XS.map(() => 0); this.gateT = GATE_XS.map(() => 0); this.gateReq = GATE_XS.map(() => 0);
     this.squads = []; this.nextId = 1; this.outside = [];
     this.queues = { barracks: [], stable: [], range: [] };
   }
@@ -108,9 +108,13 @@ export class Army {
   }
   // portes de la muraille : s'ouvrent quand une escouade doit passer, se referment ensuite
   updateGate(dt) {
-    if (this.gateReq) this.gateT = 1.5; else this.gateT -= dt; this.gateReq = 0;
-    const target = this.gateT > 0 ? 1 : 0; this.gate += Math.sign(target - this.gate) * Math.min(Math.abs(target - this.gate), dt * 0.9);
+    for (let g = 0; g < GATE_XS.length; g++) {
+      if (this.gateReq[g]) this.gateT[g] = 1.5; else this.gateT[g] -= dt; this.gateReq[g] = 0;
+      const target = this.gateT[g] > 0 ? 1 : 0, v = this.gate[g]; this.gate[g] += Math.sign(target - v) * Math.min(Math.abs(target - v), dt * 0.9);
+    }
   }
+  // porte la plus proche de x (gauche, centre ou droite)
+  gateNear(x) { let best = 0, bd = Infinity; GATE_XS.forEach((gx, g) => { const d = Math.abs(gx - x); if (d < bd) { bd = d; best = g; } }); return best; }
   // ——— escouades ———
   unitHp(type) { return UNITS[type].hp; }
   maxN(type) { return UNITS[type].squad; }
@@ -132,9 +136,9 @@ export class Army {
   }
   // les escouades franchissent la muraille par la PORTE (centre) : trajet intérieur ↔ extérieur
   route(q, tx, tz) {
-    q.way = []; const inside = q.z > WALL_Z1, toOut = tz < WALL_Z0;
-    if (inside && toOut) q.way.push({ x: GATE_X, z: GARRISON_Z }, { x: GATE_X, z: WALL_Z0 - 4 });
-    else if (!inside && !toOut) q.way.push({ x: GATE_X, z: WALL_Z0 - 4 }, { x: GATE_X, z: GARRISON_Z });
+    q.way = []; const inside = q.z > WALL_Z1, toOut = tz < WALL_Z0, g = this.gateNear(q.x), gx = GATE_XS[g];
+    if (inside && toOut) q.way.push({ x: gx, z: GARRISON_Z, gi: g }, { x: gx, z: WALL_Z0 - 4, gi: g });
+    else if (!inside && !toOut) q.way.push({ x: gx, z: WALL_Z0 - 4, gi: g }, { x: gx, z: GARRISON_Z, gi: g });
     q.way.push({ x: tx, z: tz });
   }
   layoutPosts() {
@@ -189,10 +193,10 @@ export class Army {
     let moving = false;
     const step = (tx, tz) => { const dx = tx - q.x, dz = tz - q.z, d = Math.hypot(dx, dz); if (d < 0.05) return true; const st = Math.min(d, speed * dt); q.x += dx / d * st; q.z += dz / d * st; moving = true; return d <= st + 0.01; };
     // ordre explicite : suivre le trajet ; devant la porte, on attend qu'elle soit ouverte
-    const gw = q.way[0], viaGate = gw && gw.x === GATE_X && (gw.z === WALL_Z0 - 4 || gw.z === GARRISON_Z);
-    if (viaGate) this.gateReq = 1;
-    if (Math.abs(q.x - GATE_X) < q.rad + 8 && q.z > WALL_Z0 - 9 && q.z < WALL_Z1 + 9) this.gateReq = 1;       // encore dans le passage : on garde la porte ouverte
-    if (q.way.length) { const wait = viaGate && this.gate < 0.7 && Math.abs(q.z - 146) < 22 && Math.abs(q.z - 146) > 5; if (!wait && step(q.way[0].x, q.way[0].z)) q.way.shift(); }
+    const gw = q.way[0], viaGate = !!gw && gw.gi !== undefined;
+    if (viaGate) this.gateReq[gw.gi] = 1;
+    GATE_XS.forEach((gx, g) => { if (Math.abs(q.x - gx) < q.rad + 8 && q.z > WALL_Z0 - 9 && q.z < WALL_Z1 + 9) this.gateReq[g] = 1; });       // encore dans le passage : on garde la porte ouverte
+    if (q.way.length) { const wait = viaGate && this.gate[gw.gi] < 0.7 && Math.abs(q.z - 146) < 22 && Math.abs(q.z - 146) > 5; if (!wait && step(q.way[0].x, q.way[0].z)) q.way.shift(); }
     // cibles à portée de coups
     const reach = rad + (U.reach || 2) + 0.6, m = hash.query(q.x, q.z, reach, Z.x, Z.z, tmp);
     let live = 0; for (let k = 0; k < m; k++) if (Z.hp[tmp[k]] > 0) tmp[live++] = tmp[k];

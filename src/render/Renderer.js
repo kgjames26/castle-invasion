@@ -7,6 +7,7 @@ import { archerPos, formationLayout, archerPose, rallySlot } from '../sim/army.j
 import { applyNorthFog } from './fog.js';
 import { StructureView } from './Structures.js';
 import { WallView } from './WallView.js';
+import { stoneMaterial } from './Stone.js';
 import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry } from './Troops.js';
 const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1]];      // variantes de modèle par type de zombie
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
@@ -102,7 +103,7 @@ export class Renderer {
     for (let gz = 0; gz < GD; gz++) for (let gx = 0; gx < GW; gx++) {
       const t = type[gz * GW + gx], x = (gx + .5) * CELL, z = (gz + .5) * CELL;
       if (t === T.ROCK) rock.push([x, z, 1.6 + r() * 1.4]);
-      else if (t === T.FOREST && r() < 0.55) tree.push([x + (r() - .5) * 1.6, z + (r() - .5) * 1.6, 2.2 + r() * 1.6]);
+      else if (t === T.FOREST && r() < 0.95) { tree.push([x + (r() - .5) * 1.8, z + (r() - .5) * 1.8, 3.4 + r() * 2.4]); if (r() < 0.6) tree.push([x + (r() - .5) * 3.6, z + (r() - .5) * 3.6, 2.6 + r() * 1.8]); }
     }
     const mk = (geo, mat, list, yOff) => {
       const im = new THREE.InstancedMesh(geo, mat, Math.max(1, list.length)); im.count = list.length;
@@ -151,14 +152,14 @@ export class Renderer {
       d.position.set(T.site.x, 0.2, T.site.z); this.scene.add(d);
     }
     // forêt des bûcherons : les arbres s'éclaircissent quand on coupe et REPOUSSENT tout seuls (échelle = bois restant)
-    { const N = 18, ws = TASKS.wood.site; this.treePos = []; let sd = 31; const rn = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
-      for (let i = 0; i < N; i++) { const a = rn() * 6.283, r = 2 + 8 * Math.sqrt(rn()); this.treePos.push([ws.x + Math.cos(a) * r, ws.z + Math.sin(a) * r * 0.8, 0.8 + rn() * 0.5, rn()]); }
+    { const N = 46, ws = TASKS.wood.site; this.treePos = []; let sd = 31; const rn = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < N; i++) { const a = rn() * 6.283, r = 2 + 12 * Math.sqrt(rn()); this.treePos.push([ws.x + Math.cos(a) * r, ws.z + Math.sin(a) * r * 0.8, 1.35 + rn() * 0.7, rn()]); }
       this.treePos.sort((a, b) => a[3] - b[3]);
       const mk = (geo, mat) => { const im = new THREE.InstancedMesh(geo, mat, N); im.frustumCulled = false; im.count = N; this.scene.add(im); return im; };
       const trunk = new THREE.CylinderGeometry(0.25, 0.35, 1.6, 6); trunk.translate(0, 0.8, 0); const fol = new THREE.ConeGeometry(1.5, 3.8, 6); fol.translate(0, 3.2, 0); const snow = new THREE.ConeGeometry(1.0, 1.4, 6); snow.translate(0, 4.7, 0);
       this.treeT = mk(trunk, lam(0x6b4a2c)); this.treeF = mk(fol, lam(0x2f5d3c)); this.treeS = mk(snow, lam(0xf2f6fa)); }
     // gisements découverts par prospection : disque coloré + blocs de minerai ; anneau pulsant pendant l'exploration
-    { const cap = 9; this.exDisc = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 0.3, 16), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55 }), cap); this.exDisc.frustumCulled = false; this.exDisc.count = 0; this.exDisc.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); this.scene.add(this.exDisc);
+    { const cap = 14; this.exDisc = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 0.3, 16), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55 }), cap); this.exDisc.frustumCulled = false; this.exDisc.count = 0; this.exDisc.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); this.scene.add(this.exDisc);
       this.exRock = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), lam(0xffffff), cap * 6); this.exRock.frustumCulled = false; this.exRock.count = 0; this.exRock.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 6 * 3), 3); this.scene.add(this.exRock);
       const rg = new THREE.RingGeometry(4, 5.4, 28); rg.rotateX(-Math.PI / 2); this.pRing = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0x4fd1c5, transparent: true, opacity: 0.85, depthWrite: false })); this.pRing.visible = false; this.scene.add(this.pRing); }
     const vg = new THREE.BoxGeometry(0.7, 1.5, 0.7); vg.translate(0, 0.75, 0);
@@ -180,7 +181,7 @@ export class Renderer {
       this.treeT.instanceMatrix.needsUpdate = this.treeF.instanceMatrix.needsUpdate = this.treeS.instanceMatrix.needsUpdate = true;
       let nd = 0, nr = 0;
       for (const r of ['stone', 'iron', 'gold']) for (const e of E.extra[r]) {
-        if (nd >= 9) break; const f = Math.max(0, e.amount / e.max), rad = 3 + 3 * f;
+        if (nd >= 14) break; const f = Math.max(0, e.amount / e.max), rad = 3 + 3 * f;
         d.position.set(e.x, 0.2, e.z); d.rotation.set(0, 0, 0); d.scale.set(rad, 1, rad); d.updateMatrix(); this.exDisc.setMatrixAt(nd, d.matrix); this.exDisc.setColorAt(nd, this.tmpColor.setHex(RES_INFO[r].color)); nd++;
         if (e.amount <= 0) continue;
         for (let j = 0; j < 6; j++) { const a = j * 1.05 + e.x, rr = rad * 0.55 * (j % 2 ? 0.6 : 1), s2 = 0.7 + 0.5 * ((j * 7) % 3) / 2; d.position.set(e.x + Math.cos(a) * rr, s2 * 0.5, e.z + Math.sin(a) * rr); d.rotation.set(j, j * 2, 0); d.scale.set(s2, s2 * 0.8, s2); d.updateMatrix(); this.exRock.setMatrixAt(nr, d.matrix); this.exRock.setColorAt(nr, this.tmpColor.setHex(RES_INFO[r].color).lerp(this.white, 0.15)); nr++; }
@@ -334,7 +335,8 @@ export class Renderer {
     for (let i = 0; i <= SECTORS; i++) { const x = Math.min(W - 3, Math.max(3, i * SECTOR_W)); if (i === 0 || i === SECTORS) put(tw[0], a++, x, 146, 0, 1.15, 1.15, 1.15); else put(tw[1], b++, x, 146, 0, 1.1, 1.1, 1.1); }
     tw[0].count = a; tw[1].count = b; for (const t of tw) t.instanceMatrix.needsUpdate = true;
     // château (orientation : façade vers le sud, côté village)
-    const castle = new THREE.Mesh(geo.Castle, kit.material); castle.position.set(CASTLE.x, 0, CASTLE.z); castle.scale.setScalar(0.8); castle.rotation.y = Math.PI / 2; this.scene.add(castle); this.castleKit = castle;
+    // château : +20 % (échelle 0,96) et pierre grise procédurale, à la place du blanc neige du kit
+    const castle = new THREE.Mesh(geo.Castle, stoneMaterial(0xb3b7bd)); castle.position.set(CASTLE.x, 0, CASTLE.z); castle.scale.setScalar(0.96); castle.rotation.y = Math.PI / 2; this.scene.add(castle); this.castleKit = castle;
     this.struct.setKit(kit);   // maisons, tours, moulin, entrepôt, grenier : modèles du kit
     // monuments et décor du village
     const one = (name, x, z, ry, sc) => { const m = new THREE.Mesh(geo[name], kit.material); m.position.set(x, 0, z); m.rotation.y = ry; m.scale.setScalar(sc); this.scene.add(m); return m; };

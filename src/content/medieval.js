@@ -29,7 +29,7 @@ export const FORMATIONS = {
 export const SQUAD = { sortieZ: [58, 139], garrisonLeash: 16, intercept: 80, chargeRange: 28, aggro: 9, maxSquads: 60 };
 export const TRAIN = { baseQueue: 5, queuePerLevel: 5, speedPerLevel: 0.25 };
 export const WALL = {
-  segHp: 400, gateHp: 900, gateSegs: [19, 20],
+  segHp: 400, gateHp: 900,
   maxLevel: 5, levelHpBonus: 0.25, levelDmgCut: 0.10,
   repairHpPerStone: 8, upgradeBase: { stone: 120, wood: 60 },
 };
@@ -60,7 +60,9 @@ export const ECON = {
   restock: { gold: 25, stone: 20, iron: 10 },
 };
 // Prospection : un villageois libre explore la campagne ; au bout de `time` secondes il découvre un NOUVEAU gisement (pierre, fer ou or) ailleurs sur la carte.
-export const PROSPECT = { cost: { gold: 40, food: 30 }, time: 45, amount: [2200, 3800], maxPerRes: 3, res: ['stone', 'iron', 'gold'], zone: { x0: 12, x1: 188, z0: 206, z1: 292 }, clear: 16 };
+// Gisements présents dès le début (bords de la zone constructible, hors des chemins de construction)
+export const START_DEPOSITS = { stone: [{ x: 188, z: 296, amount: 3000 }], iron: [{ x: 22, z: 272, amount: 2600 }, { x: 176, z: 276, amount: 2600 }], gold: [{ x: 12, z: 300, amount: 2200 }] };
+export const PROSPECT = { cost: { gold: 40, food: 30 }, time: 45, amount: [2200, 3800], maxPerRes: 4, res: ['stone', 'iron', 'gold'], zone: { x0: 12, x1: 188, z0: 206, z1: 292 }, clear: 16 };
 // Tâches : chaque villageois sait quoi faire ; le joueur ne règle que les effectifs.
 export const TASKS = {
   wood:   { name: 'Bûcherons',      ico: '🪵', res: 'wood',  building: 'sawmill', site: { x: 40,  z: 255 }, rate: 1.3,  deposit: 9000, regen: 3.2 },

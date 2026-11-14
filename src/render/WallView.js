@@ -2,7 +2,7 @@
 // le chemin de ronde ; escaliers pour monter les archers ; au centre, deux battants (le même panneau) pivotent pour laisser passer les troupes.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { SEGS, SEG_W, SECTORS, SECTOR_W, WALK_H } from '../sim/constants.js';
+import { SEGS, SEG_W, SECTORS, SECTOR_W, WALK_H, GATE_SEGS } from '../sim/constants.js';
 import { STAIR_Z0, STAIR_Z1 } from '../sim/army.js';
 
 export const WALL_H = 6.4, GATE_H = 4.4, Z_OUT = 143.5, Z_IN = 148.9, Z_MID = 146.2, THICK = 2.0, STEPS = 12;
@@ -23,7 +23,8 @@ export class WallView {
     const mk = (geo, mat, cap) => { const im = new THREE.InstancedMesh(geo, mat, cap); im.frustumCulled = false; im.count = 0; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); scene.add(im); return im; };
     this.outer = mk(asset.geo, panelMat, SEGS + 2); this.inner = mk(asset.geo, panelMat, SEGS + 2); this.core = mk(unit, stone, SEGS + 2);
     this.leaves = mk(asset.geo, panelMat, 2); this.steps = mk(unit, stone, STAIR_XS.length * STEPS);
-    const gs = sim.wall; this.gateSegs = [...Array(SEGS).keys()].filter(i => gs.isGate(i)); this.gx0 = this.gateSegs[0] * SEG_W; this.gx1 = (this.gateSegs[this.gateSegs.length - 1] + 1) * SEG_W;
+    // portes : une par passage (gauche, centre, droite) ; chacune a ses deux battants et son linteau
+    this.gates = GATE_SEGS.map(([a, b], g) => ({ g, segs: [a, b], x0: a * SEG_W, x1: (b + 1) * SEG_W }));
     this.stairs();
   }
   stairs() {
@@ -36,11 +37,12 @@ export class WallView {
   place(im, k, x, y, z, ry, sx, sy, sz) { const d = this.d; d.position.set(x, y, z); d.rotation.set(0, ry, 0); d.scale.set(sx, sy, sz); d.updateMatrix(); im.setMatrixAt(k, d.matrix); }
   tint(im, k, ratio, breached, base = 1) { const c = this.c; if (breached) c.setRGB(0.35, 0.27, 0.24); else c.setRGB(base, base, base).lerp(this.c2, (1 - ratio) * 0.85); im.setColorAt(k, c); }
   update() {
-    const wall = this.sim.wall, gate = this.sim.army.gate, ease = t => t * t * (3 - 2 * t); let n = 0, nl = 0;
+    const wall = this.sim.wall, gates = this.sim.army.gate, ease = t => t * t * (3 - 2 * t); let n = 0, nl = 0;
     for (let i = 0; i < SEGS; i++) {
       const hp = wall.hp[i], ratio = hp / wall.segMax(i), br = hp <= 0, lvl = wall.level[wall.sectorOf(i)], x = i * SEG_W + SEG_W / 2, H = WALL_H + 0.3 * (lvl - 1), k = n;
       if (wall.isGate(i)) {                                                                  // porte : deux battants + linteau
-        const left = x < (this.gx0 + this.gx1) / 2, px = left ? this.gx0 : this.gx1, a = (br ? 0 : 1.35 * ease(gate)) * (left ? -1 : 1), m = this.m, m2 = this.m2;
+        const G = this.gates.find(q => q.segs[0] <= i && i <= q.segs[1]), gc = (G.x0 + G.x1) / 2, left = x < gc, px = left ? G.x0 : G.x1;
+        const a = (br ? 0 : 1.35 * ease(gates[G.g])) * (left ? -1 : 1), m = this.m, m2 = this.m2;
         if (!br) {
           m.makeTranslation(px, 0, Z_OUT); m2.makeRotationY(a); m.multiply(m2); m2.makeTranslation(left ? SEG_W / 2 : -SEG_W / 2, 0, 0); m.multiply(m2); m2.makeScale(0.5, GATE_H / 4, THICK); m.multiply(m2);
           this.leaves.setMatrixAt(nl, m); this.tint(this.leaves, nl, ratio, false, 0.9); nl++;
@@ -52,12 +54,14 @@ export class WallView {
       this.place(this.core, k, x, br ? 0.5 : WALK_H / 2, Z_MID, 0, SEG_W, br ? 1 : WALK_H, 4.7); this.tint(this.core, k, ratio, br, 0.5); n++;
     }
     // linteau au-dessus de la porte (panneau extérieur + dalle du chemin de ronde)
-    const gw = this.gx1 - this.gx0, gc = (this.gx0 + this.gx1) / 2, intact = this.gateSegs.some(s => wall.hp[s] > 0);
-    if (intact) {
+    let lintels = 0;
+    for (const G of this.gates) {
+      const gw = G.x1 - G.x0, gc = (G.x0 + G.x1) / 2, intact = wall.hp[G.segs[0]] > 0 || wall.hp[G.segs[1]] > 0;
+      if (!intact) continue;
       this.place(this.outer, n, gc, GATE_H, Z_OUT, 0, gw / 10, (WALL_H - GATE_H) / 4, THICK); this.tint(this.outer, n, 1, false);
-      this.place(this.core, n, gc, (GATE_H + WALL_H - 1.2) / 2 + 0.0, Z_MID, 0, gw, WALK_H - GATE_H, 4.7); this.core.setColorAt(n, this.c.setRGB(0.5, 0.5, 0.5)); n++;
+      this.place(this.core, n, gc, (GATE_H + WALL_H - 1.2) / 2 + 0.0, Z_MID, 0, gw, WALK_H - GATE_H, 4.7); this.core.setColorAt(n, this.c.setRGB(0.5, 0.5, 0.5)); n++; lintels++;
     }
-    this.outer.count = this.inner.count = n; this.core.count = n; this.inner.count = n - (intact ? 1 : 0); this.leaves.count = nl;
+    this.outer.count = n; this.core.count = n; this.inner.count = n - lintels; this.leaves.count = nl;
     for (const im of [this.outer, this.inner, this.core, this.leaves]) { im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; }
   }
 }

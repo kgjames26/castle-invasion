@@ -125,7 +125,9 @@ export class Build {
     return { range: TOWER.range + TOWER.rangePerLevel * (lv - 1), dmg: TOWER.dmg * (1 + TOWER.dmgPerLevel * (lv - 1)) * (1 + 0.1 * w), rate: TOWER.rate / (1 + TOWER.ratePerLevel * (lv - 1)) };
   }
   // ——— ouvriers ———
-  releaseJob(id) { for (const v of this.sim.eco.villagers) if (v.job === id) { v.job = 0; v.state = 'idle'; v.task = null; } }
+  // un ouvrier quitte son chantier : il retourne à sa tâche d'origine s'il en manque une (emprunt), sinon il devient libre
+  unbind(v) { v.job = 0; v.state = 'idle'; v.task = null; this.sim.eco.returnHome(v); }
+  releaseJob(id) { for (const v of this.sim.eco.villagers) if (v.job === id) this.unbind(v); }
   builderSpot(s, k) {
     const [hw, hd] = this.half(s.type, s.rot), a = Math.PI * (0.2 + 0.6 * (k / 3));
     return [s.x + (hw + 1.5) * Math.cos(a), s.z + (hd + 1.5) * Math.sin(a)];
@@ -134,15 +136,23 @@ export class Build {
     const sim = this.sim, E = sim.eco, items = this.items;
     // ouvriers : réaffectation des villageois libres vers les chantiers
     let free = null;
+    // plusieurs chantiers du même type : une seule équipe à la fois (la première) ; les suivants attendent, un ouvrier à la suite de l'autre
+    const head = new Map(); for (const s of items) if (WORKING(s) && !head.has(s.type)) head.set(s.type, s);
     for (const s of items) {
       if (!WORKING(s)) continue;
+      const want = head.get(s.type) === s ? s.workers : 0;
       const crew = []; for (const v of E.villagers) if (v.job === s.id) crew.push(v);
-      while (crew.length > s.workers) { const v = crew.pop(); v.job = 0; v.state = 'idle'; }
-      if (crew.length < s.workers) {
+      while (crew.length > want) this.unbind(crew.pop());
+      if (crew.length < want) {
         free ||= E.villagers.filter(v => !v.task && !v.job && !v.leaving && v.carry === 0);
-        while (crew.length < s.workers && free.length) {
-          let bi = 0, bd = Infinity; for (let i = 0; i < free.length; i++) { const d = (free[i].x - s.x) ** 2 + (free[i].z - s.z) ** 2; if (d < bd) { bd = d; bi = i; } }
-          const v = free.splice(bi, 1)[0]; v.job = s.id; v.state = 'toBuild'; crew.push(v);
+        while (crew.length < want) {
+          let v = null;
+          if (free.length) {
+            let bi = 0, bd = Infinity; for (let i = 0; i < free.length; i++) { const d = (free[i].x - s.x) ** 2 + (free[i].z - s.z) ** 2; if (d < bd) { bd = d; bi = i; } }
+            v = free.splice(bi, 1)[0];
+          } else v = E.borrow(s);                  // aucun libre : emprunt sur la tâche la moins urgente
+          if (!v) break;
+          v.job = s.id; v.state = 'toBuild'; crew.push(v);
         }
       }
       crew.forEach((v, k) => { const [bx, bz] = this.builderSpot(s, k); v.bx = bx; v.bz = bz; });
