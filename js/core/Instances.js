@@ -20,6 +20,14 @@ export class InstancedType {
     this.mesh.instanceColor.setUsage(THREE.DynamicDrawUsage);
     scene.add(this.mesh);
   }
+  // animation par texture de sommets : un flottant (pose courante) par instance
+  enableAnim(depthMaterial) {
+    this.anim = new THREE.InstancedBufferAttribute(new Float32Array(this.pool.cap || this.mesh.instanceMatrix.count), 1);
+    this.anim.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.geometry.setAttribute('aAnim', this.anim);
+    if (depthMaterial) this.mesh.customDepthMaterial = depthMaterial;
+  }
+  setAnim(i, f) { if (this.anim) this.anim.array[i] = f; }
   alloc() { return this.pool.alloc(); }
   release(i) {
     if (i < 0) return;
@@ -47,6 +55,7 @@ export class InstancedType {
     this.mesh.count = this.pool.high;
     this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.instanceColor.needsUpdate = true;
+    if (this.anim) this.anim.needsUpdate = true;
   }
 }
 

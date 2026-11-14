@@ -2,22 +2,47 @@
 
 export const VERSION = '1.0.0';
 
+// Carte rectangulaire. Z : nord = négatif (haut de l'écran), muraille en z = 0.
+// Du sud au nord : base (3/5 de la hauteur) → muraille → zone de déploiement (1/10) → plaine (1/10) → brouillard (1/5).
+// Portrait : carte étroite (9 segments de muraille) · Paysage : carte large (17 segments).
 export const MAP = {
-  SIZE: 120,          // mètres
-  HALF: 60,
-  GRID: 48,           // grille de navigation 48×48
   CELL: 2.5,
-  WALL_Z: 0,          // la muraille coupe la carte en deux
+  WALL_Z: 0,
   WALL_HALF_THICK: 2.1,
   WALL_HEIGHT: 4.3,
   SEG_LEN: 8,
-  SEG_COUNT: 15,
-  GATE_SEG: 7,
-  CASTLE_POS: { x: 0, z: 40 },
-  CASTLE_SCALE: 0.8,
-  CASTLE_DOOR: { x: 0, z: 25.5 },
-  SPAWNS: [{ x: -40, z: -57 }, { x: 0, z: -58 }, { x: 40, z: -57 }],
+  H: 140,
+  CASTLE_SCALE: 1.0,
+  orient: 'landscape',
+  // renseignés par configure()
+  W: 136, HALF: 68, SEG_COUNT: 17, GATE_SEG: 8,
+  minX: -68, maxX: 68, minZ: -56, maxZ: 84,
+  GX: 56, GZ: 56,
+  STAGE_Z: -14, PLAIN_Z: -28, FOG_END_Z: -56,
+  CASTLE_POS: { x: 0, z: 68 }, CASTLE_DOOR: { x: 0, z: 49 },
+  SPAWNS: [],
+  configure(orient) {
+    const M = MAP;
+    M.orient = orient === 'portrait' ? 'portrait' : 'landscape';
+    M.SEG_COUNT = M.orient === 'portrait' ? 9 : 17;
+    M.GATE_SEG = (M.SEG_COUNT - 1) / 2;
+    M.W = M.SEG_COUNT * M.SEG_LEN;
+    M.HALF = M.W / 2;
+    const south = M.H * 0.6, north = M.H * 0.4;
+    M.minX = -M.HALF; M.maxX = M.HALF; M.minZ = -north; M.maxZ = south;
+    M.STAGE_Z = -M.H * 0.1; M.PLAIN_Z = -M.H * 0.2; M.FOG_END_Z = -north;
+    M.GX = Math.round(M.W / M.CELL); M.GZ = Math.round(M.H / M.CELL);
+    // la grille couvre [minX-…] : on garde un léger débord pour l'alignement
+    M.CASTLE_POS = { x: 0, z: south - 16 };
+    M.CASTLE_DOOR = { x: 0, z: south - 16 - 18.5 };
+    const sx = M.HALF * 0.62;
+    M.SPAWNS = M.orient === 'portrait'
+      ? [{ x: -sx * 0.9, z: -(north - 4) }, { x: 0, z: -(north - 3) }, { x: sx * 0.9, z: -(north - 4) }]
+      : [{ x: -sx, z: -(north - 4) }, { x: 0, z: -(north - 3) }, { x: sx, z: -(north - 4) }];
+    return M;
+  },
 };
+MAP.configure('landscape');
 
 export const RESOURCES = ['stone', 'wood', 'gold', 'metal', 'diamond'];
 export const RES_INFO = {
@@ -52,22 +77,29 @@ export const UNITS = {
     desc: 'Reste en sous-terrain. Chaque ouvrier accélère la production et les améliorations (+6 %) et répare la muraille entre les vagues.' },
   soldier: { name: 'Soldat', icon: '🗡️', hp: 130, dmg: 14, range: 1.5, cd: 1.0, speed: 3.4, radius: 0.5, aggro: 9, cost: { wood: 10, metal: 10, gold: 15 }, time: 12, pop: 1, building: 'barracks',
     desc: 'Fantassin à l\'épée et au bouclier. Solide en ligne.' },
-  archer: { name: 'Archer', icon: '🏹', hp: 75, dmg: 12, range: 20, cd: 1.4, speed: 3.4, radius: 0.45, aggro: 22, ranged: true, cost: { wood: 30, gold: 15 }, time: 12, pop: 1, building: 'barracks',
+  archer: { name: 'Archer', icon: '🏹', hp: 75, dmg: 12, range: 20, cd: 1.4, speed: 3.4, radius: 0.45, aggro: 22, ranged: true, scale: 0.92, cost: { wood: 30, gold: 15 }, time: 12, pop: 1, building: 'barracks',
     desc: 'Tir à distance. Placé sur la muraille, il gagne +30 % de portée.' },
   cavalry: { name: 'Cavalier', icon: '🐎', hp: 240, dmg: 22, range: 1.9, cd: 1.1, speed: 7, radius: 0.85, aggro: 12, charge: true, cost: { wood: 10, metal: 25, gold: 40 }, time: 20, pop: 2, building: 'stable',
     desc: 'Rapide et puissant à la charge (dégâts ×2 au premier impact).' },
 };
 
 // ---------- Ennemis ----------
+// size = taille relative (1 = humain moyen). Plus un zombie est grand, plus il est puissant et résistant ;
+// plus il est petit, plus il est rapide et fragile. Chaque apparition varie un peu (voir sizeStats).
+// variants : modèles animés (0 femme A, 1 femme B, 2 coureur, 3/4/5 marcheurs bras tendus).
 export const ENEMIES = {
-  classic:   { name: 'Zombie',          hp: 60,  dmg: 8,  range: 1.3, cd: 1.2, speed: 2.1, radius: 0.5, aggro: 8,  wallMul: 0.6,   gold: 1, scale: 1 },
-  fast:      { name: 'Zombie rapide',   hp: 40,  dmg: 6,  range: 1.3, cd: 0.8, speed: 4.3, radius: 0.45, aggro: 10, wallMul: 0.5, gold: 1, scale: 0.95 },
-  dog:       { name: 'Chien zombie',    hp: 32,  dmg: 7,  range: 1.2, cd: 0.7, speed: 5.6, radius: 0.45, aggro: 16, wallMul: 0.4, gold: 1, scale: 1 },
-  golem:     { name: 'Golem',           hp: 520, dmg: 34, range: 2.2, cd: 2.0, speed: 1.4, radius: 1.2, aggro: 7,  wallMul: 2,   gold: 8, scale: 1 },
-  jumper:    { name: 'Sauteur',         hp: 70,  dmg: 10, range: 1.3, cd: 1.0, speed: 3.0, radius: 0.45, aggro: 9,  wallMul: 1.5, gold: 2, scale: 1, jumps: true },
-  golem_ram: { name: 'Golem bélier',    hp: 700, dmg: 30, range: 2.4, cd: 2.4, speed: 1.15, radius: 1.3, aggro: 0, wallMul: 7,   gold: 12, scale: 1, siege: true },
-  thrower:   { name: 'Lanceur de rochers', hp: 85, dmg: 26, range: 26, cd: 4.0, speed: 1.8, radius: 0.55, aggro: 26, wallMul: 1.2, gold: 4, scale: 1, ranged: true, aoe: 2.6, siege: true },
+  classic:   { name: 'Zombie',          size: 1.0,  variants: [3, 4, 5, 0, 1], hp: 60,  dmg: 8,  range: 1.3, cd: 1.2, speed: 2.1, radius: 0.5, aggro: 8,  wallMul: 0.6, gold: 1 },
+  fast:      { name: 'Zombie rapide',   size: 0.75, variants: [2],             hp: 40,  dmg: 6,  range: 1.3, cd: 0.8, speed: 4.3, radius: 0.42, aggro: 10, wallMul: 0.5, gold: 1 },
+  dog:       { name: 'Zombie rampant',  size: 0.55, variants: [2],             hp: 32,  dmg: 7,  range: 1.1, cd: 0.7, speed: 5.6, radius: 0.36, aggro: 16, wallMul: 0.4, gold: 1 },
+  golem:     { name: 'Colosse',         size: 2.1,  variants: [4, 3],          hp: 520, dmg: 34, range: 2.4, cd: 2.0, speed: 1.4, radius: 1.1, aggro: 7,  wallMul: 2,   gold: 8 },
+  jumper:    { name: 'Sauteur',         size: 0.9,  variants: [1, 0],          hp: 70,  dmg: 10, range: 1.3, cd: 1.0, speed: 3.0, radius: 0.45, aggro: 9,  wallMul: 1.5, gold: 2, jumps: true },
+  golem_ram: { name: 'Colosse bélier',  size: 2.5,  variants: [5],             hp: 700, dmg: 30, range: 2.6, cd: 2.4, speed: 1.15, radius: 1.3, aggro: 0, wallMul: 7,   gold: 12, siege: true, ram: true },
+  thrower:   { name: 'Lanceur de rochers', size: 1.2, variants: [0],           hp: 85,  dmg: 26, range: 26, cd: 4.0, speed: 1.8, radius: 0.55, aggro: 26, wallMul: 1.2, gold: 4, ranged: true, aoe: 2.6, siege: true },
 };
+// Statistiques d'un zombie d'une taille donnée (j = facteur de taille par rapport à son type)
+export function sizeStats(def, j) {
+  return { hp: Math.pow(j, 2.3), dmg: Math.pow(j, 1.6), speed: Math.pow(j, -0.7), radius: j, cd: Math.pow(j, 0.4), gold: Math.pow(j, 1.5) };
+}
 
 // ---------- Armes de siège ----------
 export const SIEGE = {

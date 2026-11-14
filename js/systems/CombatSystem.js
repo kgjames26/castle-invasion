@@ -125,7 +125,8 @@ export class CombatSystem {
   }
 
   fireArrow(u, t) {
-    const sx = u.x, sy = (u.y || 0) + 1.5, sz = u.z;
+    const dd = Math.hypot(t.x - u.x, t.z - u.z) || 1;
+    const sx = u.x + (t.x - u.x) / dd * 1.1, sy = (u.y || 0) + 1.7, sz = u.z + (t.z - u.z) / dd * 1.1;
     const d = Math.hypot(t.x - sx, t.z - sz);
     const T = 0.25 + d / 32;
     const tx = t.x + (t.vx || 0) * T, tz = t.z + (t.vz || 0) * T;

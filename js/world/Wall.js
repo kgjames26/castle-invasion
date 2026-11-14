@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { MAP, WALL_HP, GATE_HP, WALL_REGEN_PER_WORKER } from '../data/Config.js';
 
-// Muraille segmentée : 15 segments de 8 m, porte au centre, tours décoratives
+// Muraille segmentée : segments de 8 m (9 en portrait, 17 en paysage), porte au centre, tours décoratives
 export class Wall {
   constructor(game) {
     this.game = game;
@@ -26,24 +26,24 @@ export class Wall {
       seg.hp = seg.maxHp;
       this.segments.push(seg);
     }
-    // tours
-    const towerX = [-60, -52, -36, -20, -4, 4, 20, 36, 52, 60];
-    for (const x of towerX) {
-      const big = Math.abs(x) === 4;
-      const name = big ? 'tower2' : Math.abs(x) === 60 ? 'tower3' : 'tower1';
-      const t = sm.model(name, { x: x === 60 ? 58.6 : x === -60 ? -58.6 : x, z: MAP.WALL_Z, scale: big ? 1.05 : 0.95, shadow: true, receive: true });
+    // tours : aux extrémités, de part et d'autre de la porte (grandes) et tous les 2 segments
+    const G = MAP.GATE_SEG, N = MAP.SEG_COUNT;
+    const bounds = new Set([0, N, G, G + 1]);
+    for (let k = G - 2; k > 0; k -= 2) bounds.add(k);
+    for (let k = G + 3; k < N; k += 2) bounds.add(k);
+    for (const k of bounds) {
+      const x = -MAP.HALF + k * MAP.SEG_LEN;
+      const big = k === G || k === G + 1;
+      const end = k === 0 || k === N;
+      const name = big ? 'tower2' : end ? 'tower3' : 'tower1';
+      const tx = end ? (k === 0 ? x + 1.4 : x - 1.4) : x;
+      const t = sm.model(name, { x: tx, z: MAP.WALL_Z, scale: big ? 1.05 : 0.95, shadow: true, receive: true });
       this.towers.push(t);
-      grid.markCircle(x, MAP.WALL_Z, 2.3, k => { grid.blocked[k] = 1; });
-    }
-    // neige au pied de la muraille (décor)
-    for (let i = 0; i < 9; i++) {
-      const x = -54 + i * 13.5 + (i % 2) * 3;
-      if (Math.abs(x) < 7) continue;
-      sm.model(['snow1', 'snow2', 'snow3'][i % 3], { x, z: -3.2, rotY: -Math.PI / 2, scale: 1.2, lod: true });
+      grid.markCircle(tx, MAP.WALL_Z, 2.3, kk => { grid.blocked[kk] = 1; });
     }
     // cellules de muraille
     grid.wallState = s => this.segments[s];
-    for (let j = 0; j < grid.n; j++) {
+    for (let j = 0; j < grid.nz; j++) {
       const z = grid.cz(j);
       if (Math.abs(z - MAP.WALL_Z) > MAP.WALL_HALF_THICK + 0.3) continue;
       for (let i = 0; i < grid.n; i++) {
@@ -56,7 +56,7 @@ export class Wall {
     // torches à la porte et sur le chemin de ronde
     sm.addTorch(-5.5, 7.5, -2.8, 16, 20);
     sm.addTorch(5.5, 7.5, -2.8, 16, 20);
-    for (const x of [-44, -28, 28, 44]) sm.addTorch(x, 5.0, -2.4, 0, 0, false);
+    for (const f of [0.65, 0.4]) for (const sg of [-1, 1]) sm.addTorch(sg * MAP.HALF * f, 5.0, -2.4, 0, 0, false);
     this.applyTechs();
   }
 

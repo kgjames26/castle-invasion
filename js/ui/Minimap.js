@@ -11,8 +11,8 @@ export class Minimap {
     this.resize();
     const go = e => {
       const r = this.canvas.getBoundingClientRect();
-      const x = ((e.clientX - r.left) / r.width) * MAP.SIZE - MAP.HALF;
-      const z = ((e.clientY - r.top) / r.height) * MAP.SIZE - MAP.HALF;
+      const x = MAP.minX + ((e.clientX - r.left) / r.width) * MAP.W;
+      const z = MAP.minZ + ((e.clientY - r.top) / r.height) * MAP.H;
       this.game.cam.focus(x, z);
     };
     this.canvas.addEventListener('pointerdown', e => { e.stopPropagation(); this.drag = true; go(e); this.canvas.setPointerCapture(e.pointerId); });
@@ -21,6 +21,12 @@ export class Minimap {
   }
 
   resize() {
+    // la mini-carte a les proportions de la carte (étroite en portrait, large en paysage)
+    const small = matchMedia('(max-width: 720px)').matches || innerHeight < 460;
+    const long = small ? 128 : 168;
+    const h = MAP.orient === 'portrait' ? long : Math.round(long * 0.92);
+    this.canvas.style.height = h + 'px';
+    this.canvas.style.width = Math.round(h * MAP.W / MAP.H) + 'px';
     const r = this.canvas.getBoundingClientRect();
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     this.canvas.width = Math.max(64, Math.round(r.width * dpr));
@@ -28,19 +34,21 @@ export class Minimap {
     this.bg = null;
   }
 
-  m(x) { return ((x + MAP.HALF) / MAP.SIZE) * this.canvas.width; }
-  n(z) { return ((z + MAP.HALF) / MAP.SIZE) * this.canvas.height; }
+  m(x) { return ((x - MAP.minX) / MAP.W) * this.canvas.width; }
+  n(z) { return ((z - MAP.minZ) / MAP.H) * this.canvas.height; }
 
   drawBg() {
     const c = document.createElement('canvas');
     c.width = this.canvas.width; c.height = this.canvas.height;
     const x = c.getContext('2d');
     const g = x.createLinearGradient(0, 0, 0, c.height);
-    g.addColorStop(0, '#231c20'); g.addColorStop(0.5, '#2c2a24'); g.addColorStop(0.5, '#2e3a2a'); g.addColorStop(1, '#34402e');
+    // du nord (brouillard sombre) au sud (prairie)
+    g.addColorStop(0, '#0d1118'); g.addColorStop(0.2, '#454c3a'); g.addColorStop(0.3, '#8a9250'); g.addColorStop(0.4, '#938a5c'); g.addColorStop(0.42, '#5d9440'); g.addColorStop(1, '#4f8636');
     x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
     // route
     x.fillStyle = '#4a3e30';
-    x.fillRect(this.m(-1.5), this.n(-48), this.m(1.5) - this.m(-1.5), this.n(26) - this.n(-48));
+    x.fillStyle = '#b59a6e';
+    x.fillRect(this.m(-1.5), this.n(MAP.minZ + 14), this.m(1.5) - this.m(-1.5), this.n(MAP.CASTLE_DOOR.z) - this.n(MAP.minZ + 14));
     // château
     const r = this.game.castle.rect;
     x.fillStyle = '#9a8f80';
@@ -57,7 +65,7 @@ export class Minimap {
     const g = this.game, ctx = this.ctx, W = this.canvas.width, H = this.canvas.height;
     if (!this.bg) this.drawBg();
     ctx.drawImage(this.bg, 0, 0);
-    const s = W / 150;
+    const s = Math.max(W, H) / 150;
     // gisements
     for (const n of g.resources.nodes) {
       if (!n.alive) continue;
@@ -95,7 +103,7 @@ export class Minimap {
     ctx.strokeStyle = 'rgba(255,230,170,0.85)';
     ctx.lineWidth = 1.2 * s;
     ctx.beginPath();
-    q.forEach((p, i) => { const x = this.m(Math.max(-90, Math.min(90, p.x))), y = this.n(Math.max(-90, Math.min(90, p.z))); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+    q.forEach((p, i) => { const x = this.m(Math.max(MAP.minX - 30, Math.min(MAP.maxX + 30, p.x))), y = this.n(Math.max(MAP.minZ - 30, Math.min(MAP.maxZ + 30, p.z))); if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
     ctx.closePath(); ctx.stroke();
     // nord
     ctx.fillStyle = '#f6d48d';

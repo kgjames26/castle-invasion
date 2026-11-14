@@ -58,6 +58,7 @@ export class BaseUI {
   onStart() {
     $('menu').classList.add('hidden');
     $('hud').classList.remove('hidden');
+    $('underground').classList.add('hidden');
     this.minimap.resize();
   }
 
@@ -81,11 +82,19 @@ export class BaseUI {
     this.game.siege.cancelPlacement();
   }
   openFormations() { this.formation.show(); }
+  // la carte « Ville » remplace l'interface de jeu de la carte principale
+  onView(v) {
+    const city = v === 'city';
+    $('hud').classList.toggle('hidden', city);
+    $('underground').classList.toggle('hidden', !city);
+    if (city) { this.underground.render(true); this.formation.close?.(); $('reserve-menu').classList.add('hidden'); }
+    else { $('btn-base').blur(); }
+  }
   closeTop() {
     if (!$('help').classList.contains('hidden')) { $('help').classList.add('hidden'); return true; }
     if (this.formation.open) { this.formation.close(); return true; }
     if (!$('reserve-menu').classList.contains('hidden')) { $('reserve-menu').classList.add('hidden'); return true; }
-    if (this.underground.isOpen) { this.underground.close(); return true; }
+    if (this.underground.isOpen) { if (this.underground.current) this.underground.closePanel(); else this.underground.close(); return true; }
     if (this.game.paused) { this.game.setPaused(false); return true; }
     return false;
   }

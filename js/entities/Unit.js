@@ -42,11 +42,14 @@ export class Unit {
     this.selected = false;
     this.lastHit = -99;
     this.ignoreGrid = false;
-    const r = this.game.unitRender[type];
+    const r = this.pickRender(type);
     this.render = r;
     this.inst = r ? r.alloc() : -1;
+    this.inst2 = -1; this.inst3 = -1;
     return this;
   }
+
+  pickRender(type) { return this.game.unitRender[type]; }
 
   get moving() { return this.vx * this.vx + this.vz * this.vz > 0.04; }
 
@@ -126,9 +129,8 @@ export class Unit {
       if (!here || gr.passableXZ(nx, this.z, this.team)) this.x = nx;
       if (!here || gr.passableXZ(this.x, nz, this.team)) this.z = nz;
       // ne jamais sortir de la carte
-      const H = MAP.HALF - 0.5;
-      this.x = Math.max(-H, Math.min(H, this.x));
-      this.z = Math.max(-H - 1, Math.min(H, this.z));
+      this.x = Math.max(MAP.minX + 0.5, Math.min(MAP.maxX - 0.5, this.x));
+      this.z = Math.max(MAP.minZ - 1, Math.min(MAP.maxZ - 0.5, this.z));
     }
     if (this.vx * this.vx + this.vz * this.vz > 0.05) {
       this.rot = angleLerp(this.rot, Math.atan2(this.vx, this.vz), Math.min(1, dt * 10));
@@ -164,7 +166,10 @@ export class Unit {
     this.removed = true;
     if (this.render && this.inst >= 0) this.render.release(this.inst);
     this.inst = -1;
+    this.releaseExtras();
   }
+  releaseExtras() {}
+  drawExtras() {}
 
   // --- rendu (instancié, interpolé) ---
   draw(alpha, time) {
@@ -185,10 +190,13 @@ export class Unit {
         y += Math.abs(Math.sin(this.anim)) * 0.12;
         roll = Math.sin(this.anim) * 0.07;
       }
-      if (this.attackAnim > 0) tilt = Math.sin(this.attackAnim * Math.PI) * 0.35;
+      if (this.attackAnim > 0 && !this.def.ranged) tilt = Math.sin(this.attackAnim * Math.PI) * 0.35;
       if (this.def.hunchAnim) tilt += 0.1 * Math.sin(time * 3 + this.id);
+      if (this.bowTilt !== undefined) tilt = this.bowTilt;
     }
+    this.dx = x; this.dy = y; this.dz = z; this.drot = rot; this.dsc = sc; this.dtilt = tilt;
     this.render.set(this.inst, x, y, z, rot, sc, tilt, roll);
+    this.drawExtras();
     if (this.flash > 0) this.render.color(this.inst, 2.2, 0.6, 0.5);
     else if (this.selected) this.render.color(this.inst, 1.15, 1.15, 1.05);
     else this.render.color(this.inst, 1, 1, 1);

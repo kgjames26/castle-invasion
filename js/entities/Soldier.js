@@ -186,6 +186,42 @@ export class Soldier extends Unit {
     }
   }
 
+  // --- rendu de l'archer : modèle animé (corps + arc + flèche encochée) ---
+  releaseExtras() {
+    const r = this.game.unitRender;
+    if (this.inst2 >= 0) { r.archerBow.release(this.inst2); this.inst2 = -1; }
+    if (this.inst3 >= 0) { r.archerArrow.release(this.inst3); this.inst3 = -1; }
+  }
+
+  draw(alpha, time) {
+    if (this.def.ranged && this.alive) {
+      // phase de tension : l'archer encoche et bande l'arc pendant les 0,45 s avant le tir
+      const aiming = this.target && this.target.alive && !this.moving && this.cd > 0 && this.cd < 0.45;
+      this.aim = aiming ? 1 - this.cd / 0.45 : Math.max(0, (this.aim || 0) - 0.12);
+      this.bowTilt = -0.15 * this.aim + 0.11 * this.attackAnim;
+    }
+    super.draw(alpha, time);
+  }
+
+  drawExtras() {
+    if (!this.def.ranged) return;
+    const g = this.game, R = g.unitRender;
+    if (this.inst2 < 0) this.inst2 = R.archerBow.alloc();
+    if (this.inst3 < 0) this.inst3 = R.archerArrow.alloc();
+    if (this.inst2 < 0 || this.inst3 < 0) return;
+    const rec = this.dying > 0 ? 0 : this.attackAnim * 0.14 * this.dsc;
+    const sy = Math.sin(this.drot), cy = Math.cos(this.drot);
+    // l'arc recule légèrement au lâcher (axe de tir = local +z)
+    R.archerBow.set(this.inst2, this.dx - sy * rec, this.dy, this.dz - cy * rec, this.drot, this.dsc, this.dtilt, 0);
+    if (this.dying > 0 || (this.aim || 0) < 0.05) { R.archerArrow.hide(this.inst3); return; }
+    // flèche encochée, tirée en arrière avec la corde
+    const pull = (1 - this.aim) * 0.35;
+    const h = 1.39 * this.dsc, zf = (0.27 - pull * 0.5) * this.dsc;
+    const ct = Math.cos(this.dtilt), st = Math.sin(this.dtilt);
+    const vy = h * ct - zf * st, vz = h * st + zf * ct;
+    R.archerArrow.set(this.inst3, this.dx + vz * sy, this.dy + vy, this.dz + vz * cy, this.drot, this.dsc * 1.25, this.dtilt, 0);
+  }
+
   attack(t) {
     const g = this.game;
     this.cd = this.def.cd * (0.9 + Math.random() * 0.2);

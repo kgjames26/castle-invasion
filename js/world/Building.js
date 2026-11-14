@@ -9,9 +9,11 @@ export class Castle {
     this.isStructure = true;
     this.isCastle = true;
     this.type = 'castle';
+    const k = MAP.CASTLE_SCALE / 0.8;
     this.x = MAP.CASTLE_POS.x; this.z = MAP.CASTLE_POS.z;
-    this.rect = { x0: -13.5, x1: 13.5, z0: 27.6, z1: 53 };
-    this.radius = 13;
+    this.k = k;
+    this.rect = { x0: -13.5 * k, x1: 13.5 * k, z0: this.z - 12.4 * k, z1: this.z + 13 * k };
+    this.radius = 13 * k;
     this.alive = true;
     this.baseHp = CASTLE_HP;
     this.maxHp = CASTLE_HP;
@@ -23,8 +25,9 @@ export class Castle {
     this.mesh = sm.model('castle', { x: this.x, z: this.z, rotY: Math.PI, scale: MAP.CASTLE_SCALE, shadow: true, receive: true });
     const r = this.rect;
     grid.markRect(r.x0, r.z0, r.x1, r.z1, k => { grid.blocked[k] = 1; });
-    sm.addTorch(-3.2, 4.5, 25.6, 14, 18);
-    sm.addTorch(3.2, 4.5, 25.6, 14, 18);
+    const k = this.k;
+    sm.addTorch(-3.2 * k, 4.5, this.z - 14.4 * k, 10, 18);
+    sm.addTorch(3.2 * k, 4.5, this.z - 14.4 * k, 10, 18);
   }
   applyDefenses(level) {
     const f = this.hp / this.maxHp;

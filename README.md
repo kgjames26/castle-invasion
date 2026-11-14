@@ -1,7 +1,7 @@
 # 🏰 Castle Invasion
 
 Jeu de défense de base médiéval en 3D (PWA, mobile et ordinateur, portrait ou paysage).
-Récolte des ressources comme dans Age of Empires, développe une ville souterraine, forme tes troupes
+Récolte des ressources comme dans Age of Empires, développe ta ville sur une seconde carte, forme tes troupes
 et utilise des armes de siège pour protéger ta muraille contre des vagues de zombies venues du nord.
 
 - **Three.js r170** + HTML/CSS/JS vanilla, modules ES, aucune étape de build
@@ -19,7 +19,7 @@ et utilise des armes de siège pour protéger ta muraille contre des vagues de z
 - **7 formations** : Ligne, Double ligne, Coin, Carré, Escarmouche, Colonne, Cavalerie en coin (bonus selon le cahier des charges). Elles se brisent sous 40 % d'effectif.
 - **Siège** : baliste, catapulte, trébuchet (tir parabolique, zone, munitions pierre ou métal), bélier mobile qui détruit les nids. Aperçu de portée et de trajectoire au placement.
 - **Ennemis** : zombie, rapide, chien, golem, sauteur (franchit la muraille) + golem bélier et lanceur de rochers.
-- **Ville souterraine** : Quartiers, Caserne, Écurie, Atelier de siège, Laboratoire (10 recherches), Forge, Marché, Défenses souterraines.
+- **Carte « Ville »** (bouton au sud de la base) : Quartiers, Caserne, Écurie, Atelier de siège, Laboratoire (10 recherches), Forge, Marché, Défenses souterraines.
 - **Sauvegarde** automatique toutes les 30 s et à chaque fin de vague (localStorage). Pause automatique en arrière-plan.
 
 ## Contrôles
@@ -107,3 +107,9 @@ scripts/generate-sw.mjs   Régénère la liste de cache du service worker
 - Modèles 3D : *Low poly winter medieval castle and town pack*, *Low poly medieval towers pack*, *Low poly medieval Walls pack* — **assetfactory** sur Sketchfab, licence *Sketchfab Standard* (voir `assets/models/LICENSE-*.txt`).
 - Unités, zombies et armes de siège : modèles low-poly procéduraux du jeu.
 - [Three.js](https://threejs.org) — licence MIT (`lib/THREE_LICENSE`).
+
+## Version 2
+- Jeu de jour ; carte : 3/5 zone de base (jusqu'à la muraille), 1/10 zone de placement des troupes et engins, 1/10 plaine, 1/5 brouillard progressif (sombre au nord).
+- Format portrait (smartphone, automatique) ou paysage (PC / tablette) choisi dans le menu ; la carte est plus large en paysage.
+- Zombies animés de tailles variées : plus ils sont grands, plus ils sont forts et résistants ; plus ils sont petits, plus ils sont rapides et fragiles.
+- Archer avec tir de flèche animé.

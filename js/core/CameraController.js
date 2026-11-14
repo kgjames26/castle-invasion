@@ -4,9 +4,11 @@ import { MAP } from '../data/Config.js';
 
 // Caméra semi-isométrique : regarde vers le nord par défaut, pivotable, zoomable
 export class CameraController {
-  constructor(camera, dom) {
+  constructor(camera, dom, opts = {}) {
     this.camera = camera;
     this.dom = dom;
+    this.mode = opts.mode || 'map';
+    this.bounds = opts.bounds || null;
     this.target = new THREE.Vector3(0, 0, 6);
     this.goal = { x: 0, z: 6, yaw: 0, pitch: 0.9, dist: 90 };
     this.cur = { ...this.goal };
@@ -18,10 +20,18 @@ export class CameraController {
     this.fitDefault();
   }
 
+  // cadrage par défaut : toute la largeur de la carte si possible, centré entre la muraille et le château
   fitDefault() {
     const a = window.innerWidth / window.innerHeight;
-    this.goal.dist = a < 0.8 ? 118 : a < 1.2 ? 100 : 88;
-    this.goal.z = a < 0.8 ? 14 : 12;
+    if (this.mode === 'city') {
+      this.goal.dist = a < 0.8 ? 128 : 92;
+      this.goal.z = a < 0.8 ? -4 : -2;
+      return;
+    }
+    const portrait = MAP.orient === 'portrait';
+    const fit = (MAP.W * 0.92) / (0.768 * a);
+    this.goal.dist = clamp(portrait ? Math.min(fit, 135) : fit, 70, 150);
+    this.goal.z = portrait ? 20 : 16;
   }
   resetView() { this.goal.yaw = 0; this.goal.pitch = 0.9; this.goal.x = 0; this.fitDefault(); }
 
@@ -38,11 +48,12 @@ export class CameraController {
   panWorld(dx, dz) { this.goal.x += dx; this.goal.z += dz; this.clampGoal(); }
   rotate(da) { this.goal.yaw += da; }
   tilt(dp) { this.goal.pitch = clamp(this.goal.pitch + dp, 0.55, 1.35); }
-  zoom(f) { this.goal.dist = clamp(this.goal.dist * f, 22, 160); }
+  zoom(f) { this.goal.dist = clamp(this.goal.dist * f, 22, 165); }
   focus(x, z) { this.goal.x = x; this.goal.z = z; this.clampGoal(); }
   clampGoal() {
-    this.goal.x = clamp(this.goal.x, -MAP.HALF, MAP.HALF);
-    this.goal.z = clamp(this.goal.z, -MAP.HALF, MAP.HALF);
+    const b = this.bounds || MAP;
+    this.goal.x = clamp(this.goal.x, b.minX, b.maxX);
+    this.goal.z = clamp(this.goal.z, b.minZ, b.maxZ);
   }
 
   update(dt) {

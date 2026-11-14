@@ -42,7 +42,7 @@ export class PathfindingSystem {
   constructor(game) {
     this.game = game;
     this.grid = game.grid;
-    const N = this.grid.n * this.grid.n;
+    const N = this.grid.n * this.grid.nz;
     this.heap = new MinHeap(N * 8);
     this.g = new Float32Array(N);
     this.came = new Int32Array(N);
@@ -96,7 +96,7 @@ export class PathfindingSystem {
       const i = k % n, j = (k / n) | 0;
       for (const [di, dj, w] of DIRS) {
         const ni = i + di, nj = j + dj;
-        if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
+        if (ni < 0 || nj < 0 || ni >= n || nj >= gr.nz) continue;
         const nk = nj * n + ni;
         if (di && dj && (gr.blocked[j * n + ni] || gr.blocked[nj * n + i])) continue;
         const c = this.enemyCost(nk);
@@ -116,7 +116,7 @@ export class PathfindingSystem {
     if (bv === Infinity) bv = 1e9;
     for (const [di, dj] of DIRS) {
       const ni = i + di, nj = j + dj;
-      if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
+      if (ni < 0 || nj < 0 || ni >= n || nj >= gr.nz) continue;
       if (di && dj && (gr.blocked[j * n + ni] || gr.blocked[nj * n + i])) continue;
       const nk = nj * n + ni;
       if (this.flow[nk] < bv) { bv = this.flow[nk]; best = nk; }
@@ -128,7 +128,7 @@ export class PathfindingSystem {
     return { x: gr.cx(best % n), z: gr.cz((best / n) | 0) };
   }
 
-  // A* sur la grille 48×48 avec lissage du chemin
+  // A* sur la grille avec lissage du chemin
   findPath(sx, sz, tx, tz, team = 'player') {
     const gr = this.grid, n = gr.n;
     const si = gr.cellI(sx), sj = gr.cellJ(sz);
@@ -158,7 +158,7 @@ export class PathfindingSystem {
       const i = k % n, j = (k / n) | 0;
       for (const [di, dj, w] of DIRS) {
         const ni = i + di, nj = j + dj;
-        if (ni < 0 || nj < 0 || ni >= n || nj >= n) continue;
+        if (ni < 0 || nj < 0 || ni >= n || nj >= gr.nz) continue;
         const nk = nj * n + ni;
         if (closed[nk] || !gr.passable(nk, team)) continue;
         if (di && dj && (!gr.passable(j * n + ni, team) || !gr.passable(nj * n + i, team))) continue;

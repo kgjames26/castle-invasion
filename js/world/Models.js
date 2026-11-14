@@ -130,6 +130,11 @@ export function buildUnitGeometries() {
     ...humanoid({ skin: 0x6c7c4c, tunic: 0x4a3a2a, pants: 0x2a2620, arms: 0x6c7c4c, armRx: -2.9, hunch: 0.1, torsoH: 0.85 }),
     P(dode(0.42), 0x6a625a, { y: 2.65, z: 0.05 }),
   ]);
+  // tronc de bélier porté par le colosse (repère local du zombie, avance le long de +z)
+  G.ramlog = merge([
+    P(cyl(0.2, 0.22, 2.8, 7), 0x5a3c22, { y: 0.95, z: 0.85, rx: Math.PI / 2 }),
+    P(cyl(0.26, 0.26, 0.28, 7), 0x3a3a40, { y: 0.95, z: 2.35, rx: Math.PI / 2 }),
+  ]);
   return G;
 }
 

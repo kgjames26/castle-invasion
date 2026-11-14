@@ -45,7 +45,7 @@ export class InputManager {
     if (p.type === 'touch' || p.type === 'pen') {
       if (this.boxMode) p.mode = 'box';
       else if (this.dragGhost) p.mode = 'ghost';
-      else p.lp = setTimeout(() => { if (!p.moved && this.pointers.size === 1) { p.mode = 'box'; navigator.vibrate?.(15); this.h.boxDrag?.({ x0: p.sx, y0: p.sy, x1: p.x + 1, y1: p.y + 1 }); } }, 380);
+      else if (this.cam.mode !== 'city') p.lp = setTimeout(() => { if (!p.moved && this.pointers.size === 1) { p.mode = 'box'; navigator.vibrate?.(15); this.h.boxDrag?.({ x0: p.sx, y0: p.sy, x1: p.x + 1, y1: p.y + 1 }); } }, 380);
     }
     if (p.type === 'mouse' && this.dragGhost && p.button === 0) p.mode = 'ghost';
   }
@@ -67,7 +67,7 @@ export class InputManager {
         if (p.type === 'mouse') {
           if (p.button === 1 || p.alt) p.mode = 'rotate';
           else if (p.button === 2) p.mode = 'rotate';
-          else p.mode = 'box';
+          else p.mode = this.cam.mode === 'city' ? 'pan' : 'box';
         } else p.mode = 'pan';
       }
     }
@@ -110,6 +110,13 @@ export class InputManager {
     const dbl = now - this.lastTap.t < 330 && Math.hypot(p.x - this.lastTap.x, p.y - this.lastTap.y) < 30;
     this.lastTap = { t: dbl ? 0 : now, x: p.x, y: p.y };
     this.h.tap?.(p.x, p.y, { touch, shift: p.shift, double: dbl });
+  }
+
+  reset() {
+    for (const p of this.pointers.values()) clearTimeout(p.lp);
+    this.pointers.clear();
+    this.gesture = null;
+    this.h.boxDrag?.(null);
   }
 
   cancel(e) {

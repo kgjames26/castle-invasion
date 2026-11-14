@@ -48,7 +48,7 @@
       <div id="mini-wrap" class="panel"><canvas id="minimap"></canvas></div>
       <div id="actions-right">
         <button id="btn-siege" class="big hidden" data-tip="Réserve d'armes de siège à déployer">🛡️<b>Siège</b><em id="siege-badge">0</em></button>
-        <button id="btn-base" class="big" data-tip="Ville souterraine : production, caserne, atelier, laboratoire… (B)">⛏️<b>Base</b></button>
+        <button id="btn-base" class="big" data-tip="Ville (au sud) : production, caserne, atelier, laboratoire… (B)">🏘️<b>Ville</b></button>
         <button id="btn-pause" class="big" data-tip="Pause (Espace)">⏸<b>Pause</b></button>
         <button id="btn-speed" class="big" data-tip="Vitesse du jeu (1, 2, 3)">▶<b>×1</b></button>
       </div>
@@ -64,31 +64,40 @@
   <div id="reserve-menu" class="panel hidden"></div>
   <div id="tooltip"></div>
 
-  <!-- Ville souterraine -->
-  <div id="underground" class="overlay hidden">
-    <div class="ug-head">
-      <div class="ug-title">⛏️ Ville souterraine</div>
-      <div id="ug-res"></div>
-      <button id="ug-close" class="small">⬆ Remonter</button>
+  <!-- Ville : carte secondaire (bâtiments de développement et de création) -->
+  <div id="underground" class="hidden">
+    <div id="ug-labels"></div>
+    <div id="ug-top">
+      <div class="ug-head panel">
+        <div class="ug-title">🏘️ Ville</div>
+        <div id="ug-res"></div>
+        <div id="ug-wave"></div>
+        <button id="ug-close" class="small">⬆ Carte</button>
+      </div>
+      <div id="ug-grid" class="panel"></div>
     </div>
-    <div class="ug-body">
-      <div id="ug-grid"></div>
-      <div id="ug-detail"></div>
-    </div>
+    <div id="ug-detail" class="panel hidden"></div>
   </div>
 
   <!-- Menus -->
   <div id="menu" class="overlay">
     <div class="menu-box">
       <h1>Castle<br><span>Invasion</span></h1>
-      <p class="tagline">Récolte. Bâtis sous terre. Forme tes troupes.<br>Tiens la muraille face aux morts venus du nord.</p>
+      <p class="tagline">Récolte. Développe ta ville. Forme tes troupes.<br>Tiens la muraille face aux morts venus du nord.</p>
       <div id="loading"><div class="bar"><i></i></div><small>Chargement des pierres du royaume…</small></div>
       <div id="menu-buttons" class="hidden">
         <button id="btn-continue" class="big-btn hidden">Continuer</button>
         <button id="btn-new" class="big-btn">Nouvelle partie</button>
+        <div id="fmt" class="fmt-row">
+          <span>Format</span>
+          <button class="chip sel" data-f="auto">Auto</button>
+          <button class="chip" data-f="portrait">📱 Portrait</button>
+          <button class="chip" data-f="landscape">🖥️ Paysage</button>
+        </div>
+        <small id="fmt-hint" class="credits"></small>
         <button id="btn-help" class="big-btn ghost">Comment jouer</button>
       </div>
-      <small class="credits">Modèles 3D : assetfactory (Sketchfab) · Three.js</small>
+      <small class="credits">Modèles 3D : assetfactory, Denys Almaral, Bard the Bowman (Sketchfab) · Three.js</small>
     </div>
   </div>
 
@@ -96,9 +105,9 @@
     <div class="menu-box help-box">
       <h2>Comment jouer</h2>
       <ul>
-        <li><b>But :</b> protéger le château. La muraille coupe la carte en deux ; les zombies arrivent du <b>nord</b> par vagues.</li>
+        <li><b>But :</b> protéger le château. Ta base est au sud, la muraille au milieu ; les zombies sortent du brouillard au <b>nord</b>, par vagues. Plus ils sont grands, plus ils sont forts ; plus ils sont petits, plus ils sont rapides.</li>
         <li><b>Ressources :</b> les cultivateurs récoltent seuls 🪨 🪵 🪙 ⛓️ 💎. Les gisements du nord sont plus riches… et plus exposés.</li>
-        <li><b>Base ⛏️ :</b> produis cultivateurs, ouvriers, soldats, archers, cavaliers et armes de siège ; améliore tes bâtiments et recherche des technologies.</li>
+        <li><b>Ville 🏘️ :</b> touche la porte « Ville » au sud du château (ou le bouton Ville) pour passer sur la carte secondaire : produis cultivateurs, ouvriers, soldats, archers, cavaliers et armes de siège, améliore tes bâtiments et recherche des technologies.</li>
         <li><b>Archers :</b> envoie-les sur la muraille (+30 % de portée, hors d'atteinte au corps à corps).</li>
         <li><b>Formations :</b> sélectionne plusieurs troupes puis « Former ». Ligne, Double ligne, Coin, Carré, Escarmouche, Colonne, Cavalerie en coin.</li>
         <li><b>Siège :</b> les armes construites vont en réserve, puis se déploient derrière la muraille (bélier : devant). Le bélier détruit les nids au nord.</li>
@@ -107,7 +116,7 @@
       <h3>Contrôles</h3>
       <div class="cols">
         <div><b>Mobile</b><br>Toucher : sélectionner / ordonner<br>Glisser : déplacer la vue<br>Appui long + glisser : sélection multiple<br>Deux doigts : zoom + rotation<br>Double-toucher : tout ce type à l'écran</div>
-        <div><b>Ordinateur</b><br>Clic gauche : sélectionner (glisser = cadre)<br>Clic droit : déplacer / attaquer<br>Molette : zoom · Q/E : rotation<br>WASD/ZQSD : caméra · Espace : pause<br>B : base · G : former · X : dissoudre</div>
+        <div><b>Ordinateur</b><br>Clic gauche : sélectionner (glisser = cadre)<br>Clic droit : déplacer / attaquer<br>Molette : zoom · Q/E : rotation<br>WASD/ZQSD : caméra · Espace : pause<br>B : ville · G : former · X : dissoudre</div>
       </div>
       <button id="help-close" class="big-btn">Compris</button>
     </div>

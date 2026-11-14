@@ -1,6 +1,6 @@
-import { VERSION } from '../data/Config.js';
+import { VERSION, MAP } from '../data/Config.js';
 
-const KEY = 'castle-invasion-save-v1';
+const KEY = 'castle-invasion-save-v2';
 
 // Sauvegarde locale : automatique toutes les 30 s et à chaque fin de vague
 export class SaveManager {
@@ -14,6 +14,7 @@ export class SaveManager {
     const g = this.game;
     return {
       v: VERSION,
+      orient: MAP.orient,
       date: Date.now(),
       time: g.time,
       res: g.resources.stock,
@@ -32,7 +33,7 @@ export class SaveManager {
       })),
       siege: g.siege.weapons.filter(w => w.alive).map(w => ({ t: w.type, x: w.x, z: w.z, hp: Math.round(w.hp), ammo: w.ammoMode })),
       stats: g.stats,
-      cam: { x: g.cam.goal.x, z: g.cam.goal.z, yaw: g.cam.goal.yaw, dist: g.cam.goal.dist },
+      cam: { x: g.mapCam.goal.x, z: g.mapCam.goal.z, yaw: g.mapCam.goal.yaw, dist: g.mapCam.goal.dist },
     };
   }
 
@@ -86,7 +87,7 @@ export class SaveManager {
     g.ui.clearToasts?.();
     g.waves.startPrep(ws.wave || 1, d.midWave ? 15 : Math.max(10, d.prepTimer || 30));
     Object.assign(g.stats, d.stats || {});
-    if (d.cam) Object.assign(g.cam.goal, d.cam);
+    if (d.cam) Object.assign(g.mapCam.goal, d.cam);
     g.camShake = 0;
   }
 }

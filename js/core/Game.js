@@ -9,6 +9,7 @@ import { NavGrid, SpatialHash } from '../utils/Grid.js';
 import { GameMap } from '../world/Map.js';
 import { Wall } from '../world/Wall.js';
 import { Castle } from '../world/Building.js';
+import { City } from '../world/City.js';
 import { PathfindingSystem } from '../systems/PathfindingSystem.js';
 import { CombatSystem } from '../systems/CombatSystem.js';
 import { EffectsSystem } from '../systems/EffectsSystem.js';
@@ -44,8 +45,12 @@ export class Game {
     this.ui = ui;
     ui.game = this;
     this.sm = new SceneManager(container);
-    this.cam = new CameraController(this.sm.camera, this.sm.renderer.domElement);
-    this.sm.onResize = () => { this.cam.fitDefault(); this.ui.onResize?.(); };
+    this.mapCam = new CameraController(this.sm.camera, this.sm.renderer.domElement);
+    this.cityCam = new CameraController(this.sm.camera, this.sm.renderer.domElement, { mode: 'city' });
+    this.cityCam.keys = this.mapCam.keys;
+    this.cam = this.mapCam;
+    this.view = 'map';
+    this.sm.onResize = () => { this.mapCam.fitDefault(); this.cityCam.fitDefault(); this.ui.onResize?.(); };
     this.grid = new NavGrid();
     this.allyHash = new SpatialHash(5);
     this.enemyHash = new SpatialHash(5);
@@ -69,8 +74,19 @@ export class Game {
     const sm = this.sm;
     // rendus instanciés des unités
     this.unitRender = {};
-    const caps = { cultivator: 80, soldier: 90, archer: 90, cavalry: 50, classic: 320, fast: 160, dog: 140, golem: 50, jumper: 90, golem_ram: 30, thrower: 50 };
+    const caps = { cultivator: 80, soldier: 90, cavalry: 50, ramlog: 40 };
     for (const [k, cap] of Object.entries(caps)) this.unitRender[k] = sm.instanced(sm.unitGeo[k], cap, { shadow: true });
+    // archers : modèle « Bard the Bowman » (corps + arc) et flèche encochée
+    const R = this.unitRender;
+    R.archer = sm.instanced(sm.archerGeo.body, 90, { shadow: true, material: sm.mat.archer });
+    R.archerBow = sm.instanced(sm.archerGeo.weapons || sm.archerGeo.bow, 90, { shadow: true, material: sm.mat.archer });
+    R.archerArrow = sm.instanced(sm.projGeo.arrow, 90, { shadow: false });
+    // zombies animés : une instance par variante de modèle
+    sm.zombies.variants.forEach((v, i) => {
+      const t = sm.instanced(v.geo, 260, { shadow: true, material: sm.zombies.mats[i].mat });
+      t.enableAnim(sm.zombies.mats[i].depth);
+      R['z' + i] = t;
+    });
     // systèmes
     this.fx = new EffectsSystem(this);
     this.pathfinding = new PathfindingSystem(this);
@@ -86,9 +102,11 @@ export class Game {
     this.wall.build();
     this.map.build();
     this.siege = new SiegeSystem(this);
+    this.city = new City(this);
+    this.city.build();
+    this.cityCam.bounds = this.city.bounds;
     this.pathfinding.setTargets(this.castle);
     this.pathfinding.computeFlow();
-    sm.addSnow(sm.mobile ? 500 : 900);
     // superpositions : barres de vie et anneaux de sélection
     const barMat = c => new THREE.MeshBasicMaterial({ color: c, depthTest: false, transparent: true });
     this.barsBg = new InstancedList(sm.scene, sm.fxGeo.bar, barMat(0x111111), 600, 30);
@@ -218,7 +236,7 @@ export class Game {
   onUnitDeath(u) {
     if (u.team === 'enemy') {
       this.stats.kills++;
-      this.resources.add('gold', u.def.gold);
+      this.resources.add('gold', Math.max(1, Math.round(u.def.gold * (u.goldMul || 1))));
       this.fx.burst(u.x, 1, u.z, 7, 0x3a4a22, 3, 0.7, 0.8);
     } else {
       this.fx.burst(u.x, 1, u.z, 7, 0x6a1010, 3, 0.7, 0.8);
@@ -232,6 +250,14 @@ export class Game {
   renderFrame(alpha, dt) {
     if (!this.unitRender) return;
     const t = performance.now() / 1000;
+    if (this.view === 'city') {
+      this.cam.update(dt);
+      this.city.update(t);
+      this.sm.tick(t, this.paused ? 0 : dt);
+      this.sm.render();
+      this.ui.update(dt);
+      return;
+    }
     for (const u of this.units) u.draw(alpha, t);
     for (const e of this.enemies) e.draw(alpha, t);
     for (const k in this.unitRender) this.unitRender[k].commit();
@@ -272,8 +298,8 @@ export class Game {
     for (const e of this.enemies) {
       if (!e.alive || e.hp >= e.maxHp) continue;
       const x = e.px + (e.x - e.px) * alpha, z = e.pz + (e.z - e.pz) * alpha;
-      const h = e.type === 'golem' || e.type === 'golem_ram' ? 4.8 : e.type === 'dog' ? 1.7 : 2.8;
-      bar(x, e.y + h, z, e.hp / e.maxHp, e.type.startsWith('golem') ? 2.2 : 1.0, 0.95, 0.2, 0.15);
+      const h = 2.5 * e.size * 1.3 + 0.5;
+      bar(x, e.y + h, z, e.hp / e.maxHp, Math.max(0.9, Math.min(2.6, 0.95 * e.size)), 0.95, 0.2, 0.15);
     }
     for (const w of this.siege.weapons) {
       if (!w.alive) continue;
@@ -329,7 +355,7 @@ export class Game {
         const q = this.cam.screenToGround(sx, sy, h);
         if (q && Math.abs(q.z - MAP.WALL_Z) < MAP.WALL_HALF_THICK + 0.5 && Math.abs(q.x) < MAP.HALF) return { isWallSeg: true, index: this.wall.segAt(q.x), point: q };
       }
-      for (const h of [14, 7]) {
+      for (const h of [14 * this.castle.k, 7 * this.castle.k]) {
         const q = this.cam.screenToGround(sx, sy, h);
         if (q && this.castle.distTo(q.x, q.z) < 0.5) return this.castle;
       }
@@ -345,6 +371,7 @@ export class Game {
 
   // ---------- entrées ----------
   onHover(sx, sy) {
+    if (this.view === 'city') return;
     if (!this.siege.placing) return;
     const p = this.cam.screenToGround(sx, sy);
     if (p) this.siege.updateGhost(p.x, p.z);
@@ -353,6 +380,11 @@ export class Game {
   onTap(sx, sy, o) {
     if (!this.running || this.over) return;
     this.audio.unlock();
+    if (this.view === 'city') {
+      const id = this.city.pick(sx, sy);
+      if (id) this.ui.underground.select(id);
+      return;
+    }
     const sel = this.selection;
     const ground = this.cam.screenToGround(sx, sy);
     // placement d'une arme / d'un centre
@@ -374,6 +406,7 @@ export class Game {
       return;
     }
     const ally = this.pickAlly(sx, sy, o.touch);
+    if (!ally && this.nearCityGate(sx, sy, o.touch)) { this.ui.underground.open(); return; }
     if (ally) {
       if (o.double && ally.isUnit) {
         const same = this.units.filter(u => u.alive && u.type === ally.type && this.onScreen(u));
@@ -397,6 +430,7 @@ export class Game {
   }
 
   onSecondary(sx, sy) {
+    if (this.view === 'city') return;
     if (this.siege.placing) { this.siege.cancelPlacement(); return; }
     if (this.pending) { this.pending = null; this.ui.setPending(null); return; }
     const ground = this.cam.screenToGround(sx, sy);
@@ -407,12 +441,20 @@ export class Game {
     this.command(w && w.isWallSeg ? { x: w.point.x, z: MAP.WALL_Z } : ground, enemy, !!enemy, w);
   }
 
+  nearCityGate(sx, sy, touch) {
+    const gt = this.map.cityGate;
+    if (!gt) return false;
+    this.cam.worldToScreen(gt.x, 5, gt.z, _p);
+    return _p.visible && Math.hypot(_p.x - sx, _p.y - sy) < (touch ? 62 : 46);
+  }
+
   onScreen(u) {
     this.cam.worldToScreen(u.x, 1, u.z, _p);
     return _p.visible && _p.x >= 0 && _p.y >= 0 && _p.x <= innerWidth && _p.y <= innerHeight;
   }
 
   onBoxSelect(r, additive) {
+    if (this.view === 'city') return;
     const inBox = [];
     for (const u of this.units) {
       if (!u.alive) continue;
@@ -498,10 +540,26 @@ export class Game {
     else if (k === 'KeyG') this.ui.openFormations();
     else if (k === 'KeyX') this.formations.dissolveUnits(this.selection.units);
     else if (k === 'KeyH') this.cam.focus(0, 10);
+    else if (this.view === 'city') { /* touches de jeu inactives dans la ville */ }
     else if (k === 'KeyM') { this.pending = 'move'; this.ui.setPending('move'); }
     else if (k === 'KeyT') { this.pending = 'attack'; this.ui.setPending('attack'); }
     else if (k === 'KeyN') this.cam.resetView();
     else if (k === 'KeyA' && e.ctrlKey) { e.preventDefault(); this.selection.set(this.units.filter(u => u.alive && u.type !== 'cultivator')); }
+  }
+
+  // Bascule entre la carte principale et la carte « Ville » (le jeu continue de tourner)
+  setView(v) {
+    if (v === this.view || !this.running) return;
+    this.siege.cancelPlacement();
+    this.pending = null;
+    this.ui.setPending?.(null);
+    this.view = v;
+    this.sm.active = v;
+    this.cam = v === 'city' ? this.cityCam : this.mapCam;
+    this.input.cam = this.cam;
+    this.input.reset?.();
+    if (v === 'city') this.cityCam.fitDefault();
+    this.ui.onView(v);
   }
 
   setPaused(p, auto = false) {
