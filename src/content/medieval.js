@@ -33,12 +33,12 @@ export const WALL = {
   repairHpPerStone: 8, upgradeBase: { stone: 120, wood: 60 },
 };
 export const START = {
-  res: { wood: 150, stone: 150, iron: 60, food: 150, gold: 100 },
-  reserve: { archer: 4, soldier: 0, heavy: 0, cavalry: 0 },
-  perSector: { archer: 2 },
-  squads: [{ type: 'soldier', n: 6, sector: 2 }, { type: 'soldier', n: 4, sector: 1 }, { type: 'soldier', n: 4, sector: 3 }],
+  res: { wood: 240, stone: 170, iron: 40, food: 200, gold: 80 },
+  reserve: { archer: 0, soldier: 0, heavy: 0, cavalry: 0 },
+  perSector: { archer: 0 },
+  squads: [],
   villagers: 10,
-  assign: { wood: 3, stone: 2, iron: 1, gold: 1, food: 3, repair: 0 },   // répartition de départ (modifiable)
+  assign: { wood: 3, stone: 2, iron: 0, gold: 0, food: 3, repair: 0 },   // répartition de départ (modifiable)
 };
 
 // ——— Économie (Phase 3) ———
@@ -54,7 +54,7 @@ export const ECON = {
   upkeep: { villager: 0.02, unit: 0.03 },    // nourriture / personne / seconde
   famineMult: 0.5, levelGather: 0.15, millBonus: 0.2,
   repairHpPerSec: 14, villagerCost: { food: 40 },
-  popBase: 20, popPerHouse: 8, housesStart: 4, housesMax: 60,      // population max PARTAGÉE = base + maisons × 8
+  popBase: 14, popPerHouse: 8, housesStart: 0, housesMax: 60,      // population max PARTAGÉE = base + maisons × 8
   drop: { x: 100, z: 284 },                  // point de dépôt : le château
   restock: { gold: 25, stone: 20, iron: 10 },
 };
@@ -69,23 +69,38 @@ export const TASKS = {
 };
 // Bâtiments : niveau 0 = à construire. Coût du niveau N+1 = base × (N+1).
 export const BUILDINGS = {   // group: 'eco' (onglet Village) ou 'army' (onglet Armée)
-  sawmill:   { name: 'Scierie',   ico: '🪚', group: 'eco', start: 1, cost: { wood: 60 },             pos: { x: 40,  z: 262 }, size: [9, 5, 7],  color: 0x9b6a3a, info: 'Emplacements bûcherons · +15 % de rendement par niveau' },
-  quarry:    { name: 'Carrière',  ico: '⛏', group: 'eco', start: 1, cost: { wood: 60 },             pos: { x: 160, z: 262 }, size: [9, 5, 7],  color: 0x8a8d92, info: 'Emplacements carriers · +15 % de rendement par niveau' },
-  mine:      { name: 'Mine',      ico: '⛓', group: 'eco', start: 1, cost: { wood: 100, stone: 60 }, pos: { x: 182, z: 243 }, size: [8, 6, 8],  color: 0x4f5a72, info: 'Emplacements fer + or (partagés) · +15 %/niveau' },
-  farm:      { name: 'Ferme',     ico: '🌾', group: 'eco', start: 1, cost: { wood: 70 },             pos: { x: 100, z: 244 }, size: [16, 1.2, 10], color: 0xc9b24a, info: 'Emplacements fermiers · +15 % de rendement par niveau' },
-  mill:      { name: 'Moulin',    ico: '🌀', group: 'eco', start: 0, cost: { wood: 90, stone: 40 },  pos: { x: 128, z: 258 }, size: [6, 9, 6],  color: 0xcfc3a1, info: 'Nourriture +20 % par niveau' },
-  granary:   { name: 'Grenier',   ico: '🏚', group: 'eco', start: 1, cost: { wood: 80, stone: 30 },  pos: { x: 66,  z: 270 }, size: [9, 6, 7],  color: 0xb08a4a, info: 'Stock de nourriture +400 par niveau' },
-  warehouse: { name: 'Entrepôt',  ico: '📦', group: 'eco', start: 1, cost: { wood: 80, stone: 40 },  pos: { x: 134, z: 272 }, size: [10, 6, 8], color: 0x7a6a55, info: 'Stock bois/pierre/fer/or +400 par niveau' },
+  sawmill:   { time: 25, base: 3, name: 'Scierie',   ico: '🪚', group: 'eco', start: 0, cost: { wood: 60 },             pos: { x: 40,  z: 262 }, size: [9, 5, 7],  color: 0x9b6a3a, info: 'Emplacements bûcherons · +15 % de rendement par niveau' },
+  quarry:    { time: 25, base: 3, name: 'Carrière',  ico: '⛏', group: 'eco', start: 0, cost: { wood: 60 },             pos: { x: 160, z: 262 }, size: [9, 5, 7],  color: 0x8a8d92, info: 'Emplacements carriers · +15 % de rendement par niveau' },
+  mine:      { time: 40, base: 0, name: 'Mine',      ico: '⛓', group: 'eco', start: 0, cost: { wood: 100, stone: 60 }, pos: { x: 182, z: 243 }, size: [8, 6, 8],  color: 0x4f5a72, info: 'Emplacements fer + or (partagés) · +15 %/niveau' },
+  farm:      { time: 30, base: 3, name: 'Ferme',     ico: '🌾', group: 'eco', start: 0, cost: { wood: 70 },             pos: { x: 100, z: 244 }, size: [16, 1.2, 10], color: 0xc9b24a, info: 'Emplacements fermiers · +15 % de rendement par niveau' },
+  mill:      { time: 30, base: 0, name: 'Moulin',    ico: '🌀', group: 'eco', start: 0, cost: { wood: 90, stone: 40 },  pos: { x: 128, z: 258 }, size: [6, 9, 6],  color: 0xcfc3a1, info: 'Nourriture +20 % par niveau' },
+  granary:   { time: 28, base: 0, name: 'Grenier',   ico: '🏚', group: 'eco', start: 0, cost: { wood: 80, stone: 30 },  pos: { x: 66,  z: 270 }, size: [9, 6, 7],  color: 0xb08a4a, info: 'Stock de nourriture +400 par niveau' },
+  warehouse: { time: 32, base: 0, name: 'Entrepôt',  ico: '📦', group: 'eco', start: 0, cost: { wood: 80, stone: 40 },  pos: { x: 134, z: 272 }, size: [10, 6, 8], color: 0x7a6a55, info: 'Stock bois/pierre/fer/or +400 par niveau' },
 };
 // Bâtiments militaires (onglet Armée) : le niveau accélère l'entraînement (+25 %/niveau) et agrandit la file.
 export const ARMY_BUILDINGS = {
-  barracks: { name: 'Caserne',      ico: '🪖', group: 'army', start: 1, cost: { wood: 100, stone: 50 }, pos: { x: 38,  z: 180 }, size: [16, 5, 11], color: 0x8a4545, info: 'Fantassins · Lourds dès le niveau 2' },
-  stable:   { name: 'Écurie',       ico: '🐎', group: 'army', start: 0, cost: { wood: 120, stone: 40 }, pos: { x: 162, z: 180 }, size: [16, 5, 11], color: 0x7a5a3a, info: 'Cavaliers' },
-  range:    { name: 'Champ de tir', ico: '🎯', group: 'army', start: 1, cost: { wood: 90, stone: 30 },  pos: { x: 100, z: 176 }, size: [18, 3, 9],  color: 0x4a6f4a, info: 'Archers' },
-  forge:    { name: 'Forge',        ico: '🔨', group: 'army', start: 0, max: 1, cost: { wood: 80, stone: 80, iron: 40 }, pos: { x: 100, z: 195 }, size: [10, 6, 8], color: 0x5a4f58, info: 'Débloque les améliorations militaires' },
+  barracks: { time: 45, base: 0, name: 'Caserne',      ico: '🪖', group: 'army', start: 0, cost: { wood: 100, stone: 50 }, pos: { x: 38,  z: 180 }, size: [16, 5, 11], color: 0x8a4545, info: 'Fantassins · Lourds dès le niveau 2' },
+  stable:   { time: 45, base: 0, name: 'Écurie',       ico: '🐎', group: 'army', start: 0, cost: { wood: 120, stone: 40 }, pos: { x: 162, z: 180 }, size: [16, 5, 11], color: 0x7a5a3a, info: 'Cavaliers' },
+  range:    { time: 35, base: 0, name: 'Champ de tir', ico: '🎯', group: 'army', start: 0, cost: { wood: 90, stone: 30 },  pos: { x: 100, z: 176 }, size: [18, 3, 9],  color: 0x4a6f4a, info: 'Archers' },
+  forge:    { time: 50, base: 0, name: 'Forge',        ico: '🔨', group: 'army', start: 0, max: 1, cost: { wood: 80, stone: 80, iron: 40 }, pos: { x: 100, z: 195 }, size: [10, 6, 8], color: 0x5a4f58, info: 'Débloque les améliorations militaires' },
 };
-ARMY_BUILDINGS.workshop = { name: 'Atelier de siège', ico: '🛠', group: 'army', start: 0, max: 3, cost: { wood: 140, stone: 100, iron: 30 }, pos: { x: 150, z: 205 }, size: [14, 6, 10], color: 0x6a5a45, info: '2 armes déployables par niveau · Niv.1 baliste · Niv.2 catapulte · Niv.3 trébuchet' };
+ARMY_BUILDINGS.workshop = { time: 55, base: 0, name: 'Atelier de siège', ico: '🛠', group: 'army', start: 0, max: 3, cost: { wood: 140, stone: 100, iron: 30 }, pos: { x: 150, z: 205 }, size: [14, 6, 10], color: 0x6a5a45, info: '2 armes déployables par niveau · Niv.1 baliste · Niv.2 catapulte · Niv.3 trébuchet' };
 Object.assign(BUILDINGS, ARMY_BUILDINGS);
+// ——— Phase 6 : construction libre ———
+// Structures multiples (placées où l'on veut) : maisons et tours de défense. Les autres bâtiments existent en un seul exemplaire (niveaux).
+export const MULTI = {
+  house: { name: 'Maison', ico: '🏠', group: 'eco', time: 16, size: [6, 4.6, 6], info: `+8 places de population (villageois + armée)` },
+  tower: { name: 'Tour de défense', ico: '🗼', group: 'def', time: 30, size: [5, 14, 5], cost: { wood: 70, stone: 110 }, max: 5, info: 'Tire seule sur les zombies à portée · améliorable' },
+};
+export const STRUCT = { ...BUILDINGS, ...MULTI };
+export const BUILD = {
+  minX: 5, maxX: 195, minZ: 176, towerMinZ: 154, maxZ: 312, gap: 1.2,
+  refund: 0.8, moveWork: 6, workerExp: 0.85, maxWorkers: 4, upgradeTime: 0.7,
+  maxTowers: 14, houseCost: n => ({ wood: 40 + 4 * n, stone: 8 + 2 * n }), towerUpCost: lv => ({ wood: 50 * lv, stone: 90 * lv }),
+  blockers: [{ x: 100, z: 298, r: 24 }, { x: 162, z: 292, r: 6.5 }, { x: 80, z: 240, r: 3.5 }, { x: 122, z: 238, r: 3.5 }, { x: 82, z: 280, r: 3 }, { x: 88, z: 286, r: 3 }, { x: 150, z: 276, r: 3 }],
+};
+// Tours de défense : tirent seules ; les 6 tours de la muraille existent dès le départ.
+export const TOWER = { range: 44, rangePerLevel: 3, dmg: 22, dmgPerLevel: 0.4, rate: 1.2, ratePerLevel: 0.1, wallXs: [3, 40, 80, 120, 160, 197], wallZ: 146 };
 // Armes de siège (reprises de l'ancien jeu) : fixes, derrière la muraille. Munitions prélevées dans les stocks.
 // range/minRange en mètres depuis l'arme ; aoe = rayon d'impact ; speed = m/s du projectile ; crew = places de population.
 export const SIEGE = {

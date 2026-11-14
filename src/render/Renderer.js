@@ -5,7 +5,7 @@ import { T } from '../sim/terrain.js';
 import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/medieval.js';
 import { archerPos, formationLayout } from '../sim/army.js';
 import { applyNorthFog } from './fog.js';
-import { buildMilitary } from './Military.js';
+import { StructureView } from './Structures.js';
 const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4]];      // variantes de modèle par type de zombie
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
 
@@ -29,28 +29,66 @@ export class Renderer {
   }
   resize(w, h) { this.renderer.setSize(w, h, false); this.renderer.domElement.style.width = w + 'px'; this.renderer.domElement.style.height = h + 'px'; this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
 
+  // Sol : une seule texture 6 px/m, peinte par zones (neige gelée au nord, terre piétinée au front, dalles de la cour, terre battue du village,
+  // pavés autour du château), avec chemins à bords doux, gisements, mares gelées, bruit de grain et vignettage. Déterministe (graine fixe).
   buildGround() {
-    const k = 3, cv = document.createElement('canvas'); cv.width = W * k; cv.height = D * k; const g = cv.getContext('2d');
-    let seed = 99; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    const band = (z0, z1, c) => { g.fillStyle = c; g.fillRect(0, z0 * k, W * k, (z1 - z0) * k); };
-    // neige : bleutée et sombre au nord (terres des zombies), plus claire vers le champ de bataille, terre battue dans la cour et au village
-    band(0, 30, '#7d8a98'); band(30, 90, '#c9d5de'); band(90, WALL_Z0, '#dde6ec');
-    band(WALL_Z0, WALL_Z1, '#8b8a86');
-    band(WALL_Z1, 200, '#a69d8e'); band(200, 270, '#d6dde1'); band(270, D, '#b7b1a5');
-    const type = this.sim.terrain.type, pal = { [T.FOREST]: '#9db3a6', [T.HILL]: '#f1f5f8', [T.ROCK]: '#9ea3a8', [T.ROAD]: '#b3a58f' };
-    for (let gz = 0; gz < GD; gz++) for (let gx = 0; gx < GW; gx++) { const t = type[gz * GW + gx]; if (t && pal[t]) { g.fillStyle = pal[t]; g.fillRect(gx * CELL * k, gz * CELL * k, CELL * k + 1, CELL * k + 1); } }
-    // congères et plaques de glace (bruit déterministe)
-    for (let i = 0; i < 900; i++) { const x = r() * W, z = r() * D, w = 1.5 + r() * 5, h = 1 + r() * 3; g.fillStyle = r() < 0.75 ? 'rgba(255,255,255,0.2)' : 'rgba(120,150,175,0.08)'; g.beginPath(); g.ellipse(x * k, z * k, w * k, h * k, 0, 0, 7); g.fill(); }
-    // chemins de terre battue : de la porte au château, vers les gisements et le long de la muraille (côté ville)
-    const path = (pts, w) => { g.strokeStyle = 'rgba(120,98,70,0.5)'; g.lineWidth = w * k; g.lineCap = g.lineJoin = 'round'; g.beginPath(); pts.forEach(([x, z], i) => i ? g.lineTo(x * k, z * k) : g.moveTo(x * k, z * k)); g.stroke(); g.strokeStyle = 'rgba(160,138,108,0.5)'; g.lineWidth = w * 0.45 * k; g.stroke(); };
-    path([[100, 150], [100, 200], [100, 284]], 9); path([[100, 238], [40, 255]], 5); path([[100, 238], [160, 255]], 5); path([[100, 262], [182, 243]], 4.5); path([[100, 262], [18, 238]], 4.5);
-    path([[8, 156], [192, 156]], 5);
-    // repères de secteurs sur le champ de bataille et la zone militaire
-    g.strokeStyle = 'rgba(40,60,90,.35)'; g.lineWidth = 1.5; g.setLineDash([8, 8]);
-    for (let s = 1; s < SECTORS; s++) { g.beginPath(); g.moveTo(s * SECTOR_W * k, 90 * k); g.lineTo(s * SECTOR_W * k, 200 * k); g.stroke(); }
-    g.setLineDash([]); g.fillStyle = 'rgba(40,60,90,.4)'; g.font = `bold ${7 * k}px sans-serif`; g.textAlign = 'center';
-    for (let s = 0; s < SECTORS; s++) g.fillText(SECTOR_SHORT[s], (s + .5) * SECTOR_W * k, 126 * k);
-    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const k = 6, cv = document.createElement('canvas'); cv.width = W * k; cv.height = D * k; const g = cv.getContext('2d');
+    let seed = 99; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647, rr = (a, b) => a + (b - a) * r();
+    const X = v => v * k;
+    const lerpHex = (a, b, t) => { const p = h => [(h >> 16) & 255, (h >> 8) & 255, h & 255], A = p(a), B = p(b); return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',')})`; };
+    // fond : dégradé nord → sud (terres gelées sombres → plaine claire → cour → village → pied du château)
+    const grad = g.createLinearGradient(0, 0, 0, D * k);
+    for (const [z, c] of [[0, '#6c7b8c'], [24, '#7e8da0'], [60, '#c3cfda'], [105, '#dce5ec'], [138, '#cdd5dc'], [150, '#8f8c86'], [176, '#a39a8b'], [205, '#cdbd9c'], [250, '#d6d0c0'], [285, '#bdae96'], [320, '#a89f90']]) grad.addColorStop(z / D, c);
+    g.fillStyle = grad; g.fillRect(0, 0, W * k, D * k);
+    const blob = (x, z, rad, col, a) => { const gr = g.createRadialGradient(X(x), X(z), 0, X(x), X(z), X(rad)); gr.addColorStop(0, col.replace('A', a)); gr.addColorStop(1, col.replace('A', 0)); g.fillStyle = gr; g.fillRect(X(x - rad), X(z - rad), X(rad * 2), X(rad * 2)); };
+    // marbrure de la neige : grandes taches douces claires et bleutées
+    for (let i = 0; i < 900; i++) { const z = r() * D; if (z > 150 && z < 300 && r() < 0.5) continue; blob(r() * W, z, rr(4, 13), r() < 0.6 ? 'rgba(255,255,255,A)' : 'rgba(110,140,170,A)', rr(0.06, 0.16)); }
+    // types de terrain issus de la simulation (forêt, colline, rocher, route)
+    const type = this.sim.terrain.type, pal = { [T.FOREST]: 'rgba(60,92,76,.40)', [T.HILL]: 'rgba(255,255,255,.55)', [T.ROCK]: 'rgba(96,100,106,.55)', [T.ROAD]: 'rgba(124,104,78,.45)' };
+    for (let gz = 0; gz < GD; gz++) for (let gx = 0; gx < GW; gx++) { const t = type[gz * GW + gx]; if (t && pal[t]) blob((gx + .5) * CELL, (gz + .5) * CELL, CELL * 1.5, pal[t].replace(/[\d.]+\)$/, 'A)'), 0.55); }
+    // sous-bois : aiguilles sombres et brindilles
+    for (let gz = 0; gz < GD; gz++) for (let gx = 0; gx < GW; gx++) if (type[gz * GW + gx] === T.FOREST) for (let n = 0; n < 5; n++) { g.fillStyle = r() < 0.7 ? 'rgba(35,55,45,.35)' : 'rgba(255,255,255,.4)'; g.fillRect(X(gx * CELL + r() * CELL), X(gz * CELL + r() * CELL), rr(2, 6), rr(1, 3)); }
+    // front de bataille : boue gelée piétinée, de plus en plus marquée vers la muraille (z 100 → 141)
+    for (let i = 0; i < 220; i++) { const z = rr(96, 141), x = r() * W, len = rr(3, 11), a = 0.05 + 0.2 * (z - 96) / 45; g.strokeStyle = `rgba(104,86,66,${a})`; g.lineWidth = rr(0.5, 1.8) * k; g.lineCap = 'round'; g.beginPath(); g.moveTo(X(x), X(z)); g.lineTo(X(x + rr(-2, 2)), X(z + len)); g.stroke(); }
+    for (let i = 0; i < 160; i++) blob(r() * W, rr(120, 141), rr(2, 6), 'rgba(92,76,58,A)', rr(0.08, 0.22));
+    // ——— dalles de la cour militaire (z 152 → 200) et pavés autour du château ———
+    const flags = (x0, z0, x1, z1, base, rows, clip) => {
+      g.save(); if (clip) clip(); else { g.beginPath(); g.rect(X(x0), X(z0), X(x1 - x0), X(z1 - z0)); g.clip(); }
+      for (let z = z0; z < z1; z += rows) { let x = x0 - r() * 2; while (x < x1) { const w = rr(1.4, 3.0), v = rr(-14, 14); g.fillStyle = `rgb(${base[0] + v},${base[1] + v},${base[2] + v})`; g.fillRect(X(x) + 1, X(z) + 1, X(w) - 2, X(rows) - 2); if (r() < 0.18) { g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(X(x) + 2, X(z) + 2, X(w) - 4, rr(2, 6)); } x += w; } }
+      g.restore();
+    };
+    g.fillStyle = '#6e6a63'; g.fillRect(0, X(WALL_Z0), W * k, X(WALL_Z1 - WALL_Z0));
+    flags(0, WALL_Z1, W, 203, [150, 144, 133], 1.6);
+    for (let i = 0; i < 420; i++) blob(r() * W, rr(WALL_Z1, 203), rr(2, 7), 'rgba(250,252,255,A)', rr(0.1, 0.32));       // neige poudrée sur les dalles
+    flags(0, 0, 0, 0, [170, 162, 148], 1.5, () => { g.beginPath(); g.ellipse(X(CASTLE.x), X(CASTLE.z), X(36), X(26), 0, 0, 7); g.clip(); });
+    // ——— village : terre battue, herbe morte, neige par plaques ———
+    for (let i = 0; i < 520; i++) blob(r() * W, rr(203, 292), rr(2, 8), r() < 0.62 ? 'rgba(158,124,82,A)' : 'rgba(255,255,255,A)', rr(0.12, 0.3));
+    for (let i = 0; i < 700; i++) { const x = r() * W, z = rr(203, 296); g.strokeStyle = r() < 0.7 ? 'rgba(120,128,80,.55)' : 'rgba(150,140,90,.5)'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(X(x), X(z)); g.lineTo(X(x + rr(-.4, .4)), X(z - rr(.5, 1.4))); g.stroke(); }
+    // ——— décalques de gisements et de sites ———
+    blob(40, 255, 11, 'rgba(46,58,46,A)', 0.5); blob(160, 255, 11, 'rgba(120,122,126,A)', 0.6); blob(182, 236, 8, 'rgba(60,62,72,A)', 0.55); blob(18, 236, 8, 'rgba(70,64,56,A)', 0.5);
+    for (let i = 0; i < 90; i++) { g.fillStyle = r() < 0.5 ? 'rgba(90,94,100,.7)' : 'rgba(160,160,164,.7)'; g.fillRect(X(160 + rr(-9, 9)), X(255 + rr(-9, 9)), rr(2, 6), rr(2, 5)); }
+    g.fillStyle = 'rgba(95,72,48,.5)'; g.fillRect(X(86), X(246), X(28), X(12));                                  // terre labourée des fermiers
+    g.strokeStyle = 'rgba(70,52,34,.45)'; g.lineWidth = 2; for (let z = 246.8; z < 258; z += 1.4) { g.beginPath(); g.moveTo(X(86), X(z)); g.lineTo(X(114), X(z)); g.stroke(); }
+    // mares gelées autour des points d'eau
+    for (const [x, z] of [[80, 240], [122, 238]]) { blob(x, z, 6.5, 'rgba(150,185,215,A)', 0.95); g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(X(x), X(z), X(4.2), X(3.4), 0, 0, 7); g.stroke(); g.beginPath(); g.moveTo(X(x - 3), X(z - 1)); g.lineTo(X(x + 1), X(z + 1.5)); g.lineTo(X(x + 3), X(z - 1.2)); g.stroke(); }
+    // ——— chemins : bords doux (trois traits superposés), ornières ———
+    const path = (pts, w) => {
+      const draw = (lw, col) => { g.strokeStyle = col; g.lineWidth = lw * k; g.lineCap = g.lineJoin = 'round'; g.beginPath(); pts.forEach(([x, z], i) => i ? g.lineTo(X(x), X(z)) : g.moveTo(X(x), X(z))); g.stroke(); };
+      draw(w * 1.5, 'rgba(116,94,68,.14)'); draw(w * 1.15, 'rgba(116,94,68,.3)'); draw(w * 0.8, 'rgba(133,110,80,.5)'); draw(w * 0.22, 'rgba(98,78,56,.4)');
+    };
+    path([[100, 150], [100, 200], [100, 284]], 9); path([[100, 238], [40, 255]], 5); path([[100, 238], [160, 255]], 5); path([[100, 262], [182, 243]], 4.5); path([[100, 262], [18, 238]], 4.5); path([[8, 205], [192, 205]], 4);
+    // repères de secteurs sur le champ de bataille
+    g.strokeStyle = 'rgba(40,60,90,.28)'; g.lineWidth = 3; g.setLineDash([k * 2.2, k * 2.2]);
+    for (let s = 1; s < SECTORS; s++) { g.beginPath(); g.moveTo(X(s * SECTOR_W), X(70)); g.lineTo(X(s * SECTOR_W), X(WALL_Z0 - 2)); g.stroke(); }
+    g.setLineDash([]); g.fillStyle = 'rgba(40,60,90,.32)'; g.font = `bold ${6 * k}px sans-serif`; g.textAlign = 'center';
+    for (let s = 0; s < SECTORS; s++) g.fillText(SECTOR_SHORT[s], X((s + .5) * SECTOR_W), X(118));
+    // vignettage des bords du monde
+    for (const [x0, z0, x1, z1] of [[0, 0, 12, 0], [W, 0, W - 12, 0]]) { const gr = g.createLinearGradient(X(x0), 0, X(x1), 0); gr.addColorStop(0, 'rgba(20,30,40,.35)'); gr.addColorStop(1, 'rgba(20,30,40,0)'); g.fillStyle = gr; g.fillRect(Math.min(X(x0), X(x1)), 0, X(12), D * k); }
+    // grain fin (déterministe) : casse les aplats et donne du relief de loin comme de près
+    const img = g.getImageData(0, 0, cv.width, cv.height), d = img.data; let gs = 12345;
+    for (let i = 0; i < d.length; i += 4) { gs = (gs * 1103515245 + 12345) & 0x7fffffff; const n = ((gs >> 16) & 15) - 7; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
+    g.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, D), applyNorthFog(new THREE.MeshLambertMaterial({ map: tex })));
     m.rotation.x = -Math.PI / 2; m.position.set(W / 2, 0, D / 2); this.scene.add(m);
   }
@@ -100,15 +138,7 @@ export class Renderer {
     this.scene.add(g); this.keepBoxes = g;
   }
   buildEconomy() {
-    this.bMesh = {};
-    for (const id in BUILDINGS) {
-      const B = BUILDINGS[id], g = new THREE.BoxGeometry(...B.size); g.translate(0, B.size[1] / 2, 0);
-      const m = new THREE.Mesh(g, lam(B.color)); m.position.set(B.pos.x, 0, B.pos.z); this.scene.add(m);
-      const ghost = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false })); ghost.position.copy(m.position); this.scene.add(ghost);
-      this.bMesh[id] = { m, ghost };
-      const mil = buildMilitary(id);
-      if (mil) { mil.g.position.copy(m.position); mil.g.visible = false; this.scene.add(mil.g); (this.milB ||= {})[id] = mil; m.visible = false; this.bMesh[id].kit = true; }
-    }
+    this.struct = new StructureView(this.scene, this.sim, this.camera);   // toutes les structures (chantiers, bâtiments, fantôme)
     // points de récolte (gisements) : pastilles colorées au sol
     for (const t in TASKS) {
       const T = TASKS[t]; if (!T.res) continue;
@@ -124,23 +154,18 @@ export class Renderer {
   }
   updateEconomy(alpha) {
     const E = this.sim.eco, d = this.dummy;
-    for (const id in this.bMesh) {
-      const lv = E.level[id], { m, ghost } = this.bMesh[id];
-      m.visible = lv > 0 && !this.bMesh[id].kit; ghost.visible = lv === 0; m.scale.y = 1 + 0.12 * (lv - 1);
-    }
-    if (this.milB) for (const id in this.milB) { const lv = E.level[id], mb = this.milB[id]; mb.g.visible = lv > 0; mb.pips.forEach((p, i) => { p.visible = i < lv; }); }
     if (this.kit) this.updateKitEconomy();
     const vs = E.villagers, VS = 2.8; this.vMesh.count = vs.length; let nc = 0;
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], x = v.px + (v.x - v.px) * alpha, z = v.pz + (v.z - v.pz) * alpha;
       if (this.chars) {                                    // villageois humanoïde : cap selon le déplacement, balancement à la marche
         const dx = v.x - v.px, dz = v.z - v.pz, mv = dx * dx + dz * dz > 1e-6; let rot = this.vRot.get(v) ?? 0; if (mv) { rot = Math.atan2(dx, dz); this.vRot.set(v, rot); }
-        const bob = mv ? 1 + 0.05 * Math.sin(this.clock * 11 + i) : 1;
+        const hammer = v.job && v.state === 'building', bob = hammer ? 1 + 0.09 * Math.sin(this.clock * 9 + i) : mv ? 1 + 0.05 * Math.sin(this.clock * 11 + i) : 1;
         d.position.set(x, 0, z); d.scale.set(1.9, 1.9 * bob, 1.9); d.rotation.set(0, rot, mv ? 0.06 * Math.sin(this.clock * 11 + i) : 0); d.updateMatrix(); this.vMesh.setMatrixAt(i, d.matrix);
-        this.vMesh.setColorAt(i, this.tmpColor.setHex(VTINT[v.task] || 0xffffff));
+        this.vMesh.setColorAt(i, this.tmpColor.setHex(v.job ? 0xffb35a : VTINT[v.task] || 0xffffff));
       } else {
       d.position.set(x, 0, z); d.scale.set(VS * 0.8, VS, VS * 0.8); d.rotation.set(0, 0, 0); d.updateMatrix(); this.vMesh.setMatrixAt(i, d.matrix);
-      this.vMesh.setColorAt(i, v.task === 'repair' ? this.vCol.repair : this.vCol.idle);
+      this.vMesh.setColorAt(i, v.task === 'repair' || v.job ? this.vCol.repair : this.vCol.idle);
       }
       if (v.carry > 0) {                                  // charge portée : cube coloré selon la ressource
         d.position.set(x, this.chars ? 5.0 : 4.6, z); d.scale.set(1.8, 1.8, 1.8); d.rotation.set(0, 0, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
@@ -220,11 +245,7 @@ export class Renderer {
     tw[0].count = a; tw[1].count = b; for (const t of tw) t.instanceMatrix.needsUpdate = true;
     // château (orientation : façade vers le sud, côté village)
     const castle = new THREE.Mesh(geo.Castle, kit.material); castle.position.set(CASTLE.x, 0, CASTLE.z); castle.scale.setScalar(0.8); castle.rotation.y = Math.PI / 2; this.scene.add(castle); this.castleKit = castle;
-    // maisons de population : une instance par maison construite
-    this.houseTypes = ['House1', 'House2', 'House3', 'House4', 'House5']; this.hm = this.houseTypes.map(n => mk(n, 64));
-    const slots = []; for (const z of [214, 224, 233]) for (let x = 14; x <= 186; x += 9.2) if (Math.abs(x - 100) > 9) slots.push({ x, z });
-    slots.sort((p, q) => (Math.abs(p.x - 100) + Math.abs(p.z - 224) * 1.4) - (Math.abs(q.x - 100) + Math.abs(q.z - 224) * 1.4));
-    this.houseSlots = slots.slice(0, 60).map((p, i) => ({ ...p, t: (i * 7 + ((i / 5) | 0)) % 5, ry: (((i * 37) % 11) - 5) * 0.03 })); this.houseShown = -1;
+    this.struct.setKit(kit);   // maisons, tours, moulin, entrepôt, grenier : modèles du kit
     // monuments et décor du village
     const one = (name, x, z, ry, sc) => { const m = new THREE.Mesh(geo[name], kit.material); m.position.set(x, 0, z); m.rotation.y = ry; m.scale.setScalar(sc); this.scene.add(m); return m; };
     one('Church', 162, 292, -0.3, 1.0); one('Waterhole2', 80, 240, 0, 2.4); one('Waterhole1', 122, 238, 0, 2.4);
@@ -235,11 +256,6 @@ export class Renderer {
     const props = [['Item18', 128, 279], ['Item19', 130, 280.5], ['Item16', 140, 279], ['Item20', 142, 277.5], ['Item21', 138, 281], ['Item11', 60, 276], ['Item19', 70, 277], ['Item18', 72, 278.5], ['Item10', 44, 268], ['Item12', 36, 270], ['Item17', 34, 262], ['Item6', 56, 279], ['Item8', 64, 280]];
     const pm = {}; for (const [n, x, z] of props) (pm[n] ||= []).push([x, z]);
     for (const n in pm) { const im = mk(n, pm[n].length); pm[n].forEach(([x, z], i) => put(im, i, x, z, i * 1.7, 2.4, 2.4, 2.4)); im.count = pm[n].length; im.instanceMatrix.needsUpdate = true; }
-    // bâtiments d'économie à modèle : moulin, entrepôt, grenier
-    this.kitB = {};
-    for (const [id, name, sc] of [['mill', 'Windmill', 1.5], ['warehouse', 'House4', 1.15], ['granary', 'House5', 1.2]]) {
-      const B = BUILDINGS[id], m = new THREE.Mesh(geo[name], kit.material); m.position.set(B.pos.x, 0, B.pos.z); m.scale.setScalar(sc); m.visible = false; this.scene.add(m); this.kitB[id] = m; this.bMesh[id].m.visible = false; this.bMesh[id].kit = true;
-    }
   }
   updateKitWall() {
     const wall = this.sim.wall, d = this.dummy, c = this.tmpColor, cnt = { Wall1: 0, Wall2: 0, Wall3: 0, Wall4: 0 };
@@ -252,16 +268,7 @@ export class Renderer {
     }
     for (const t in this.kw) { const im = this.kw[t]; im.count = cnt[t]; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
   }
-  updateKitEconomy() {
-    const E = this.sim.eco;
-    if (E.houses !== this.houseShown) {
-      this.houseShown = E.houses; const n = Math.min(E.houses, this.houseSlots.length), cn = [0, 0, 0, 0, 0];
-      for (let i = 0; i < n; i++) { const h = this.houseSlots[i]; this.put(this.hm[h.t], cn[h.t]++, h.x, h.z, h.ry, 1, 1, 1); }
-      this.hm.forEach((im, t) => { im.count = cn[t]; im.instanceMatrix.needsUpdate = true; });
-    }
-    for (const id in this.kitB) { const lv = E.level[id]; this.kitB[id].visible = lv > 0; this.kitB[id].scale.y = this.kitB[id].scale.x * (1 + 0.06 * (lv - 1)); }
-    this.wagons.forEach((w, k) => { w.visible = E.up.carts > k; });
-  }
+  updateKitEconomy() { this.wagons.forEach((w, k) => { w.visible = this.sim.eco.up.carts > k; }); }
   // ——— personnages de l'ancien jeu : zombies animés (VAT), archers, villageois humanoïdes ———
   useCharacters(ch) {
     this.chars = ch; this.vRot = new WeakMap(); const cap = MAX_Z;
@@ -297,6 +304,8 @@ export class Renderer {
     }
     this.ab.count = this.abow.count = ai; this.ab.instanceMatrix.needsUpdate = this.abow.instanceMatrix.needsUpdate = true;
   }
+  // point du monde → pixels écran (pour les bulles d'interface ancrées sur la carte)
+  project(x, y, z) { const v = this._pv || (this._pv = new THREE.Vector3()); v.set(x, y, z).project(this.camera); const r = this.renderer.domElement.getBoundingClientRect(); return { x: (v.x * 0.5 + 0.5) * r.width + r.left, y: (-v.y * 0.5 + 0.5) * r.height + r.top, vis: v.z > -1 && v.z < 1 }; }
   setSquad(id) { this.selSquad = id || 0; }
   setTargeting(on) { this.targetMode = on; }
   setSelected(s) { this.selected = s; this.hl.visible = s >= 0; if (s >= 0) this.hl.position.set(s * SECTOR_W + SECTOR_W / 2, 0.2, 112); }
@@ -348,7 +357,7 @@ export class Renderer {
     // flèches
     const ar = sim.arrows; this.arMesh.count = Math.min(ar.length, 256);
     for (let i = 0; i < this.arMesh.count; i++) {
-      const a = ar[i], f = Math.min(1, a.t / 0.3), x = a.x0 + (a.x1 - a.x0) * f, z = a.z0 + (a.z1 - a.z0) * f, y = 4.5 * (1 - f) + 1 + 3 * Math.sin(Math.PI * f);
+      const a = ar[i], f = Math.min(1, a.t / 0.3), x = a.x0 + (a.x1 - a.x0) * f, z = a.z0 + (a.z1 - a.z0) * f, y = (a.h || 4.5) * (1 - f) + 1 + 3 * Math.sin(Math.PI * f);
       d.position.set(x, y, z); d.scale.set(1, 1, 1); d.rotation.set(0, Math.atan2(a.x1 - a.x0, a.z1 - a.z0), 0); d.updateMatrix(); this.arMesh.setMatrixAt(i, d.matrix); this.tmpColor.setRGB(1, 0.95, 0.7); this.arMesh.setColorAt(i, this.tmpColor);
     }
     this.arMesh.instanceMatrix.needsUpdate = true; if (this.arMesh.instanceColor) this.arMesh.instanceColor.needsUpdate = true;
@@ -358,7 +367,7 @@ export class Renderer {
       const o = dg === 2 ? 0.28 + 0.12 * Math.sin(this.clock * 8) : dg === 1 ? 0.12 : tgt ? 0.1 + 0.08 * Math.sin(this.clock * 5) : 0;
       this.threat[s].material.opacity = o;
     }
-    this.updateWall(); this.updateEconomy(alpha); this.updateSiege(alpha);
+    this.updateWall(); this.updateEconomy(alpha); this.updateSiege(alpha); this.struct.update(dtReal, this.clock);
     this.renderer.render(this.scene, this.camera);
   }
 }

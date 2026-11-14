@@ -72,3 +72,15 @@ Sauvegardé dans `legacy/` (ressource de développement : animations, muraille, 
 
 ## Décor du monde (kit)
 Le décor vient du pack « Low poly winter medieval castle and town pack » (assetfactory, licence Sketchfab Standard — voir `assets/world/LICENSE-NOTICE.md`), converti en kit compact par `tools/extract_kit.py` et chargé par `src/render/Kit.js` ; `Renderer.useKit()` remplace les boîtes provisoires : tronçons de muraille (4 variantes, porte à escalier), tours, château, **maisons de population** (une par maison construite, 5 modèles), moulin / entrepôt / grenier, église, puits, étals, petits objets, et **chariots** (un de plus par niveau de l'amélioration « Chariots »). Les bâtiments militaires restent des volumes simples provisoires. Sans le kit, le jeu retombe sur les boîtes.
+
+## Phase 6 — Construction libre
+- Départ : seulement le château + stock de base. Tous les bâtiments (scierie, carrière, mine, ferme, forge, casernes, moulin, entrepôt, grenier…) se construisent, ainsi que maisons et tours de défense (multiples).
+- Placement libre sur la carte (tap ou glisser le fantôme, rotation), déplacement possible (gratuit, bloqué jusqu'au passage d'un ouvrier).
+- Chantier standard : échafaudage → bâtiment terminé. Nombre d'ouvriers réglé sur le chantier (− / +).
+- Tours : construction + amélioration (niveaux 1–5). Les 6 tours de muraille de départ suffisent aux premières vagues.
+- Moteur : `src/sim/build.js`, rendu : `src/render/Structures.js` + `Buildings.js`. Sauvegarde v4 (migration depuis v3). Test : `node tests/build.mjs`.
+
+## Phase 7 — Interface « parchemin » + sol
+- Carte plein écran, barre de ressources/vague en haut, dock (Bâtir / Armée / Villageois / Savoir), fiches contextuelles ancrées, barre de placement, interactions tactiles directement sur la carte.
+- Nouveau sol : texture unique 6 px/m (zones, chemins, mares, grain).
+- Équilibrage des vagues 7+ non retravaillé (le bot de test perd à la vague 7).

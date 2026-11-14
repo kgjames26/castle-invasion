@@ -10,6 +10,7 @@ import { Army } from './army.js';
 import { Siege } from './siege.js';
 import { START, UNITS, TIMING, waveSpec } from '../content/medieval.js';
 import { Economy } from './economy.js';
+import { Build } from './build.js';
 
 export class Simulation {
   constructor(seed = 20261114) {
@@ -21,6 +22,7 @@ export class Simulation {
     this.zombies = new ZombieSwarm();
     this.army = new Army(); this.siege = new Siege();
     this.eco = new Economy(this);
+    this.build = new Build(this);
     this.scratch = new Int32Array(256);
     this.arrows = [];             // événements visuels (consommés par le rendu)
     this.events = [];             // 'breach', 'repair', 'waveStart', 'waveEnd', 'gameOver'
@@ -31,7 +33,7 @@ export class Simulation {
     this.rng = makeRng(this.seed);
     this.wall.reset(); this.zombies.clear(); this.zombies.kills = 0;
     this.army = new Army(); this.siege = new Siege();
-    this.eco.reset();
+    this.eco.reset(); this.build.reset();
     this.army.reserve = { ...START.reserve };
     for (let s = 0; s < SECTORS; s++) { this.army.reserve.archer += START.perSector.archer; this.army.assignArchers(s, START.perSector.archer); }
     for (const o of START.squads) { this.army.reserve[o.type] += o.n; this.army.formSquad(o.type, o.n, o.sector); }
@@ -58,11 +60,15 @@ export class Simulation {
   buildSiege(type, s) { return this.siege.build(this, type, s); }
   cancelSiege() { return this.siege.cancel(this); }
   dismantleSiege(id) { return this.siege.dismantle(this, id); }
-  buildHouse() { return this.eco.buildHouse(); }
+  // ——— construction libre ———
+  place(type, x, z, rot, workers) { return this.build.place(type, x, z, rot, workers); }
+  setWorkers(id, n) { return this.build.setWorkers(id, n); }
+  cancelBuild(id) { return this.build.cancel(id); }
+  upgradeStruct(id, workers) { return this.build.upgrade(id, workers); }
+  moveStruct(id, x, z, rot) { return this.build.move(id, x, z, rot); }
   upgrade(s) { const c = this.wall.upgradeCost(s); if (!c || !this.eco.pay(c)) return false; return this.wall.upgrade(s); }
   assignVillagers(task, delta) { return this.eco.setAssign(task, delta); }
   recruitVillager() { return this.eco.recruitVillager(); }
-  upgradeBuilding(b) { return this.eco.upgradeBuilding(b); }
   buyUpgrade(u) { return this.eco.buyUpgrade(u); }
   setRepairPriority(s) { this.eco.setRepairPriority(s); }
   skipPrep() { if (this.phase === 'prep') this.timer = 0; }
@@ -127,6 +133,7 @@ export class Simulation {
     this.zombies.update(dt, this);
     this.army.update(dt, this);
     this.siege.update(dt, this);
+    this.build.update(dt);
     this.eco.update(dt);
     this.zombies.compact();
     for (let i = this.arrows.length - 1; i >= 0; i--) { this.arrows[i].t += dt; if (this.arrows[i].t > 0.4) this.arrows.splice(i, 1); }

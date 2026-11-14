@@ -70,8 +70,9 @@ export class Army {
     const it = this.queues[b].pop(); if (!it) return false;
     for (const r in UNITS[it.type].cost) sim.eco.add(r, UNITS[it.type].cost[r]); return true;
   }
-  trainTick(dt) {
-    for (const b of TRAIN_BUILDINGS) { const q = this.queues[b]; if (!q.length) continue; q[0].t -= dt; if (q[0].t <= 0) { this.reserve[q[0].type]++; q.shift(); } }
+  // la file attend tant que le bâtiment est bloqué (déplacé) ou en cours de construction
+  trainTick(dt, sim) {
+    for (const b of TRAIN_BUILDINGS) { const q = this.queues[b]; if (!q.length || sim.eco.level[b] < 1) continue; q[0].t -= dt; if (q[0].t <= 0) { this.reserve[q[0].type]++; q.shift(); } }
   }
   // ——— escouades ———
   unitHp(type) { return UNITS[type].hp; }
@@ -118,7 +119,7 @@ export class Army {
   // ——— tick ———
   update(dt, sim) {
     const Z = sim.zombies, hash = sim.hash, eco = sim.eco, w = eco.up.weapons, ar = eco.up.archery;
-    this.trainTick(dt);
+    this.trainTick(dt, sim);
     // archers
     const AU = UNITS.archer, range = AU.range + 3 * ar, adm = AU.dmg * (1 + 0.1 * w) * (1 + 0.1 * ar);
     for (let s = 0; s < SECTORS; s++) {

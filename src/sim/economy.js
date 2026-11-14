@@ -12,7 +12,7 @@ export class Economy {
   reset() {
     this.res = { ...START.res };
     this.level = {}; for (const b in BUILDINGS) this.level[b] = BUILDINGS[b].start;
-    this.houses = ECON.housesStart;
+    this.houses = 0;
     this.up = {}; for (const u in UPGRADES) this.up[u] = 0;
     this.assign = {}; for (const t of TASK_IDS) this.assign[t] = START.assign[t] || 0;
     this.repairPriority = -1;
@@ -29,11 +29,9 @@ export class Economy {
   popCap() { return ECON.popBase + ECON.popPerHouse * this.houses; }
   population() { return this.villagers.length + this.sim.army.popUsed() + this.sim.siege.popUsed(); }
   popRoom() { return this.popCap() - this.population(); }
-  houseCost() { return { wood: 40 + 4 * this.houses, stone: 8 + 2 * this.houses }; }
-  buildHouse() { if (this.houses >= ECON.housesMax || !this.pay(this.houseCost())) return false; this.houses++; return true; }
   speed() { return ECON.villagerSpeed * (1 + UPGRADES.boots.per * this.up.boots); }
   carryCap() { return ECON.carry * (1 + UPGRADES.carts.per * this.up.carts); }
-  slots(b) { return ECON.slotsPerLevel * this.level[b]; }
+  slots(b) { return BUILDINGS[b].base + ECON.slotsPerLevel * this.level[b]; }   // base = ce que le château permet avant toute construction
   taskCap(t) {
     if (t === 'repair') return TASKS.repair.slots;
     const b = TASKS[t].building; let used = 0;
@@ -41,18 +39,18 @@ export class Economy {
     return Math.max(0, this.slots(b) - used);
   }
   gatherRate(t) {
-    const T = TASKS[t]; let r = T.rate * (1 + UPGRADES.tools.per * this.up.tools) * (1 + ECON.levelGather * (this.level[T.building] - 1));
+    const T = TASKS[t]; let r = T.rate * (1 + UPGRADES.tools.per * this.up.tools) * (1 + ECON.levelGather * Math.max(0, this.level[T.building] - 1));
     if (t === 'food') r *= (1 + UPGRADES.plow.per * this.up.plow) * (1 + ECON.millBonus * this.level.mill);
     return r * (this.famine ? ECON.famineMult : 1);
   }
-  idleCount() { let n = 0; for (const t of TASK_IDS) n += this.assign[t]; return this.villagers.length - n; }
+  builderCount() { let n = 0; for (const v of this.villagers) if (v.job) n++; return n; }
+  idleCount() { let n = 0; for (const t of TASK_IDS) n += this.assign[t]; return this.villagers.length - n - this.builderCount(); }
   military() { return this.sim.army.headcount(); }
   // ——— ressources ———
   afford(c) { for (const r in c) if (this.res[r] < c[r]) return false; return true; }
   pay(c) { if (!this.afford(c)) return false; for (const r in c) this.res[r] -= c[r]; return true; }
   add(r, n) { const room = this.cap(r) - this.res[r], a = Math.max(0, Math.min(n, room)); this.res[r] += a; this.lost += n - a; return a; }
   scaled(base, mult) { const o = {}; for (const r in base) o[r] = Math.round(base[r] * mult); return o; }
-  buildingCost(b) { return this.level[b] >= (BUILDINGS[b].max || ECON.maxLevel) ? null : this.scaled(BUILDINGS[b].cost, this.level[b] + 1); }
   upgradeCost(u) { return this.up[u] >= UPGRADES[u].max ? null : this.scaled(UPGRADES[u].cost, this.up[u] + 1); }
   // ——— commandes ———
   setAssign(t, delta) {
@@ -67,13 +65,12 @@ export class Economy {
     if (this.popRoom() <= 0 || !this.pay(ECON.villagerCost)) return false;
     this.addVillager(); this.syncTasks(); return true;
   }
-  upgradeBuilding(b) { const c = this.buildingCost(b); if (!c || !this.pay(c)) return false; this.level[b]++; return true; }
   buyUpgrade(u) { const U = UPGRADES[u]; if (U.req && this.level[U.req] < 1) return false; const c = this.upgradeCost(u); if (!c || !this.pay(c)) return false; this.up[u]++; return true; }
   setRepairPriority(s) { this.repairPriority = s; }
   // ——— villageois ———
   addVillager(x, z) {
     const i = this.villagers.length;
-    const v = { id: this.nextId++, task: null, state: 'idle', x: 0, z: 0, px: 0, pz: 0, carry: 0, carryRes: null, timer: 0, seg: -1, leaving: false, jx: 0, jz: 0 };
+    const v = { id: this.nextId++, task: null, state: 'idle', x: 0, z: 0, px: 0, pz: 0, carry: 0, carryRes: null, timer: 0, seg: -1, leaving: false, jx: 0, jz: 0, job: 0, bx: 0, bz: 0 };
     this.resetJitter(v, i); v.x = v.px = x !== undefined ? x : v.jx; v.z = v.pz = z !== undefined ? z : v.jz;
     this.villagers.push(v); return v;
   }
@@ -91,7 +88,7 @@ export class Economy {
     }
     for (const t of TASK_IDS) {
       while (counts[t] < this.assign[t]) {
-        const v = this.villagers.find(c => !c.task); if (!v) break;
+        const v = this.villagers.find(c => !c.task && !c.job); if (!v) break;
         v.task = t; v.state = t === 'repair' ? 'repairIdle' : 'toSite'; v.timer = 0; v.seg = -1; counts[t]++;
       }
     }
@@ -114,6 +111,10 @@ export class Economy {
   }
   updateVillager(v, i, dt) {
     v.px = v.x; v.pz = v.z;
+    if (v.job) {   // ouvrier de chantier : va sur place, puis travaille (la progression est comptée par Build)
+      if (v.state === 'toBuild') { if (this.moveTo(v, v.bx, v.bz, dt)) v.state = 'building'; }
+      return;
+    }
     const T = v.task ? TASKS[v.task] : null;
     switch (v.state) {
       case 'idle': this.moveTo(v, v.jx, v.jz, dt); break;
@@ -176,15 +177,15 @@ export class Economy {
     return {
       res: { ...this.res }, houses: this.houses, level: { ...this.level }, up: { ...this.up }, assign: { ...this.assign }, repairPriority: this.repairPriority,
       deposit: { ...this.deposit }, lost: this.lost, famine: this.famine,
-      villagers: this.villagers.map(v => ({ task: v.task, state: v.state, x: +v.x.toFixed(2), z: +v.z.toFixed(2), carry: v.carry, carryRes: v.carryRes, timer: v.timer, seg: v.seg, leaving: v.leaving })),
+      villagers: this.villagers.map(v => ({ task: v.task, state: v.state, x: +v.x.toFixed(2), z: +v.z.toFixed(2), carry: v.carry, carryRes: v.carryRes, timer: v.timer, seg: v.seg, leaving: v.leaving, job: v.job, bx: v.bx, bz: v.bz })),
     };
   }
   restore(st) {
     this.reset();
-    Object.assign(this.res, st.res); Object.assign(this.level, st.level); this.houses = st.houses ?? ECON.housesStart; Object.assign(this.up, st.up); Object.assign(this.assign, st.assign);
+    Object.assign(this.res, st.res); Object.assign(this.level, st.level); Object.assign(this.up, st.up); Object.assign(this.assign, st.assign);
     Object.assign(this.deposit, st.deposit); this.repairPriority = st.repairPriority ?? -1; this.lost = st.lost || 0; this.famine = !!st.famine;
     this.villagers = []; this.nextId = 1;
-    for (const o of st.villagers) { const v = this.addVillager(o.x, o.z); Object.assign(v, { task: o.task, state: o.state, carry: o.carry, carryRes: o.carryRes, timer: o.timer, seg: o.seg, leaving: o.leaving }); }
+    for (const o of st.villagers) { const v = this.addVillager(o.x, o.z); Object.assign(v, { task: o.task, state: o.state, carry: o.carry, carryRes: o.carryRes, timer: o.timer, seg: o.seg, leaving: o.leaving, job: o.job || 0, bx: o.bx || 0, bz: o.bz || 0 }); }
     this.syncTasks();
   }
 }

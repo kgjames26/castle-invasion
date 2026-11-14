@@ -1,9 +1,20 @@
 // Sauvegarde versionnée. Format : { version, savedAt, state }. Les migrations s'ajoutent dans MIGRATIONS.
 
-export const SAVE_VERSION = 3;
-const KEY = 'castle-invasion.v3.save';
+import { BUILDINGS } from '../content/medieval.js';
+
+export const SAVE_VERSION = 4;
+const KEY = 'castle-invasion.v3.save';   // même clé : les parties v3 sont migrées vers la construction libre
 // MIGRATIONS[n] : état de la version n → version n+1
 const MIGRATIONS = {
+  // v3 (bâtiments à emplacement fixe, maisons en nombre) → v4 (construction libre : chaque bâtiment devient une structure placée)
+  3: st => {
+    const out = { ...st }, items = []; let id = 100;
+    for (const b in (st.eco?.level || {})) { const lv = st.eco.level[b]; if (lv > 0 && BUILDINGS[b]) items.push({ id: id++, type: b, x: BUILDINGS[b].pos.x, z: BUILDINGS[b].pos.z, rot: 0, level: lv, state: 'built', progress: 1, work: 0, workers: 1, paid: null, fixed: false, wt: -1 }); }
+    const slots = []; for (const z of [214, 224, 233]) for (let x = 14; x <= 186; x += 9.2) if (Math.abs(x - 100) > 9) slots.push({ x, z });
+    slots.sort((p, q) => (Math.abs(p.x - 100) + Math.abs(p.z - 224) * 1.4) - (Math.abs(q.x - 100) + Math.abs(q.z - 224) * 1.4));
+    for (let i = 0; i < Math.min(st.eco?.houses || 0, slots.length); i++) items.push({ id: id++, type: 'house', x: +slots[i].x.toFixed(1), z: slots[i].z, rot: 0, level: 1, state: 'built', progress: 1, work: 0, workers: 1, paid: null, fixed: false, wt: -1 });
+    out.build = { next: id, items }; return out;
+  },
   // v2 (soldats individuels, un seul bâtiment « maisons ») → v3 (escouades, population partagée, files d'entraînement)
   2: st => {
     const out = { ...st }, a = st.army, per = {};
@@ -29,7 +40,7 @@ export function serialize(sim) {
   for (let i = 0; i < Z.n; i++) zs.push([+Z.x[i].toFixed(2), +Z.z[i].toFixed(2), Math.round(Z.hp[i]), Z.type[i], Z.sector[i]]);
   return {
     seed: sim.seed, rng: sim.rng.state(), time: sim.time, wave: sim.wave, phase: sim.phase, timer: sim.timer, targets: sim.targets,
-    eco: sim.eco.serialize(), castleHp: sim.castleHp, kills: Z.kills, stats: { ...sim.stats },
+    eco: sim.eco.serialize(), build: sim.build.serialize(), castleHp: sim.castleHp, kills: Z.kills, stats: { ...sim.stats },
     spawn: sim.spawn ? { ...sim.spawn, counts: [...sim.spawn.counts] } : null, assaultTime: sim.assaultTime,
     wall: { hp: Array.from(sim.wall.hp), level: Array.from(sim.wall.level) },
     army: sim.army.serialize(),
@@ -42,6 +53,7 @@ export function restore(sim, st) {
   sim.castleHp = st.castleHp; sim.stats = { ...st.stats }; sim.over = false;
   sim.spawn = st.spawn; sim.assaultTime = st.assaultTime || 0;
   if (st.eco) sim.eco.restore(st.eco); else { sim.eco.reset(); if (st.legacyRes) { sim.eco.res.gold = st.legacyRes.gold; sim.eco.res.stone = st.legacyRes.stone; } }
+  sim.build.restore(st.build);
   sim.wall.hp.set(st.wall.hp); sim.wall.level.set(st.wall.level);
   const Z = sim.zombies; Z.clear(); Z.kills = st.kills;
   for (const [x, z, hp, t, s] of st.zombies) { if (Z.spawn(t, x, z, s, sim.rng)) Z.hp[Z.n - 1] = hp; }

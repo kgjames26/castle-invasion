@@ -5,8 +5,8 @@
 import * as THREE from 'three';
 import { applyNorthFog } from './fog.js';
 
-const mats = new Map();
-const mat = (c, ds = false) => { const k = c + (ds ? 'd' : ''); if (!mats.has(k)) mats.set(k, applyNorthFog(new THREE.MeshLambertMaterial({ color: c, flatShading: true, side: ds ? THREE.DoubleSide : THREE.FrontSide }))); return mats.get(k); };
+export const mats = new Map();
+export const mat = (c, ds = false) => { const k = c + (ds ? 'd' : ''); if (!mats.has(k)) mats.set(k, applyNorthFog(new THREE.MeshLambertMaterial({ color: c, flatShading: true, side: ds ? THREE.DoubleSide : THREE.FrontSide }))); return mats.get(k); };
 
 function gableGeo(w, d, h) {   // prisme triangulaire : longueur w (x), largeur d (z), hauteur h
   const a = [-w / 2, 0, -d / 2], b = [-w / 2, 0, d / 2], c = [-w / 2, h, 0], a2 = [w / 2, 0, -d / 2], b2 = [w / 2, 0, d / 2], c2 = [w / 2, h, 0];
@@ -14,7 +14,7 @@ function gableGeo(w, d, h) {   // prisme triangulaire : longueur w (x), largeur 
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(t.flat(), 3)); g.computeVertexNormals(); return g;
 }
 
-class B {
+export class B {
   constructor() { this.g = new THREE.Group(); }
   add(geo, c, x, y, z, rx = 0, ry = 0, rz = 0, ds = false) { const m = new THREE.Mesh(geo, mat(c, ds)); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); this.g.add(m); return m; }
   box(w, h, d, c, x, y, z, ry = 0, rz = 0, rx = 0) { return this.add(new THREE.BoxGeometry(w, h, d), c, x, y + h / 2, z, rx, ry, rz); }
@@ -24,7 +24,7 @@ class B {
   ball(r, c, x, y, z) { return this.add(new THREE.SphereGeometry(r, 8, 6), c, x, y, z); }
 }
 
-const WOOD = 0x7a5a3a, DARK = 0x4a3426, STONE = 0x8d9199, STRAW = 0xd8c06a, RED = 0xc0392b, GOLD = 0xf2d65e, STEEL = 0xcfd6dd;
+export const WOOD = 0x7a5a3a, DARK = 0x4a3426, STONE = 0x8d9199, STRAW = 0xd8c06a, RED = 0xc0392b, GOLD = 0xf2d65e, STEEL = 0xcfd6dd;
 
 function barracks() {
   const b = new B();
@@ -110,10 +110,5 @@ function workshop() {
 
 const BUILD = { barracks, range, stable, workshop };
 
-// Renvoie { g: Group, pips: Mesh[] } ou null si pas de modèle. Les pastilles dorées affichent le niveau.
-export function buildMilitary(id) {
-  const f = BUILD[id]; if (!f) return null;
-  const { g, pips } = f(), pg = new THREE.BoxGeometry(0.7, 0.7, 0.7), pm = mat(GOLD), arr = [];
-  for (let i = 0; i < 5; i++) { const p = new THREE.Mesh(pg, pm); p.position.set(pips[0] + (i - 2) * 1.0, pips[1], pips[2]); p.rotation.y = Math.PI / 4; g.add(p); arr.push(p); }
-  return { g, pips: arr };
-}
+// Modèles militaires bruts : { g, pips:[x,y,z] } (les pastilles de niveau sont ajoutées par Buildings.js)
+export const militaryModels = { barracks, range, stable, workshop };

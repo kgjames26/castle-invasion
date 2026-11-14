@@ -20,7 +20,7 @@ export class CameraController {
     this.baseDist = widthM / (2 * Math.tan(THREE.MathUtils.degToRad(this.cam.fov / 2)) * this.aspect);
     this.update(0);
   }
-  setZoom(z) { this.zoom = Math.min(1.7, Math.max(0.3, z)); }
+  setZoom(z) { this.zoom = Math.min(1.7, Math.max(0.25, z)); }
   focusOn(x, z) { this.focus = { x, z }; }
   // changement de vue instantané (onglets) : position et zoom mémorisés par onglet
   getView() { return { tx: this.tx, tz: this.tz, zoom: this.zoom }; }
@@ -31,12 +31,13 @@ export class CameraController {
   }
   down(e) {
     this.dom.setPointerCapture(e.pointerId); this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); this.moved = 0; this.focus = null;
-    if (this.ptrs.size === 1) this.drag = this.worldAt(e.clientX, e.clientY);
+    if (this.ptrs.size === 1) { this.drag = this.worldAt(e.clientX, e.clientY); this.gdrag = !!(this.drag && this.ghostHit && this.ghostHit(this.drag.x, this.drag.z)); if (this.gdrag) this.drag = null; }
     else if (this.ptrs.size === 2) { const [a, b] = [...this.ptrs.values()]; this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: this.zoom }; this.drag = null; }
   }
   move(e) {
     const p = this.ptrs.get(e.pointerId); if (!p) return;
     this.moved += Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y); p.x = e.clientX; p.y = e.clientY;
+    if (this.gdrag && this.ptrs.size === 1) { const w = this.worldAt(e.clientX, e.clientY); if (w && this.moved > 4) this.ghostMove(w.x, w.z); return; }   // on glisse le fantôme de construction, pas la caméra
     if (this.ptrs.size === 2 && this.pinch) { const [a, b] = [...this.ptrs.values()]; this.setZoom(this.pinch.zoom * this.pinch.d / (Math.hypot(a.x - b.x, a.y - b.y) || 1)); }
     else if (this.ptrs.size === 1 && this.drag && this.moved > 8) {
       this.update(0); const w = this.worldAt(e.clientX, e.clientY);
@@ -44,7 +45,7 @@ export class CameraController {
     }
   }
   up(e, cancel) {
-    const wasOne = this.ptrs.size === 1; this.ptrs.delete(e.pointerId);
+    const wasOne = this.ptrs.size === 1; this.ptrs.delete(e.pointerId); this.gdrag = false;
     if (wasOne && !cancel && this.moved <= 8) { const w = this.worldAt(e.clientX, e.clientY); if (w) this.onTap(w.x, w.z); }
     this.pinch = null; this.drag = this.ptrs.size === 1 ? this.worldAt(...Object.values([...this.ptrs.values()][0])) : null;
   }
