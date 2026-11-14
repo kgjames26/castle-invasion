@@ -6,7 +6,7 @@ import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/me
 import { archerPos, formationLayout } from '../sim/army.js';
 import { applyNorthFog } from './fog.js';
 import { StructureView } from './Structures.js';
-import { buildTroopRigs, buildVillagerRigs, throwAngle } from './Troops.js';
+import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry } from './Troops.js';
 const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1]];      // variantes de modèle par type de zombie
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
 
@@ -180,7 +180,8 @@ export class Renderer {
       this.exDisc.count = nd; this.exRock.count = nr; this.exDisc.instanceMatrix.needsUpdate = this.exRock.instanceMatrix.needsUpdate = true; if (nd) { this.exDisc.instanceColor.needsUpdate = true; this.exRock.instanceColor.needsUpdate = true; }
       const P = E.prospect; this.pRing.visible = !!P; if (P) { const pu = 1 + 0.12 * Math.sin(this.clock * 5) + 0.25 * (1 - P.t / P.dur); this.pRing.position.set(P.x, 0.4, P.z); this.pRing.scale.set(pu, pu, pu); }
     }
-    // ——— villageois : un modèle par métier, animé selon l'état (marche, outil qui frappe, charge portée) ———
+    if (this.vv) return this.updateVillagersVAT(alpha);
+    // ——— villageois (repli) : un modèle par métier, animé selon l'état (marche, outil qui frappe, charge portée) ———
     const R = this.vrigs, vs = E.villagers, t = this.clock, SC = 2.0, FREQ = { wood: 7, stone: 6, iron: 6, gold: 6, food: 3.6, build: 8, repair: 8 }; let nc = 0;
     for (const k in R) R[k].begin();
     const lerpAng = (a, b, k) => { const dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
@@ -333,6 +334,50 @@ export class Renderer {
     const mk = geo => { const im = new THREE.InstancedMesh(geo, ch.archerMat, SECTORS * ARCHER_SLOTS + 4); im.frustumCulled = false; im.count = 0; this.scene.add(im); return im; };
     this.ab = mk(ch.archer.body); this.abow = mk(ch.archer.bow); this.aMesh.visible = false;
     this.vMesh.geometry = ch.villagerGeo; this.vMesh.material = ch.villagerMat;
+    if (ch.villager) this.useVillagerGLB(ch.villager);
+  }
+  // ——— villageois (modèle GLB cuit en VAT) : une variante de couleur par métier + outil et chapeau attachés à la main / la tête ———
+  useVillagerGLB(vg) {
+    const GEAR = { idle: [null, 'cap'], wood: ['axe', 'cap'], stone: ['pick', 'hardGrey'], iron: ['pick', 'hard'], gold: ['pick', 'hard'], food: ['hoe', 'straw'], repair: ['hammer', 'hardOrange'], build: ['hammer', 'hard'] };
+    const cap = 160, gm = applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide })), vv = { vg, meshes: {}, tools: {}, hats: {}, cnt: {}, gcnt: {} };
+    for (const k of vg.tints) {
+      const im = new THREE.InstancedMesh(vg.geos[k], vg.mat, cap); im.frustumCulled = false; im.count = 0;
+      im.anim = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); im.anim.setUsage(THREE.DynamicDrawUsage); vg.geos[k].setAttribute('aAnim', im.anim); this.scene.add(im); vv.meshes[k] = im;
+      const [tool, hat] = GEAR[k] || GEAR.idle, mkG = geo => { if (!geo) return null; const g = new THREE.InstancedMesh(geo, gm, cap); g.frustumCulled = false; g.count = 0; this.scene.add(g); return g; };
+      vv.tools[k] = mkG(tool && toolGeometry(tool, vg.handPos)); vv.hats[k] = mkG(hatGeometry(hat, vg.headPos));
+    }
+    this.vv = vv; this.vMesh.visible = false; for (const r in this.vrigs) for (const m of this.vrigs[r].meshes) m.visible = false;
+    this._ty = new THREE.Matrix4().makeTranslation(0, -vg.miny, 0); this._gm = new THREE.Matrix4();
+  }
+  updateVillagersVAT(alpha) {
+    const E = this.sim.eco, d = this.dummy, vv = this.vv, vg = vv.vg, t = this.clock, vs = E.villagers, SC = 0.0150;
+    const SPEED = { walk: 1.3, carry: 1.2, idle: 0.35 }, WORK = { wood: 0.9, stone: 0.8, iron: 0.8, gold: 0.8, food: 0.55, build: 1.0, repair: 1.0 };
+    for (const k in vv.meshes) { vv.cnt[k] = 0; }
+    const lerpAng = (a, b, k) => { const dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
+    let nc = 0;
+    for (let i = 0; i < vs.length; i++) {
+      const v = vs[i], x = v.px + (v.x - v.px) * alpha, z = v.pz + (v.z - v.pz) * alpha, dx = v.x - v.px, dz = v.z - v.pz, mv = dx * dx + dz * dz > 2e-6;
+      const key = v.job ? 'build' : v.task === 'repair' ? 'repair' : (v.task || 'idle'), working = v.state === 'gather' || v.state === 'building' || v.state === 'repairing', carrying = v.carry > 0;
+      let want = v.rrot ?? Math.PI;
+      if (mv) want = Math.atan2(dx, dz);
+      else if (v.state === 'building') { const s = this.sim.build.get(v.job); if (s) want = Math.atan2(s.x - v.x, s.z - v.z); }
+      else if (v.state === 'repairing') want = Math.PI;
+      else if (v.state === 'gather' && v.sx !== null && v.sx !== undefined) want = Math.atan2(v.sx - v.x, v.sz - v.z);
+      v.rrot = lerpAng(v.rrot ?? Math.PI, want, mv ? 0.3 : 0.15);
+      const clip = working && !mv ? 'work' : mv ? (carrying ? 'carry' : 'walk') : carrying ? 'carry' : 'idle', [c0, cn] = vg.clips[clip];
+      const spd = clip === 'work' ? (WORK[key] || 0.9) : SPEED[clip] || 1, ph = (t * spd + i * 0.37) % 1, an = c0 + ph * cn, k = vv.cnt[key]++, im = vv.meshes[key];
+      d.position.set(x, 0, z); d.scale.set(SC, SC, SC); d.rotation.set(0, v.rrot, 0); d.updateMatrix();
+      im.setMatrixAt(k, d.matrix); im.anim.array[k] = an;
+      const f0 = Math.floor(an), tl = vv.tools[key], ht = vv.hats[key];
+      if (tl) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.hand[f0]); tl.setMatrixAt(k, this._gm); }
+      if (ht) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.head[f0]); ht.setMatrixAt(k, this._gm); }
+      if (carrying) {
+        d.position.set(x + Math.sin(v.rrot) * 1.15, 2.15, z + Math.cos(v.rrot) * 1.15); d.scale.set(1.5, 1.2, 1.5); d.rotation.set(0, v.rrot, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
+        this.tmpColor.setHex(RES_INFO[v.carryRes].color); this.cMesh.setColorAt(nc, this.tmpColor); nc++;
+      }
+    }
+    for (const k in vv.meshes) { const n = vv.cnt[k], im = vv.meshes[k]; im.count = n; im.instanceMatrix.needsUpdate = true; im.anim.needsUpdate = true; for (const g of [vv.tools[k], vv.hats[k]]) if (g) { g.count = n; g.instanceMatrix.needsUpdate = true; } }
+    this.cMesh.count = nc; this.cMesh.instanceMatrix.needsUpdate = true; if (nc) this.cMesh.instanceColor.needsUpdate = true;
   }
   renderZombies(alpha) {
     const Z = this.sim.zombies, n = Z.n, cnt = this.zvCount.fill(0), clock = this.clock, tc = this.tmpColor;

@@ -180,3 +180,26 @@ export function throwAngle(type, e, R, noAmmo) {
   if (e < 1.0) return A.f + 0.05 * Math.sin((e - 0.35) * 14) * (1 - (e - 0.35) / 0.65);
   const t = Math.min(1, (e - 1.0) / Math.max(0.5, R - 1.8)); return A.f + (A.c - A.f) * t;
 }
+
+// ——— accessoires du villageois GLB (unités = cm, repère du maillage ; origine = pose de bind, T-pose) ———
+// outil : poignée vers +z à partir de la main droite (hx,hy,hz) ; chapeau : posé sur la tête (hx,hy,hz = position de la tête)
+export function toolGeometry(kind, [hx, hy, hz]) {
+  const W = 0x7a5a3a, S = 0xcfd6dd, D = 0x55565c;
+  const L = {
+    axe: [bx(5, 5, 66, W, 0, 0, 26), bx(4, 20, 16, S, 0, 3, 56), bx(5, 6, 8, D, 0, -3, 48)],
+    pick: [bx(5, 5, 74, W, 0, 0, 28), bx(60, 6, 6, S, 0, 0, 64), bx(7, 11, 7, S, 32, 0, 64), bx(7, 11, 7, S, -32, 0, 64)],
+    hoe: [bx(4, 4, 96, W, 0, 0, 36), bx(18, 4, 12, S, 0, 0, 90)],
+    hammer: [bx(5, 5, 46, W, 0, 0, 14), bx(15, 13, 10, D, 0, 0, 40)],
+  }[kind]; if (!L) return null;
+  const g = mergeGeometries(L, false); g.translate(hx, hy, hz); return g;
+}
+export function hatGeometry(kind, [hx, hy, hz]) {
+  const top = 172;                                       // sommet du crâne (maillage) ≈ 180 cm ; chapeau posé à ~ y = 172..186
+  const L = {
+    cap: [bx(24, 9, 26, 0x7a5a30, 0, top + 5, 0), bx(14, 3, 10, 0x7a5a30, 0, top + 2, 15)],
+    hard: [bx(26, 12, 28, 0xf2d65e, 0, top + 7, 0), bx(34, 3, 34, 0xf2d65e, 0, top + 1.5, 0)],
+    hardGrey: [bx(26, 12, 28, 0xb0b4b8, 0, top + 7, 0), bx(34, 3, 34, 0xb0b4b8, 0, top + 1.5, 0)],
+    hardOrange: [bx(26, 12, 28, 0xe67e22, 0, top + 7, 0), bx(34, 3, 34, 0xe67e22, 0, top + 1.5, 0)],
+    straw: [bx(38, 3, 38, 0xe8c86a, 0, top + 2, 0), bx(21, 9, 21, 0xe8c86a, 0, top + 7, 0)],
+  }[kind]; if (!L) return null; return mergeGeometries(L, false);
+}

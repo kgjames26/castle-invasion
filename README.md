@@ -97,3 +97,9 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Placement : la **mine** se pose uniquement sur un gisement de fer/or (aimantée, y compris gisements découverts) ; aucun autre bâtiment ne peut recouvrir un gisement ; la **ferme** se pose librement et les fermiers y travaillent.
 - Villageois : un modèle par métier (hache, pic, houe, marteau), animés : marche, coups d'outil (bois, pierre, fer, or, ferme, chantier, réparation), charge portée devant la poitrine.
 - Bâtiments redessinés (scierie, carrière, mine, ferme, forge + accessoires sur moulin/entrepôt/grenier) et **enseigne** à l'icône du métier au-dessus de chaque bâtiment.
+
+## Phase 10 — Villageois : nouveau modèle GLB animé
+- `tools/bake_villager.py` convertit `medieval_civilian_3.glb` (squelette Mixamo) en `assets/characters/villager.bin` : peau linéaire, textures cuites en couleurs de sommets, 40 images d'animation (marche, portage, travail, repos) lues par texture de sommets (VAT), 8 variantes de couleur de tunique (un par métier).
+- Outil (hache, pioche, houe, marteau) et chapeau (casquette, casque de chantier, paille…) sont des maillages instanciés collés à la main droite / à la tête image par image.
+- `Renderer.useVillagerGLB` / `updateVillagersVAT` : clip choisi selon l'état (déplacement, charge, travail, repos) ; l'ancien villageois en boîtes reste en repli si le fichier est absent.
+- Usage : `python3 tools/bake_villager.py <glb> assets/characters/villager.bin`.
