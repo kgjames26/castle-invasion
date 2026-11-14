@@ -203,10 +203,8 @@ export class Renderer {
     };
     path([[100, 150], [100, 200], [100, 284]], 9); path([[100, 238], [40, 255]], 5); path([[100, 238], [160, 255]], 5); path([[100, 262], [182, 243]], 4.5); path([[100, 262], [18, 238]], 4.5); path([[8, 205], [192, 205]], 4);
     // repères de secteurs sur le champ de bataille
-    g.strokeStyle = 'rgba(40,60,90,.28)'; g.lineWidth = 3; g.setLineDash([k * 2.2, k * 2.2]);
-    for (let s = 1; s < SECTORS; s++) { g.beginPath(); g.moveTo(X(s * SECTOR_W), X(70)); g.lineTo(X(s * SECTOR_W), X(WALL_Z0 - 2 + wallOff(s * SECTOR_W))); g.stroke(); }
-    g.setLineDash([]); g.fillStyle = 'rgba(40,60,90,.32)'; g.font = `bold ${6 * k}px sans-serif`; g.textAlign = 'center';
-    for (let s = 0; s < SECTORS; s++) g.fillText(SECTOR_SHORT[s], X((s + .5) * SECTOR_W), X(118));
+    // (v2.7) plus de lignes ni de lettres de secteurs peintes sur le terrain
+    g.fillStyle = 'rgba(40,60,90,.32)'; g.font = `bold ${6 * k}px sans-serif`; g.textAlign = 'center';
     // vignettage des bords du monde
     for (const [x0, z0, x1, z1] of [[0, 0, 12, 0], [W, 0, W - 12, 0]]) { const gr = g.createLinearGradient(X(x0), 0, X(x1), 0); gr.addColorStop(0, 'rgba(20,30,40,.35)'); gr.addColorStop(1, 'rgba(20,30,40,0)'); g.fillStyle = gr; g.fillRect(Math.min(X(x0), X(x1)), 0, X(12), D * k); }
     // grain fin (déterministe) : casse les aplats et donne du relief de loin comme de près

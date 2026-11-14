@@ -23,4 +23,11 @@ const run = (sim, s) => { for (let i = 0; i < s * 20; i++) sim.tick(); };
   let out = false; for (let i = 0; i < 20 * 8 && !out; i++) { sim.tick(); out = q.mode === 'field'; } ok(out, 'les cavaliers sortent d\'eux-mêmes contre un petit groupe');
   let back = false; for (let i = 0; i < 20 * 60 && !back; i++) { sim.tick(); back = q.mode === 'garrison'; } ok(back, `puis rentrent quand le danger est passé (${sim.zombies.n} zombies restants)`);
 }
+{ // après la vague : les troupes disponibles forment des escouades ; placement avant la vague suivante
+  const sim = new Simulation(), A = sim.army; A.reserve.soldier = 22; A.reserve.heavy = 5; const n0 = A.squads.length;
+  let ev = null; sim.skipPrep(); for (let i = 0; i < 20 * 400 && !ev; i++) { sim.tick(); ev = sim.events.find(e => e.type === 'autoFormed'); sim.events.length = 0; }
+  ok(ev && A.squads.length >= n0 + 3, `escouades formées après la vague (${A.squads.length - n0}, réserve restante ${A.reserve.soldier})`);
+  const q = A.squads[0]; sim.squadPlace(q.id, 60, 180); ok(Math.abs(q.x - 60) < 0.01 && Math.abs(q.z - 180) < 0.01 && !q.auto, 'placement : l\'escouade est posée à l\'endroit choisi');
+  sim.squadPlace(q.id, 60, 115); ok(q.mode === 'field' && q.z < 140, 'placée devant la muraille : elle attend sur le champ');
+}
 console.log(fails ? `${fails} ÉCHEC(S)` : 'tout est bon'); process.exit(fails ? 1 : 0);

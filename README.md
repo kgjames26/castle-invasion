@@ -228,3 +228,9 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Archers** (src/sim/armyai.js) : les archers en réserve montent d'eux-mêmes sur les remparts et se répartissent selon la menace ; pendant l'assaut, l'IA en déplace un à la fois vers le secteur le plus pressé. Un placement manuel (fiche d'un secteur) coupe l'IA des archers ; réactivable dans Armée › Escouades.
 - **Escouades sans ordre (🤖)** : gardent le secteur qui en a le plus besoin (menace, brèche, intrus, muraille abîmée), avec de l'inertie pour ne pas courir partout ; restent à leur poste si elles sont très blessées ; cavaliers, chevaliers et lourds en forme font de **courtes sorties** contre un petit groupe au pied du mur (jamais contre un géant), puis rentrent blessés ou quand le danger est passé ; formation et posture choisies selon la situation.
 - **Un ordre du joueur rend l'escouade manuelle (✋)** ; « Rendre la main à l'IA » la remet en automatique. Badges 🤖 / ✋ dans la liste et la bulle.
+
+## Phase 27 — Escouades autonomes, formation après la vague, placement, plus de codes de secteur
+- Symboles : escouade **⚜ autonome** (sans ordre) / **📯 tes ordres**.
+- **Après chaque vague**, les troupes en réserve complètent les escouades autonomes puis forment de nouvelles escouades (`army.autoForm`).
+- **Placement avant la vague** : bandeau « Vague repoussée · place tes troupes » → mode placement (jeu en pause) : toucher une escouade, puis l'endroit voulu (cour = poste, devant la muraille = attend sur le champ). Aussi depuis Armée › Escouades.
+- **Plus de AG / CG / C / CD / AD** : ni lettres ni lignes peintes sur le terrain ; les pastilles de muraille (sans code) n'apparaissent que sur un pan abîmé ou attaqué ; on parle des repères (porte gauche, mur gauche, grande porte, mur droit, porte droite) ; le choix « garder un secteur » disparaît au profit du placement à la main.

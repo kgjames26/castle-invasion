@@ -204,3 +204,4 @@ h2,h3,.ptitle,.wave b,.tile b,.dk span { font-family:var(--serif); }
 .tag.ai { background:#d8ecf8; color:#1f4f72; border:1px solid #7aa8c8; } .tag.man { background:#f3e2c0; color:#6e4a12; border:1px solid #c8a060; }
 .aibox { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 10px; border-radius:12px; background:#d8ecf8aa; border:1px solid #7aa8c8; color:#1f3f5a; font-size:13px; margin:6px 0; }
 .aibox.man { background:#f3e2c0aa; border-color:#c8a060; color:#5a3a10; } .aibox .act { flex:none; }
+.orderbar .ok { flex:none; min-height:40px; padding:0 14px; border-radius:12px; background:linear-gradient(180deg,#8fd18a,#3f7f45); color:#fff; font-weight:900; border:1px solid #2a5a2e; }

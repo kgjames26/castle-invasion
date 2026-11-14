@@ -1,7 +1,7 @@
 // Interface « parchemin » : la carte reste visible ; les menus apparaissent à la demande.
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
-import { SECTORS, SECTOR_NAMES, SECTOR_SHORT, ARCHER_SLOTS, CASTLE, wallOff } from '../sim/constants.js';
+import { SECTORS, SECTOR_NAMES, SECTOR_AT, ARCHER_SLOTS, CASTLE, wallOff } from '../sim/constants.js';
 import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, INFECTION, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP } from '../content/medieval.js';
 import { MAGE_TIERS } from '../render/Heroes.js';
 import { FORMATS, idealFormat, quality } from '../render/config.js';
@@ -37,7 +37,8 @@ export class UI {
     this.dock.innerHTML = Object.entries(SHEETS).map(([k, n]) => { const [ic, ...t] = n.split(' '); return `<button class="dk" data-sheet="${k}">${ic}<span>${t.join(' ')}</span></button>`; }).join('');
     this.badges = [];
     for (let s = 0; s < SECTORS; s++) {
-      const b = el('button', 'badge', `<b>${SECTOR_SHORT[s]}</b><div class="bar"><i></i></div><small></small>`); b.addEventListener('click', e => { e.stopPropagation(); this.openCard({ kind: 'sector', id: s }); });
+      const b = el('button', 'badge', `<b>🧱</b><div class="bar"><i></i></div><small></small>`);   // pastille sans code : n'apparaît que si ce pan de muraille est abîmé ou attaqué
+      b.addEventListener('click', e => { e.stopPropagation(); this.openCard({ kind: 'sector', id: s }); });
       this.badgesEl.appendChild(b); this.badges.push(b);
     }
     $('#b-skip').addEventListener('click', () => sim.skipPrep());
@@ -94,6 +95,11 @@ export class UI {
     if ((x < 0 || x > 200) && z >= FRONTIER.z0 && z < FRONTIER.z1) { const p = sim.frontier.at(x, z); if (p && p.state !== 'open') { this.openCard({ kind: 'patch', id: p.id }); this.rd.frontierV.sel = p.id; return; } }
     // escouade choisie : toucher la carte = ordre de mouvement (devant la muraille : sortie ; derrière : nouveau poste) ; toucher une autre escouade = la choisir
     const near = this.squadAt(x, z);
+    if (this.deploy) {   // placement : choisir une escouade, puis l'endroit
+      if (near) { this.depSel = near; this.rd.setSquad(near); this.buzz(10); this.renderOrder(); return; }
+      if (this.depSel) { const q = sim.squad(this.depSel); sim.squadPlace(this.depSel, x, z); this.rd.orderPing(x, z, q && q.mode === 'field'); this.buzz(15); this.depSel = 0; this.rd.setSquad(0); this.renderOrder(); this.refresh(true); }
+      return;
+    }
     // ordre en attente (choisi dans la bulle ou la fiche) : ce toucher est la destination
     if (this.order) {
       const o = this.order, q = sim.squad(o.id); if (!q) { this.endOrder(); return; }
@@ -210,7 +216,7 @@ export class UI {
       case 'upg': sim.buyUpgrade(x); break;
       case 'smith': if (!sim.eco.buySmith(x, y)) this.toast('Pas assez de ressources'); else this.buzz(10); break;
       case 'prio': sim.setRepairPriority(+x); break;
-      case 'ua': { const was = sim.army.autoArchers; sim.assignArchers(s, +y); if (was) this.toast('🏹 Placement manuel : l\'IA ne déplace plus les archers (réactivable dans Armée › Escouades)', 'info'); break; }
+      case 'ua': { const was = sim.army.autoArchers; sim.assignArchers(s, +y); if (was) this.toast('🏹 Placement manuel : les archers ne bougent plus seuls (réactivable dans Armée › Escouades)', 'info'); break; }
       case 'wall': sim.upgrade(s); break;
       case 'sseg': this.siegeSec = +x; break;
       case 'sbuild': sim.buildSiege(x, this.siegeSec); break;
@@ -222,7 +228,10 @@ export class UI {
       case 'nav': this.nav[x] = y || null; if (y && y.startsWith('sq.')) this.pickSquad(+y.slice(3)); this.html.sheet = ''; break;
       case 'sqgo': { const q = sim.squad(this.selSq); if (!q) break; this.startOrder(q.id, x); break; }
       case 'ordercancel': this.endOrder(); break;
-      case 'sqauto': { sim.squadAuto(this.selSq); this.toast('🤖 L\'escouade se débrouille seule', 'info'); break; }
+      case 'deploy': this.startDeploy(); break;
+      case 'deployend': this.endDeploy(); break;
+      case 'invitex': this.invite = false; this.renderOrder(); break;
+      case 'sqauto': { sim.squadAuto(this.selSq); this.toast('⚜ L\'escouade est autonome', 'info'); break; }
       case 'autoarch': { sim.setAutoArchers(!sim.army.autoArchers); this.toast(sim.army.autoArchers ? '🏹 Les archers se placent seuls sur les remparts' : '🏹 Placement manuel des archers (touche un secteur)', 'info'); break; }
       case 'sqorders': { const id = this.selSq; this.openSheet('army'); this.nav.army = 'sq.' + id; this.pickSquad(id); break; }
       case 'sqsee': { const q = sim.squad(this.selSq); if (q) { this.closeSheet(); this.cam.focusOn(q.x, q.z); this.openSquad(q.id); } break; }
@@ -230,7 +239,7 @@ export class UI {
       case 'newsq': { const q = sim.formSquad(x, UNITS[x].squad, 2); if (q) { this.pickSquad(q.id); this.nav.army = 'sq.' + q.id; this.toast(`${UNITS[x].ico} Escouade formée : choisis maintenant où l'envoyer`, 'ok'); } break; }
       case 'form': sim.squadForm(this.selSq, x); break;
       case 'stance': sim.squadStance(this.selSq, x); break;
-      case 'gar': { sim.squadGarrison(this.selSq, +x); this.endOrder(); const q = sim.squad(this.selSq); if (q) this.toast(`🛡 ${UNITS[q.type].name} ×${q.n} : garde le secteur ${SECTOR_SHORT[+x]}`, 'info'); break; }
+      case 'gar': { sim.squadGarrison(this.selSq, +x); this.endOrder(); const q = sim.squad(this.selSq); if (q) this.toast(`🛡 ${UNITS[q.type].name} ×${q.n} : rentre garder ${SECTOR_AT[+x]}`, 'info'); break; }
       case 'sqgo': sim.squadGarrison(+x, s); break;
       case 'sortie': { const on = !this.targeting; this.setTargeting(on); if (on) { const q = sim.squad(this.selSq); this.cam.focusOn(q ? q.x : 100, 118); } break; }
       case 'reinf': sim.squadReinforce(this.selSq); break;
@@ -267,9 +276,9 @@ export class UI {
     else if (e.type === 'repelled') this.toast('⚔ L\'escouade a repoussé le soldat transformé', 'info');
     if (e.type === 'priestArrived') { this.toast('⛪ Un prêtre s\'installe à l\'église : il bénira les défenseurs pendant les assauts', 'ok'); }
     if (e.type === 'built') { const d = STRUCT[e.what]; this.toast(e.kind === 'site' ? `${d.ico} ${d.name} terminé !` : e.kind === 'upgrading' ? `⬆ ${d.name} amélioré` : `✥ ${d.name} remis en service`); }
-    else if (e.type === 'breach') { this.toast(`💥 Brèche — ${SECTOR_NAMES[e.s]} ! Envoyez des renforts`, 'danger'); this.flashScreen('danger') }
-    else if (e.type === 'repair') this.toast(`🔧 Muraille réparée — ${SECTOR_NAMES[e.s]}`, 'ok');
-    else if (e.type === 'waveStart') { const t = (sim.targets || []).map(s => SECTOR_SHORT[s]).join(' · '); this.toast(`🌊 Vague ${e.wave} — attaque : ${t || '?'}`, 'warn'); this.flashScreen('warn'); this.buzz(60); }
+    else if (e.type === 'breach') { this.toast(`💥 Brèche près de ${SECTOR_AT[e.s]} ! Envoyez des renforts`, 'danger'); this.flashScreen('danger') }
+    else if (e.type === 'repair') this.toast(`🔧 Muraille réparée près de ${SECTOR_AT[e.s]}`, 'ok');
+    else if (e.type === 'waveStart') { this.invite = false; this.renderOrder(); const t = (sim.targets || []).map(s => SECTOR_AT[s]).join(', '); this.toast(`🌊 Vague ${e.wave} — attaque : ${t || '?'}`, 'warn'); this.flashScreen('warn'); this.buzz(60); }
     else if (e.type === 'discovered') { this.toast(`🧭 Nouveau gisement de ${RES_INFO[e.res].name.toLowerCase()} découvert (${e.amount}) !`); this.cam.focusOn(e.x, e.z); }
     else if (e.type === 'golem') { this.toast(`🗿 Un golem secoue la muraille : ${e.fell} archer${e.fell > 1 ? 's' : ''} tombé${e.fell > 1 ? 's' : ''}${e.dead ? ` (${e.dead} mort${e.dead > 1 ? 's' : ''})` : ''}`, 'danger'); this.buzz(40); }
     else if (e.type === 'oreFound') this.toast(`⛏ Défrichage : un gisement de ${RES_INFO[e.res].name.toLowerCase()} découvert !`, 'ok');
@@ -280,7 +289,8 @@ export class UI {
     else if (e.type === 'autoRepair') this.toast(`🔧 Réparation automatique : ${e.n} villageois empruntés`, 'info');
     else if (e.type === 'autoRepairDone') this.toast(`🔧 Muraille réparée — ${e.n} villageois retournent à leur tâche`, 'ok');
     else if (e.type === 'mage') this.toast(e.what === 'summoned' ? '🔮 Le magicien est arrivé ! Il agit seul : soins, réparations, sorts.' : '💀 Le magicien est tombé — il reviendra dans 30 s', e.what === 'summoned' ? 'ok' : 'danger');
-    else if (e.type === 'waveEnd') { const r = e.reward || {}; this.toast(`🏆 Vague ${e.wave} repoussée · ${Object.keys(r).map(k => `+${r[k]} ${RES_INFO[k].ico}`).join(' ')}`, 'ok'); this.buzz([30, 30, 30]); }
+    else if (e.type === 'autoFormed') this.toast(`⚜ Les troupes disponibles ${e.formed ? `forment ${e.formed} nouvelle${e.formed > 1 ? 's' : ''} escouade${e.formed > 1 ? 's' : ''}` : ''}${e.formed && e.filled ? ' et ' : ''}${e.filled ? `complètent les escouades (+${e.filled})` : ''}`, 'ok');
+    else if (e.type === 'waveEnd') { if (sim.army.squads.length) { this.invite = true; setTimeout(() => this.renderOrder(), 50); } const r = e.reward || {}; this.toast(`🏆 Vague ${e.wave} repoussée · ${Object.keys(r).map(k => `+${r[k]} ${RES_INFO[k].ico}`).join(' ')}`, 'ok'); this.buzz([30, 30, 30]); }
   }
   // ——— mise à jour de l'affichage ———
   refresh(force) {
@@ -298,7 +308,7 @@ export class UI {
       const c = this.badges[s], hp = w.sectorHp(s) / w.sectorMax(s), dg = sim.danger(s), tgt = sim.phase === 'alert' && sim.targets.includes(s);
       if (dg === 2) alert = true;
       c.className = 'badge' + (this.card?.kind === 'sector' && this.card.id === s ? ' sel' : '') + (dg === 2 ? ' d2' : dg === 1 ? ' d1' : '') + (tgt ? ' tgt' : '') + (w.breaches(s) ? ' breach' : '');
-      c.querySelector('.bar i').style.width = (hp * 100) + '%';
+      c.querySelector('.bar i').style.width = (hp * 100) + '%'; c.dataset.show = hp < 0.98 || dg || tgt || w.breaches(s) || (this.card?.kind === 'sector' && this.card.id === s) ? '1' : '';
       c.querySelector('small').textContent = `🏹${army.archers[s].n} ⚔${army.meleeIn(s)}` + (w.breaches(s) ? ` 💥${w.breaches(s)}` : '');
     }
     for (const b of this.dock.children) {
@@ -392,7 +402,7 @@ export class UI {
     const vw = innerWidth, vh = innerHeight;
     for (let s = 0; s < SECTORS; s++) {
       const p = this.rd.project(s * 40 + 20, 8, 143 + wallOff(s * 40 + 20)), b = this.badges[s];
-      b.style.display = p.vis && p.x > 0 && p.x < vw && p.y > 90 && p.y < vh - 90 ? '' : 'none'; b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
+      b.style.display = b.dataset.show && p.vis && p.x > 0 && p.x < vw && p.y > 90 && p.y < vh - 90 ? '' : 'none'; b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
     }
     const c = this.card; if (!c) return;
     let a;
@@ -434,7 +444,7 @@ export class UI {
     if (s.type === 'workshop') h += this.btn('🛠 Armes de siège', '', 'sheet:army:siege', false, 'act sec');
     if (s.type === 'forge') h += this.btn('🔨 Améliorations', '', 'sheet:army:forge', false, 'act sec');
     if (s.type === 'wizard') h += this.mageHtml(true);
-    if (s.type === 'church' && s.level) { const P = this.sim.priest, L = s.level; h += `<div class="rank">⛪ Le prêtre ${P.here ? (P.post ? `prie derrière le secteur <b>${SECTOR_SHORT[P.sector]}</b>` : 'veille sur le village') : 'arrive…'}<small>Pendant l'alerte et l'assaut, il va seul derrière le secteur le plus menacé.</small></div>`
+    if (s.type === 'church' && s.level) { const P = this.sim.priest, L = s.level; h += `<div class="rank">⛪ Le prêtre ${P.here ? (P.post ? `prie derrière <b>${SECTOR_AT[P.sector]}</b>` : 'veille sur le village') : 'arrive…'}<small>Pendant l'alerte et l'assaut, il va seul derrière le secteur le plus menacé.</small></div>`
       + `<div class="spells">${PRIEST.powers.map(w => `<span class="${w.level <= L ? 'on' : 'off'}" title="${w.info}">${w.ico}<b>${w.name}</b><small>${w.level <= L ? w.info : 'église niv. ' + w.level}</small></span>`).join('')}</div>`; }
     if (s.type === 'prison' && s.level) { const I = this.sim.infection, J = I.list.filter(b => b.state === 'jailed'), W = I.list.filter(b => b.state !== 'jailed');
       h += `<div class="rank">🔒 Cellules : <b>${J.length}/${I.cells(this.sim)}</b> · transformation ralentie de ${Math.round(INFECTION.prisonSlow * s.level * 100)} %<small>Les combattants mordus viennent s'y enfermer. Le prêtre vient les guérir ; s'ils se transforment derrière les barreaux, les gardes les abattent.</small></div>`
@@ -459,13 +469,13 @@ export class UI {
     const sim = this.sim, w = sim.wall, army = sim.army, E = sim.eco;
     const hp = w.sectorHp(s), mx = w.sectorMax(s), br = w.breaches(s), uc = w.upgradeCost(s), crew = E.assign.repair, an = army.archers[s].n;
     const squadsHere = army.squads.filter(q => q.mode === 'garrison' && q.sector === s), others = army.squads.filter(q => !(q.mode === 'garrison' && q.sector === s));
-    const sqRow = (q, go) => `<div class="row step"><span class="lab">${UNITS[q.type].ico} ${UNITS[q.type].name} ×${q.n}<small class="sub">${FORMATIONS[q.form].name} · ${q.mode === 'field' ? 'sur le terrain' : SECTOR_SHORT[q.sector]}</small></span>${go ? this.btn('→ ici', '', 'sqgo:' + q.id, false, 'act slim') : ''}</div>`;
+    const sqRow = (q, go) => `<div class="row step"><span class="lab">${UNITS[q.type].ico} ${UNITS[q.type].name} ×${q.n}<small class="sub">${FORMATIONS[q.form].name} · ${q.mode === 'field' ? 'sur le terrain' : SECTOR_NAMES[q.sector]}</small></span>${go ? this.btn('→ ici', '', 'sqgo:' + q.id, false, 'act slim') : ''}</div>`;
     const towers = sim.build.items.filter(t => t.type === 'tower' && t.x >= s * 40 - 10 && t.x <= s * 40 + 50).length;
-    return `<div class="ptitle">${SECTOR_NAMES[s]} <span class="lvl">Niv. ${w.level[s]}</span></div>
+    return `<div class="ptitle">🧱 Muraille · ${SECTOR_NAMES[s]} <span class="lvl">Niv. ${w.level[s]}</span></div>
       <div class="hpline"><div class="bar big"><i style="width:${hp / mx * 100}%"></i></div><span>${Math.round(hp)} / ${Math.round(mx)}${br ? ` · 💥${br}` : ''}</span></div>
       <div class="row">${this.btn('⬆ Renforcer', uc ? `Niv. ${w.level[s] + 1} · ${this.cost(uc)}` : 'niveau max', 'wall', !uc || !E.afford(uc))}</div>
       <div class="hint small">🗼 ${towers} tour${towers > 1 ? 's' : ''} couvrent ce secteur — touche une tour pour l'améliorer.</div>
-      <div class="row step"><span class="lab">🏹 Archers<small class="sub">réserve ${army.reserve.archer} · ${army.autoArchers ? '🤖 placés par l\'IA' : '✋ placement manuel'}</small></span>${this.btn('−', '', 'ua:archer:-1', an <= 0, 'sq')}<b class="val">${an}<small>/${ARCHER_SLOTS}</small></b>${this.btn('+', '', 'ua:archer:1', army.reserve.archer <= 0 || an >= ARCHER_SLOTS, 'sq')}${this.btn('+5', '', 'ua:archer:5', army.reserve.archer <= 0 || an >= ARCHER_SLOTS, 'sq wide')}</div>
+      <div class="row step"><span class="lab">🏹 Archers<small class="sub">réserve ${army.reserve.archer} · ${army.autoArchers ? '⚜ placés seuls' : '📯 placement manuel'}</small></span>${this.btn('−', '', 'ua:archer:-1', an <= 0, 'sq')}<b class="val">${an}<small>/${ARCHER_SLOTS}</small></b>${this.btn('+', '', 'ua:archer:1', army.reserve.archer <= 0 || an >= ARCHER_SLOTS, 'sq')}${this.btn('+5', '', 'ua:archer:5', army.reserve.archer <= 0 || an >= ARCHER_SLOTS, 'sq wide')}</div>
       ${squadsHere.map(q => sqRow(q, false)).join('')}${others.length ? `<div class="hint small">Envoyer ici :</div>${others.map(q => sqRow(q, true)).join('')}` : ''}
       ${sim.siege.weapons.some(x => x.sector === s) ? `<div class="hint small">🛠 Siège : ${sim.siege.weapons.filter(x => x.sector === s).map(x => SIEGE[x.type].ico).join(' ')}</div>` : ''}
       <div class="hint small">🔧 ${crew ? `${crew} villageois réparent la muraille` : 'Aucun réparateur'} (menu 👥).</div>`;
@@ -484,8 +494,21 @@ export class UI {
     this.renderOrder();
   }
   endOrder() { this.order = null; this.setTargeting(false); this.renderOrder(); }
+  // ——— placement des troupes avant la vague (v2.7) : le jeu est en pause ; toucher une escouade, puis l'endroit voulu ———
+  startDeploy() {
+    const sim = this.sim; if (sim.phase === 'assault') { this.toast('⚠ Impossible pendant l\'assaut : attends la fin de la vague', 'warn'); return; }
+    if (!sim.army.squads.length) { this.toast('Aucune escouade à placer : recrute des troupes', 'warn'); return; }
+    this.invite = false; this.deploy = { speed: sim.speed || 1 }; sim.speed = 0; this.depSel = 0; this.closeSheet(); this.closeCard(); this.cam.focusOn(100, 158); this.renderOrder();
+  }
+  endDeploy() { if (!this.deploy) return; this.sim.speed = this.deploy.speed; this.deploy = null; this.depSel = 0; this.rd.setSquad(0); const b = $('#b-speed'); if (b) b.textContent = '×' + this.sim.speed; this.renderOrder(); this.toast('▶ Troupes en place', 'ok'); }
   renderOrder() {
     if (!this.orderEl) { this.orderEl = el('div', 'orderbar'); document.body.appendChild(this.orderEl); this.orderEl.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { this.act(b.dataset.a); this.refresh(true); } }); }
+    if (this.deploy) {
+      const q = this.depSel && this.sim.squad(this.depSel);
+      this.orderEl.innerHTML = `<span>🎯 <b>Placement des troupes</b> (jeu en pause) · ${q ? `${UNITS[q.type].ico} ${UNITS[q.type].name} ×${q.n} : touche <b>où la placer</b> (cour ou devant la muraille)` : 'touche une <b>escouade</b>, puis l\'endroit voulu'}</span><button class="ok" data-a="deployend">✔ Terminé</button>`;
+      this.orderEl.classList.add('on'); return;
+    }
+    if (this.invite && this.sim.phase !== 'assault') { this.orderEl.innerHTML = `<span>🏆 Vague repoussée · place tes troupes avant la prochaine</span><button class="ok" data-a="deploy">🎯 Placer</button><button class="x" data-a="invitex">✕</button>`; this.orderEl.classList.add('on'); return; }
     const o = this.order, q = o && this.sim.squad(o.id); if (!q) { this.orderEl.classList.remove('on'); return; }
     const U = UNITS[q.type], txt = o.kind === 'sortie' ? '⚔ Touche le <b>champ de bataille</b> (devant la muraille) pour y envoyer' : '📍 Touche la carte : <b>derrière</b> la muraille = nouveau poste, <b>devant</b> = combat';
     this.orderEl.innerHTML = `<span>${txt} ${U.ico} ${U.name} ×${q.n}</span><button class="x" data-a="ordercancel">✕</button>`; this.orderEl.classList.add('on');
@@ -561,12 +584,12 @@ export class UI {
     const army = this.sim.army; let h = '';
     if (!army.squads.length) h += '<div class="hint">Aucune escouade. Recrute des soldats (🪖 Recruter), puis forme une escouade avec ta réserve.</div>';
     h += '<div class="blist">' + army.squads.map(q => {
-      const U = UNITS[q.type], st = q.mode === 'field' ? (q.fight > 0 ? '⚔ au combat' : q.way.length ? '🚶 en route vers le front' : '⚔ sur le champ de bataille') : (q.way.length ? '🚶 en route' : `🛡 garde ${SECTOR_NAMES[q.sector] || SECTOR_SHORT[q.sector]}`), r = army.hpRatio(q);
-      return `<button class="brow sqrow${r < 0.4 ? ' hurt' : ''}" data-a="nav:army:sq.${q.id}"><span class="ci">${U.ico}</span><div class="bt"><b>${U.name} ×${q.n}</b> <span class="lvl">${st}</span> <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '🤖 IA' : '✋ ordres'}</span><div class="bar"><i style="width:${Math.round(r * 100)}%"></i></div></div><span class="go">›</span></button>`;
+      const U = UNITS[q.type], st = q.mode === 'field' ? (q.fight > 0 ? '⚔ au combat' : q.way.length ? '🚶 en route vers le front' : '⚔ sur le champ de bataille') : (q.way.length ? '🚶 en route' : q.custom ? '🛡 à son poste' : `🛡 garde ${SECTOR_AT[q.sector]}`), r = army.hpRatio(q);
+      return `<button class="brow sqrow${r < 0.4 ? ' hurt' : ''}" data-a="nav:army:sq.${q.id}"><span class="ci">${U.ico}</span><div class="bt"><b>${U.name} ×${q.n}</b> <span class="lvl">${st}</span> <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '⚜ autonome' : '📯 tes ordres'}</span><div class="bar"><i style="width:${Math.round(r * 100)}%"></i></div></div><span class="go">›</span></button>`;
     }).join('') + '</div>';
-    h += `<div class="row">${this.btn('➕ Nouvelle escouade', 'depuis la réserve', 'nav:army:newsq', army.squads.length >= SQUAD.maxSquads, 'act')}</div>`;
-    h += `<div class="hint small">🤖 Sans ordre de ta part, chaque escouade se débrouille : elle garde le secteur le plus menacé, court colmater les brèches, et les cavaliers, chevaliers et lourds en forme font de courtes sorties. Dès que tu donnes un ordre, elle t'obéit (✋).</div>`;
-    h += `<div class="row">${this.btn(`${army.autoArchers ? '✅' : '⬜'} 🏹 Archers placés par l'IA`, army.autoArchers ? 'ils montent seuls et vont où ça presse' : 'placement manuel (touche un secteur)', 'autoarch', false, 'act' + (army.autoArchers ? '' : ' sec'))}</div>` + this.rallyLine();
+    h += `<div class="row">${this.btn('🎯 Placer les troupes', this.sim.phase === 'assault' ? 'après la vague' : 'jeu en pause, place chaque escouade', 'deploy', this.sim.phase === 'assault' || !army.squads.length, 'act')}${this.btn('➕ Nouvelle escouade', 'depuis la réserve', 'nav:army:newsq', army.squads.length >= SQUAD.maxSquads, 'act sec')}</div>`;
+    h += `<div class="hint small">⚜ Sans ordre de ta part, chaque escouade est <b>autonome</b> : elle garde le secteur le plus menacé, court colmater les brèches, et les cavaliers, chevaliers et lourds en forme font de courtes sorties. Dès que tu donnes un ordre, elle t'obéit (📯). Après chaque vague, les troupes disponibles forment d'elles-mêmes de nouvelles escouades.</div>`;
+    h += `<div class="row">${this.btn(`${army.autoArchers ? '✅' : '⬜'} 🏹 Archers autonomes`, army.autoArchers ? 'ils montent seuls et vont où ça presse' : 'placement manuel (touche un secteur)', 'autoarch', false, 'act' + (army.autoArchers ? '' : ' sec'))}</div>` + this.rallyLine();
     return h;
   }
   newSquadHtml() {
@@ -581,11 +604,10 @@ export class UI {
     const army = this.sim.army, U = UNITS[q.type], mx = army.maxN(q.type), rk = army.rank(this.sim, q.type), F = FORMATIONS[q.form], field = q.mode === 'field';
     let h = `<div class="ptitle">${U.ico} ${U.name} ×${q.n}<span class="lvl">⭐ ${rk.name}</span></div>
       <div class="hpline"><div class="bar big"><i style="width:${Math.min(100, army.hpRatio(q) * 100)}%"></i></div><span>${Math.round(q.hp)} PV · ${q.n}/${mx}</span></div>
-      <div class="hint small">${field ? '⚔ Sur le champ de bataille' : `🛡 Garde ${SECTOR_NAMES[q.sector] || SECTOR_SHORT[q.sector]}`}${q.way.length ? ' · en marche' : ''}</div>`;
-    h += q.auto ? '<div class="aibox">🤖 <b>L\'IA la commande</b> : elle choisit seule son poste, ses sorties, sa formation. Donne un ordre ci-dessous pour reprendre la main.</div>'
-      : `<div class="aibox man">✋ <b>Elle suit tes ordres.</b> ${this.btn('🤖 Rendre la main à l\'IA', 'elle se débrouillera seule', 'sqauto', false, 'act slim')}</div>`;
+      <div class="hint small">${field ? '⚔ Sur le champ de bataille' : q.custom ? '🛡 À son poste' : `🛡 Garde ${SECTOR_AT[q.sector]}`}${q.way.length ? ' · en marche' : ''}</div>`;
+    h += q.auto ? '<div class="aibox">⚜ <b>Autonome</b> : elle choisit seule son poste, ses sorties, sa formation. Donne un ordre ci-dessous pour reprendre la main.</div>'
+      : `<div class="aibox man">📯 <b>Elle suit tes ordres.</b> ${this.btn('⚜ La rendre autonome', 'elle se débrouillera seule', 'sqauto', false, 'act slim')}</div>`;
     h += `<div class="tgrp">1 · Où l'envoyer ?</div><div class="bigacts">${this.bigAct('⚔', 'Combattre dehors', 'puis touche le champ de bataille', 'sqgo:sortie', false)}${field ? this.bigAct('↩', 'Rentrer', 'retour derrière la muraille', 'gar:' + q.sector) : ''}${this.bigAct('📍', 'Placer à la main', 'puis touche la carte', 'sqgo:move')}</div>`;
-    h += `<div class="hint small">ou <b>garder un secteur</b> de la muraille :</div><div class="wallpick">${SECTOR_SHORT.map((x, i) => `<button class="${!field && q.sector === i && !q.custom ? 'on' : ''}" data-a="gar:${i}"><b>${x}</b><small>${(SECTOR_NAMES[i] || '').replace(/^Secteur /, '')}</small></button>`).join('')}</div>`;
     h += `<div class="tgrp">2 · Comment combattre ?</div><div class="fgrid">${Object.keys(FORMATIONS).map(f => `<button class="fbtn ${q.form === f ? 'on' : ''}" data-a="form:${f}"><b>${FORMATIONS[f].ico}</b>${FORMATIONS[f].name}</button>`).join('')}</div><div class="hint small">${F.info}</div>
       <div class="row">${this.btn('🛡 Tenir la position', 'défend sa place', 'stance:hold', false, 'act slim' + (q.stance === 'charge' ? ' sec' : ''))}${this.btn('🔥 Charger', 'fonce sur les zombies', 'stance:charge', false, 'act slim' + (q.stance === 'charge' ? '' : ' sec'))}</div>`;
     h += `<div class="tgrp">3 · Effectif</div><div class="row">${this.btn('➕ Compléter', `réserve ${army.reserve[q.type]}`, 'reinf', q.n >= mx || army.reserve[q.type] <= 0, 'act slim')}${this.btn('↩ Dissoudre', 'retour en réserve', 'disb', false, 'act slim sec')}${this.btn('👁 Voir', 'sur la carte', 'sqsee', false, 'act slim sec')}</div>`;
@@ -594,8 +616,8 @@ export class UI {
   // bulle d'escouade (ancrée sur la carte) : ordres directs
   squadCard(q) {
     const army = this.sim.army, U = UNITS[q.type], mx = army.maxN(q.type), field = q.mode === 'field';
-    const where = field ? '⚔ Sur le champ de bataille' : q.custom ? '🛡 Poste libre ' + SECTOR_SHORT[q.sector] : '🛡 Garde ' + SECTOR_SHORT[q.sector];
-    return `<div class="ptitle">${U.ico} ${U.name} ×${q.n} <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '🤖' : '✋'}</span><span class="lvl">${where}${q.way.length ? ' · en marche' : ''}</span></div>
+    const where = field ? '⚔ Sur le champ' : q.custom ? '🛡 À son poste' : '🛡 Garde ' + SECTOR_AT[q.sector];
+    return `<div class="ptitle">${U.ico} ${U.name} ×${q.n} <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '⚜' : '📯'}</span><span class="lvl">${where}${q.way.length ? ' · en marche' : ''}</span></div>
       <div class="hpline"><div class="bar big"><i style="width:${Math.min(100, army.hpRatio(q) * 100)}%"></i></div><span>${q.n}/${mx}</span></div>
       <div class="bigacts">${this.bigAct('⚔', 'Combattre', 'touche ensuite le champ', 'sqgo:sortie')}${field ? this.bigAct('↩', 'Rentrer', 'à son poste', 'gar:' + q.sector) : this.bigAct('📍', 'Déplacer', 'touche ensuite la carte', 'sqgo:move')}${this.bigAct('⚙', 'Ordres', 'secteur, formation…', 'sqorders')}</div>`;
   }
@@ -648,14 +670,14 @@ export class UI {
     const sim = this.sim, S = sim.siege, E = sim.eco, lv = E.level.workshop, B = BUILDINGS.workshop;
     const nb = this.needBuild('workshop'); if (nb) return nb;
     let h = `<div class="card"><div class="ct"><b>${B.ico} ${B.name}</b> <span class="lvl">Niv. ${lv} · armes ${S.deployed()}/${S.cap(sim)}</span><small>${B.info}</small></div></div>`;
-    h += `<div class="prio"><span>Secteur :</span>${SECTOR_SHORT.map((x, i) => `<button class="chipb ${this.siegeSec === i ? 'on' : ''}" data-a="sseg:${i}">${x} <small>${S.inSector(i)}/${SIEGE_RULES.slotsPerSector}</small></button>`).join('')}</div>`;
+    h += `<div class="prio"><span>Emplacement :</span>${SECTOR_NAMES.map((x, i) => `<button class="chipb ${this.siegeSec === i ? 'on' : ''}" data-a="sseg:${i}">${x} <small>${S.inSector(i)}/${SIEGE_RULES.slotsPerSector}</small></button>`).join('')}</div>`;
     for (const t of SIEGE_ORDER) {
       const D = SIEGE[t], locked = lv < D.level, off = locked || !S.canBuild(sim, t, this.siegeSec) || !E.afford(D.cost);
-      h += `<div class="card"><div class="ct"><b>${D.ico} ${D.name}</b><small>${locked ? `Atelier niv. ${D.level} requis` : D.info}</small><small>${this.cost(D.cost)} · ${D.time}s · 👥${D.crew} · tir : ${this.cost(D.ammo)}</small></div>${this.btn('Poser', SECTOR_SHORT[this.siegeSec], 'sbuild:' + t, off, 'act slim')}</div>`;
+      h += `<div class="card"><div class="ct"><b>${D.ico} ${D.name}</b><small>${locked ? `Atelier niv. ${D.level} requis` : D.info}</small><small>${this.cost(D.cost)} · ${D.time}s · 👥${D.crew} · tir : ${this.cost(D.ammo)}</small></div>${this.btn('Poser', SECTOR_NAMES[this.siegeSec], 'sbuild:' + t, off, 'act slim')}</div>`;
     }
     if (S.queue.length) h += `<div class="queue">${S.queue.map((it, i) => `<span class="qi">${SIEGE[it.type].ico}${i === 0 ? `<i style="width:${100 * (1 - it.t / it.full)}%"></i>` : ''}</span>`).join('')}<button class="chipb" data-a="scancel">↩ annuler</button></div>`;
     if (S.weapons.some(w => w.noAmmo)) h += '<div class="warn">⚠ Munitions épuisées (pierre / fer) : une arme ne tire plus.</div>';
-    for (const w of S.weapons) h += `<div class="row step"><span class="lab">${SIEGE[w.type].ico} ${SIEGE[w.type].name}<small class="sub">${SECTOR_SHORT[w.sector]}${w.noAmmo ? ' · sans munitions' : ''}</small></span>${this.btn('Démonter', '+ ½ ressources', 'sdis:' + w.id, false, 'act slim sec')}</div>`;
+    for (const w of S.weapons) h += `<div class="row step"><span class="lab">${SIEGE[w.type].ico} ${SIEGE[w.type].name}<small class="sub">${SECTOR_NAMES[w.sector]}${w.noAmmo ? ' · sans munitions' : ''}</small></span>${this.btn('Démonter', '+ ½ ressources', 'sdis:' + w.id, false, 'act slim sec')}</div>`;
     return h;
   }
   // 🔨 Forge : attaque et défense de CHAQUE type d'unité, indépendantes du rang donné par son bâtiment
@@ -718,7 +740,7 @@ export class UI {
     if (part !== 'repair') return h;
     const dmg = this.damagedSegs(), n = E.assign.repair;
     h += `<div class="row step task"><span class="lab">🔧 Réparation muraille<small class="sub">${dmg ? dmg + ' tronçon(s) à réparer' : 'muraille intacte'} · pierre${sim.autoRepair ? ' · auto ✅' : ''}</small></span>${this.btn('−', '', 'as:repair:-1', n <= 0, 'sq')}<b class="val">${n}</b>${this.btn('+', idle <= 0 && E.donorFor('repair') ? '↺' : '', 'as:repair:1', (idle <= 0 && !E.donorFor('repair')) || n >= TASKS.repair.slots, 'sq')}</div>`;
-    h += `<div class="prio"><span>Priorité :</span>${[['-1', 'Auto'], ...SECTOR_SHORT.map((x, i) => [String(i), x])].map(([v, l]) => `<button class="chipb ${E.repairPriority === +v ? 'on' : ''}" data-a="prio:${v}">${l}</button>`).join('')}</div>`;
+    h += `<div class="prio"><span>Priorité :</span>${[['-1', 'La plus abîmée'], ...SECTOR_NAMES.map((x, i) => [String(i), x])].map(([v, l]) => `<button class="chipb ${E.repairPriority === +v ? 'on' : ''}" data-a="prio:${v}">${l}</button>`).join('')}</div>`;
     return h;
   }
   damagedSegs() { const w = this.sim.wall; let n = 0; for (let i = 0; i < 40; i++) if (w.hp[i] < w.segMax(i) - 0.5) n++; return n; }

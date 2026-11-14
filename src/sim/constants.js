@@ -10,7 +10,9 @@ export const wallOff = x => { const u = (Math.min(200, Math.max(0, x)) - 100) / 
 export const wallSlope = x => { const u = (Math.min(200, Math.max(0, x)) - 100) / 100; return 2 * WALL_BOW * u / 100; };   // dz/dx de l'arc
 export const SECTORS = 5, SECTOR_W = W / SECTORS;                // 5 secteurs de 40 m
 export const SEG_W = 5, SEGS = W / SEG_W, SEGS_PER_SECTOR = SECTOR_W / SEG_W; // 40 tronçons, 8 par secteur
-export const SECTOR_NAMES = ['Aile gauche', 'Centre gauche', 'Centre', 'Centre droit', 'Aile droite'];
+// (v2.7) plus de codes AG/CG/C… : on parle des REPÈRES de la muraille (les trois portes et les deux pans de mur entre elles)
+export const SECTOR_NAMES = ['Porte gauche', 'Mur gauche', 'Grande porte', 'Mur droit', 'Porte droite'];
+export const SECTOR_AT = ['la porte gauche', 'le mur gauche', 'la grande porte', 'le mur droit', 'la porte droite'];
 export const SECTOR_SHORT = ['AG', 'CG', 'C', 'CD', 'AD'];
 export const CASTLE = { x: 100, z: 298, r: 15, hp: 6000 };
 export const TICK = 1 / 20;                                      // simulation à 20 Hz

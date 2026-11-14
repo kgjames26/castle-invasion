@@ -133,6 +133,22 @@ export class Army {
     this.squads.push(q); this.layoutPosts(); return q;
   }
   reinforce(q) { const k = Math.min(this.maxN(q.type) - q.n, this.reserve[q.type]); if (k <= 0) return 0; this.reserve[q.type] -= k; q.n += k; q.hp += k * this.unitHp(q.type); return k; }
+  // placement avant la vague : l'escouade est posée directement à l'endroit touché (cour = poste ; devant la muraille = sur le champ)
+  place(q, x, z) {
+    x = Math.min(196, Math.max(4, x)); q.way = []; q.auto = false;
+    if (z < WALL_Z0 + wallOff(x) - 1) { q.mode = 'field'; q.tx = x; q.tz = Math.min(SQUAD.sortieZ[1], Math.max(SQUAD.sortieZ[0], z)); q.x = q.px = q.tx; q.z = q.pz = q.tz; this.layoutPosts(); return; }
+    z = Math.min(MOVE_Z1, Math.max(MOVE_Z0, z)); q.mode = 'garrison'; q.sector = sectorOfX(x); q.custom = { x, z }; this.layoutPosts(); q.x = q.px = x; q.z = q.pz = z;
+  }
+  // après chaque vague : les troupes en réserve complètent les escouades autonomes, puis forment de nouvelles escouades
+  autoForm(sim) {
+    let formed = 0, filled = 0;
+    for (const t of ['knight', 'heavy', 'cavalry', 'soldier']) {
+      for (const q of this.squads) if (q.type === t && q.auto && this.reserve[t] > 0) filled += this.reinforce(q);
+      const min = Math.max(3, Math.ceil(UNITS[t].squad / 2));
+      while (this.reserve[t] >= min && this.squads.length < SQUAD.maxSquads) { const s = [2, 1, 3, 0, 4][this.squads.length % 5]; if (!this.formSquad(t, UNITS[t].squad, s)) break; formed++; }
+    }
+    return { formed, filled };
+  }
   disband(q) { this.reserve[q.type] += q.n; this.squads.splice(this.squads.indexOf(q), 1); this.layoutPosts(); }
   setForm(q, f) { if (FORMATIONS[f]) q.form = f; }
   setStance(q, st) { q.stance = st; }
