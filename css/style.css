@@ -105,3 +105,6 @@ h2,h3,.ptitle,.wave b,.tile b,.dk span { font-family:var(--serif); }
 #splash.off { opacity:0; pointer-events:none; }
 #splash h1 { margin:0 0 8px; font-size:34px; letter-spacing:1px; } #splash .sp-v { margin:0; font-size:18px; opacity:.85; }
 .vtag { position:absolute; left:10px; bottom:calc(env(safe-area-inset-bottom) + 4px); z-index:3; font-size:11px; opacity:.55; color:#fff; text-shadow:0 1px 2px #000; pointer-events:none; }
+.vols { display:flex; flex-direction:column; gap:6px; padding:6px 12px; }
+.vrow { display:grid; grid-template-columns: 80px 1fr; align-items:center; gap:8px; font-size:14px; color:var(--ink); }
+.vrow input { width:100%; accent-color:#8b5a2b; }

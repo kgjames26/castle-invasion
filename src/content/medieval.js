@@ -11,10 +11,10 @@ export const ZOMBIES = [
 ];
 // Unités : `pop` = places occupées dans la population PARTAGÉE (villageois + militaires), plafonnée par les maisons.
 export const UNITS = {
-  archer:  { name: 'Archer',   ico: '🏹', hp: 60,  dmg: 14, rate: 1.2, range: 34, pop: 1, cost: { gold: 25, wood: 15 },           train: 7,  from: 'range',    color: 0x2fae6a, size: 1 },
-  soldier: { name: 'Fantassin', ico: '⚔', hp: 140, dmg: 11, rate: 0.8, reach: 1.7, speed: 3.6, pop: 1, cost: { gold: 30, iron: 15 },           train: 8,  from: 'barracks', color: 0x3d7bd6, size: 1,   squad: 10, form: 'line' },
-  heavy:   { name: 'Lourd',    ico: '🛡', hp: 380, dmg: 22, rate: 1.1, reach: 2.0, speed: 2.6, pop: 2, cost: { gold: 60, iron: 50 },           train: 16, from: 'barracks', color: 0x7d8cab, size: 1.3, squad: 8,  form: 'phalanx', minLevel: 2 },
-  cavalry: { name: 'Cavalier', ico: '🐎', hp: 200, dmg: 18, rate: 0.9, reach: 2.2, speed: 6.5, pop: 2, cost: { gold: 50, food: 30, iron: 10 }, train: 14, from: 'stable',   color: 0xa855c9, size: 1.3, squad: 8,  form: 'wedge', charge: 0.8 },
+  archer:  { name: 'Archer',   ico: '🏹', hp: 60,  dmg: 14, rate: 1.2, range: 34, pop: 1, cost: { gold: 14, wood: 15 },           train: 7,  from: 'range',    color: 0x2fae6a, size: 1 },
+  soldier: { name: 'Fantassin', ico: '⚔', hp: 140, dmg: 11, rate: 0.8, reach: 1.7, speed: 3.6, pop: 1, cost: { gold: 16, iron: 15 },           train: 8,  from: 'barracks', color: 0x3d7bd6, size: 1,   squad: 10, form: 'line' },
+  heavy:   { name: 'Lourd',    ico: '🛡', hp: 380, dmg: 22, rate: 1.1, reach: 2.0, speed: 2.6, pop: 2, cost: { gold: 33, iron: 50 },           train: 16, from: 'barracks', color: 0x7d8cab, size: 1.3, squad: 8,  form: 'phalanx', minLevel: 2 },
+  cavalry: { name: 'Cavalier', ico: '🐎', hp: 200, dmg: 18, rate: 0.9, reach: 2.2, speed: 6.5, pop: 2, cost: { gold: 28, food: 30, iron: 10 }, train: 14, from: 'stable',   color: 0xa855c9, size: 1.3, squad: 8,  form: 'wedge', charge: 0.8 },
 };
 export const UNIT_ORDER = ['soldier', 'heavy', 'cavalry', 'archer'];
 // Formations d'escouade : effets mesurables (engage = part des membres qui combattent, contact = attaquants max par membre,
@@ -137,13 +137,13 @@ export const TIMING = { firstPrep: 60, prep: 30, alert: 10, calm: 15 };
 export const giantsFor = (v, r) => v >= 4 && r < 0.55 ? 1 + ((v - 4) / 6 | 0) : 0;
 export const PACK = { base: 5, perWave: 1.6, jitter: 6, spread: 0.9 };
 export function waveSpec(v) {
-  const n = Math.round(30 * Math.pow(1.18, v - 1));
+  const n = Math.round(30 * Math.pow(1.18, Math.min(v, 6) - 1) * Math.pow(1.1, Math.max(0, v - 6)));
   const frac = [0, 0, 0, 0, 0];
-  frac[1] = v >= 2 ? Math.min(0.35, 0.05 * (v - 1)) : 0;
-  frac[2] = v >= 3 ? Math.min(0.25, 0.04 * (v - 2)) : 0;
-  frac[4] = v >= 4 ? Math.min(0.15, 0.03 * (v - 3)) : 0;
-  frac[3] = v >= 5 ? Math.min(0.10, 0.02 * (v - 4)) : 0;
+  frac[1] = v >= 2 ? Math.min(0.25, 0.05 * (v - 1)) : 0;
+  frac[2] = v >= 3 ? Math.min(0.15, 0.04 * (v - 2)) : 0;
+  frac[4] = v >= 4 ? Math.min(0.08, 0.03 * (v - 3)) : 0;
+  frac[3] = v >= 5 ? Math.min(0.05, 0.02 * (v - 4)) : 0;
   frac[0] = 1 - frac[1] - frac[2] - frac[3] - frac[4];
   const sectors = 1 + Math.min(4, Math.floor(v / 3));
-  return { n, frac, sectors, duration: Math.min(45, 15 + n / 20), reward: { gold: 25 + 6 * v, stone: 20 + 4 * v, iron: 10 + 2 * v } };
+  return { n, frac, sectors, duration: Math.min(60, 20 + n / 14), reward: { gold: 30 + 10 * v, stone: 20 + 5 * v, iron: 10 + 3 * v } };
 }

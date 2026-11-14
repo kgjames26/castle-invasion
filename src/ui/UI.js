@@ -21,6 +21,8 @@ export class UI {
     this.sel = -1; this.acc = 0; this.sheet = null; this.asub = 'squads'; this.siegeSec = 2; this.selSq = 0; this.targeting = false; this.pressing = false;
     this.mode = 'idle'; this.place = null; this.card = null; this.html = { sheet: '', card: '', place: '' };
     this.top = $('#top'); this.dock = $('#dock'); this.sheetEl = $('#sheet'); this.cardEl = $('#card'); this.placeEl = $('#placebar'); this.badgesEl = $('#badges'); this.toasts = $('#toasts');
+    // curseurs de volume (menu Paramètres) : lecture directe, sans toucher au reste de l'interface
+    this.sheetEl.addEventListener('input', e => { const k = e.target.dataset?.vol; if (k && hooks.audio) hooks.audio.setVolume(k, +e.target.value / 100); });
     this.top.innerHTML = `
       <div class="rline">${RES.map(r => `<span class="rchip" id="r-${r}"><i>${RES_INFO[r].ico}</i><b>0</b></span>`).join('')}<span class="rchip pop" id="r-pop"><i>👥</i><b>0</b></span></div>
       <div class="wline"><div class="wave"><div class="wt"><b id="wave-title">Vague 1</b><span id="wave-phase" class="phase"></span></div><div class="cbar"><span>🏰 Château</span><div class="bar"><i id="castle-bar"></i></div></div></div>
@@ -48,7 +50,7 @@ export class UI {
   }
   // ——— feuille ———
   toggleSheet(n) { if (this.sheet === n) this.closeSheet(); else this.openSheet(n); }
-  openSheet(n, sub) { if (this.mode !== 'idle') this.cancelPlace(); this.closeCard(); this.sheet = n; if (sub) this.asub = sub; this.sheetEl.classList.add('on'); this.html.sheet = ''; this.refresh(true); }
+  openSheet(n, sub) { if (n === 'menu') this.volSnap = this.hooks.audio ? { ...this.hooks.audio.vol } : {}; if (this.mode !== 'idle') this.cancelPlace(); this.closeCard(); this.sheet = n; if (sub) this.asub = sub; this.sheetEl.classList.add('on'); this.html.sheet = ''; this.refresh(true); }
   closeSheet() { this.sheet = null; this.rallying = false; this.sheetEl.classList.remove('on'); this.setTargeting(false); this.refresh(true); }
   setTargeting(on) { this.targeting = on; this.rd.setTargeting(on); }
   pickSquad(id) { this.selSq = id; this.rd.setSquad(id); this.refresh(true); }
@@ -213,7 +215,10 @@ export class UI {
     const old = $('.sb', this.sheetEl), keep = old ? old.scrollTop : 0; this.html.sheet = html; this.sheetEl.innerHTML = html; const nb = $('.sb', this.sheetEl); if (nb) nb.scrollTop = keep;
   }
   menuHtml() {
-    return `<div class="hint">Castle Invasion · <b>v${VERSION}</b></div><div class="row">${this.btn('🔄 Nouvelle partie', 'la partie en cours sera perdue', 'newgame', false, 'act warnb')}</div>`;
+    // curseurs de volume : valeurs figées à l'ouverture du menu (pas de re-rendu pendant le glissement)
+    const v = this.volSnap || {}, sl = (k, l) => `<label class="vrow"><span>${l}</span><input type="range" min="0" max="100" step="5" value="${Math.round((v[k] ?? 0) * 100)}" data-vol="${k}"></label>`;
+    const audio = this.hooks.audio ? `<div class="vols"><div class="hint small"><b>Son</b></div>${sl('master', 'Général')}${sl('sfx', 'Effets')}${sl('music', 'Musique')}</div>` : '';
+    return `<div class="hint">Castle Invasion · <b>v${VERSION}</b></div>${audio}<div class="row">${this.btn('🔄 Nouvelle partie', 'la partie en cours sera perdue', 'newgame', false, 'act warnb')}</div>`;
   }
   renderCard() {
     const c = this.card; if (!c) return;

@@ -1,3 +1,4 @@
+import { AudioManager } from './audio/Audio.js';
 import { Simulation } from './sim/simulation.js';
 import { TICK } from './sim/constants.js';
 import { save, load, clearSave } from './sim/save.js';
@@ -22,8 +23,10 @@ loadKit().then(k => rd.useKit(k)).catch(e => console.warn('Décor du kit indispo
 loadWall('assets/wall/dungeon_wall.glb').then(w => rd.useWall(w)).catch(e => console.warn('Muraille GLB indisponible, muraille provisoire conservée', e));
 let ui;
 const cam = new CameraController(rd.camera, rd.renderer.domElement, (x, z) => ui.onMapTap(x, z));
+const audio = new AudioManager();   // sons synthétisés (Web Audio) : lit l'état, ne le modifie pas
+addEventListener('pointerdown', () => audio.unlock()); addEventListener('keydown', () => audio.unlock());
 const hooks = {
-  rd, cam,
+  rd, cam, audio,
   newGame: () => { clearSave(); sim.newGame(); ui.sel = -1; ui.cancelPlace(); ui.closeCard(); ui.closeSheet(); ui.showOver(false); ui.refresh(true); save(sim); },
 };
 ui = new UI(sim, hooks);
@@ -41,13 +44,14 @@ function frame(now) {
     let steps = 0;
     while (acc >= TICK && steps < 8) { sim.tick(); acc -= TICK; steps++; autosave += TICK; }
     if (steps === 8) acc = 0;
-    for (const e of sim.events.splice(0)) { ui.onEvent(e); if (e.type === 'waveEnd' || e.type === 'built') save(sim); if (e.type === 'gameOver') clearSave(); }
+    for (const e of sim.events.splice(0)) { ui.onEvent(e); audio.onEvent(e); if (e.type === 'waveEnd' || e.type === 'built') save(sim); if (e.type === 'gameOver') clearSave(); }
     if (autosave > 30) { autosave = 0; if (!sim.over) save(sim); }
     if (sim.over !== wasOver) { wasOver = sim.over; ui.showOver(sim.over); }
     cam.update(dt); ui.tick(dt);
+    audio.frame(sim, dt);
     rd.render(sim.speed ? acc / TICK : 1, dt);
   }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-window.__castle = { sim, cam, rd, ui, resumed };   // pour le débogage et les tests
+window.__castle = { sim, cam, rd, ui, resumed, audio };   // pour le débogage et les tests
