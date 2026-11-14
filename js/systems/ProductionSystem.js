@@ -1,4 +1,4 @@
-import { UNITS, SIEGE, BUILDINGS, TECHS, RECIPES, RESOURCES, HARVEST, buildingCost, buildingTime, MAP } from '../data/Config.js';
+import { UNITS, SIEGE, BUILDINGS, TECHS, RECIPES, RESOURCES, HARVEST, JOBS, JOB_SLOTS, FOOD_UPKEEP, buildingCost, buildingTime, MAP } from '../data/Config.js';
 import { Worker } from '../entities/Worker.js';
 
 // Ville souterraine : bâtiments, files de production, recherche, forge, marché
@@ -11,8 +11,30 @@ export class ProductionSystem {
     this.techs = new Set();
     this.research = null;
     this.reserve = [];
-    this.workers = 0;
+    this.workers = 0;                       // villageois
+    this.jobs = Object.fromEntries(Object.keys(JOBS).map(k => [k, 0]));   // villageois affectés par bâtiment
+    this.starving = false;
   }
+
+  // ---------- villageois et métiers ----------
+  slots(id) { return JOB_SLOTS * this.level(id); }
+  assigned() { return Object.values(this.jobs).reduce((a, b) => a + b, 0); }
+  idle() { return Math.max(0, this.workers - this.assigned()); }
+  jobCount(id) { return Math.min(this.jobs[id] || 0, this.slots(id)); }
+  jobRate(id) {
+    const d = JOBS[id], lv = this.level(id);
+    let r = d.rate * (1 + 0.12 * (lv - 1));
+    if (id === 'farm') r *= 1 + 0.25 * this.level('mill');
+    return r;
+  }
+  assign(id, delta) {
+    if (!JOBS[id] || !this.level(id)) return;
+    const n = Math.max(0, Math.min(this.slots(id), (this.jobs[id] || 0) + delta));
+    if (delta > 0 && (n === this.jobs[id] || this.idle() <= 0)) { if (this.idle() <= 0) this.game.ui.toast('Aucun villageois disponible : forme-en aux Maisons', 'warn'); return; }
+    this.jobs[id] = n;
+  }
+  // production par seconde d'un bâtiment, ou de nourriture consommée
+  foodUse() { return FOOD_UPKEEP.civil * this.civPop() + FOOD_UPKEEP.army * this.armyPop(); }
 
   level(id) { return this.buildings[id]?.level || 0; }
   hasTech(id) { return this.techs.has(id); }
@@ -46,8 +68,9 @@ export class ProductionSystem {
   canTrain(id) {
     const d = UNITS[id];
     if (this.unitLock(id)) return this.unitLock(id);
-    if (this.isCivil(id)) { if (this.civPop() + d.pop > this.popCap()) return 'Population maximale (améliore les Quartiers)'; }
+    if (this.isCivil(id)) { if (this.civPop() + d.pop > this.popCap()) return 'Population maximale (améliore les Maisons)'; }
     else if (this.armyPop() + d.pop > this.armyCap()) return 'Logement militaire plein (Caserne, Champ de tir, Écurie, Dépôt)';
+    if (this.starving && !this.isCivil(id)) return 'Famine : plus de nourriture';
     if (this.queues[d.building].length >= 6) return 'File pleine';
     if (!this.game.resources.canAfford(d.cost)) return 'Manque ' + this.game.resources.missing(d.cost);
     return null;
@@ -94,7 +117,7 @@ export class ProductionSystem {
     const b = this.buildings[id], info = this.upgradeInfo(id);
     if (info.max) return 'Niveau maximum';
     if (b.upgrade) return 'Amélioration en cours';
-    if (id !== 'quarters' && info.next > this.level('quarters') + 1) return `Quartiers niveau ${info.next - 1} requis`;
+    if (id !== 'quarters' && info.next > this.level('quarters') + 1) return `Maisons niveau ${info.next - 1} requises`;
     if (!this.game.resources.canAfford(info.cost)) return 'Manque ' + this.game.resources.missing(info.cost);
     return null;
   }
@@ -176,6 +199,21 @@ export class ProductionSystem {
   // ---------- mise à jour ----------
   update(dt) {
     const sp = this.speedMul();
+    // production des bâtiments du village (les villageois ne travaillent que si le bâtiment existe)
+    const R = this.game.resources;
+    for (const id of Object.keys(JOBS)) {
+      const n = this.jobCount(id);
+      if (n > 0) R.add(JOBS[id].res, this.jobRate(id) * n * dt);
+    }
+    // nourriture : tout le monde mange ; la famine affaiblit l'armée et bloque l'entraînement
+    R.stock.food = Math.max(0, R.stock.food - this.foodUse() * dt);
+    if (R.stock.food < 70 && !this.lowWarned) { this.lowWarned = true; this.game.ui.toast('🌾 Nourriture basse : construis une Ferme (onglet Village) et affecte des villageois', 'warn', 'lowfood'); }
+    else if (R.stock.food > 140) this.lowWarned = false;
+    const hungry = R.stock.food <= 0;
+    if (hungry !== this.starving) {
+      this.starving = hungry;
+      this.game.ui.toast(hungry ? '🌾 Famine ! Les troupes sont affaiblies : construis des fermes' : '🌾 Les greniers se remplissent à nouveau', hungry ? 'warn' : 'ok', 'famine');
+    }
     for (const [bid, q] of Object.entries(this.queues)) {
       if (!q.length) continue;
       const it = q[0];
@@ -235,12 +273,13 @@ export class ProductionSystem {
 
   serialize() {
     return {
-      buildings: this.buildings, queues: this.queues, techs: [...this.techs], research: this.research, reserve: this.reserve, workers: this.workers,
+      buildings: this.buildings, jobs: this.jobs, queues: this.queues, techs: [...this.techs], research: this.research, reserve: this.reserve, workers: this.workers,
     };
   }
   load(d) {
     for (const [k, v] of Object.entries(d.buildings || {})) if (this.buildings[k]) this.buildings[k] = v;
     for (const [k, v] of Object.entries(d.queues || {})) if (this.queues[k]) this.queues[k] = v;
+    Object.assign(this.jobs, d.jobs || {});
     this.techs = new Set(d.techs || []);
     this.research = d.research || null;
     this.reserve = d.reserve || [];

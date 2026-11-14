@@ -44,17 +44,19 @@ export const MAP = {
 };
 MAP.configure('landscape');
 
-export const RESOURCES = ['stone', 'wood', 'gold', 'metal', 'diamond'];
+export const RESOURCES = ['stone', 'wood', 'gold', 'metal', 'diamond'];   // ressources récoltées sur la carte
+export const ALL_RES = [...RESOURCES, 'food'];                              // + nourriture (fermes du village)
 export const RES_INFO = {
   stone:   { name: 'Pierre',  icon: '🪨', color: '#9aa0a6' },
   wood:    { name: 'Bois',    icon: '🪵', color: '#a0703c' },
   gold:    { name: 'Or',      icon: '🪙', color: '#f2c94c' },
   metal:   { name: 'Métal',   icon: '⛓️', color: '#7f97a8' },
   diamond: { name: 'Diamant', icon: '💎', color: '#56ccf2' },
+  food:    { name: 'Nourriture', icon: '🌾', color: '#d8b24a' },
 };
 
 export const START = {
-  res: { stone: 260, wood: 260, gold: 160, metal: 50, diamond: 0 },
+  res: { stone: 260, wood: 260, gold: 160, metal: 50, diamond: 0, food: 220 },
   workers: 2,
   units: [['cultivator', 4], ['soldier', 4], ['archer', 4]],
 };
@@ -66,6 +68,7 @@ export const HARVEST = {
   gold:    { rate: 0.6, value: 2.2, amount: 200 },
   metal:   { rate: 0.5, value: 2.6, amount: 200 },
   diamond: { rate: 0.18, value: 8, amount: 70 },
+  food:    { rate: 0, value: 0.8, amount: 0 },   // non récoltée sur la carte : valeur d'échange seulement
 };
 export const CARRY_BASE = 10;
 
@@ -73,8 +76,8 @@ export const CARRY_BASE = 10;
 export const UNITS = {
   cultivator: { name: 'Cultivateur', icon: '🧑‍🌾', hp: 50, speed: 3.6, radius: 0.45, cost: { wood: 25, gold: 5 }, time: 8, pop: 1, building: 'quarters',
     desc: 'Récolte les gisements et rapporte les ressources au château ou à un centre de récolte.' },
-  worker: { name: 'Ouvrier', icon: '👷', hp: 1, speed: 0, radius: 0, cost: { stone: 20, wood: 20, gold: 10 }, time: 10, pop: 1, building: 'quarters',
-    desc: 'Reste en sous-terrain. Chaque ouvrier accélère la production et les améliorations (+6 %) et répare la muraille entre les vagues.' },
+  worker: { name: 'Villageois', icon: '👷', hp: 1, speed: 0, radius: 0, cost: { stone: 20, wood: 20, gold: 10 }, time: 10, pop: 1, building: 'quarters',
+    desc: 'Habitant du village. À affecter aux fermes, scieries, carrières et mines ; accélère aussi la production (+6 %) et répare la muraille entre les vagues.' },
   soldier: { name: 'Soldat', icon: '🗡️', hp: 130, dmg: 14, range: 1.5, cd: 1.0, speed: 3.4, radius: 0.5, aggro: 9, cost: { wood: 10, metal: 10, gold: 15 }, time: 12, pop: 1, building: 'barracks',
     desc: 'Fantassin à l\'épée et au bouclier. Solide en ligne.' },
   archer: { name: 'Archer', icon: '🏹', hp: 75, dmg: 12, range: 20, cd: 1.4, speed: 3.4, radius: 0.45, aggro: 22, ranged: true, scale: 0.92, cost: { wood: 30, gold: 15 }, time: 12, pop: 1, building: 'range',
@@ -117,8 +120,8 @@ export const SIEGE = {
 // cost(level) = coût pour passer au niveau `level`
 const scale = (base, l) => Object.fromEntries(Object.entries(base).map(([k, v]) => [k, Math.round(v * Math.pow(1.7, l - 1))]));
 export const BUILDINGS = {
-  quarters: { name: 'Quartiers', icon: '🏘️', max: 5, start: 1, base: { stone: 120, wood: 120 }, time: 20,
-    desc: 'Production de cultivateurs et d\'ouvriers. Chaque niveau : +6 population.' },
+  quarters: { name: 'Maisons', icon: '🏘️', max: 5, start: 1, base: { stone: 120, wood: 120 }, time: 20,
+    desc: 'Logent les villageois : forme cultivateurs et villageois. Chaque niveau : +6 population civile.' },
   barracks: { name: 'Caserne', icon: '⚔️', max: 5, start: 1, base: { stone: 150, wood: 100, metal: 20 }, time: 25,
     desc: 'Soldats et archers. Niv.1 : Ligne, Colonne. Niv.2 : Double ligne. Chaque niveau : +8 % dégâts.' },
   range: { name: 'Champ de tir', icon: '🏹', max: 4, start: 1, base: { wood: 140, stone: 70, gold: 30 }, time: 25,
@@ -135,9 +138,38 @@ export const BUILDINGS = {
     desc: 'Transforme les ressources et forge les équipements : +5 % de dégâts de toutes les troupes par niveau.' },
   market: { name: 'Marché', icon: '⚖️', max: 3, start: 0, base: { wood: 150, gold: 40 }, time: 20,
     desc: 'Échange tes ressources contre de l\'or et inversement. Meilleurs taux à chaque niveau.' },
+  farm: { name: 'Ferme', icon: '🌾', max: 4, start: 0, base: { wood: 100, stone: 40 }, time: 18,
+    desc: 'Champs et élevage : produit de la nourriture. 3 travailleurs par niveau.' },
+  mill: { name: 'Moulin', icon: '🌬️', max: 3, start: 0, base: { wood: 130, stone: 70 }, time: 22,
+    desc: 'Transforme le grain : +25 % de nourriture produite par niveau.' },
+  granary: { name: 'Grenier', icon: '🏚️', max: 4, start: 0, base: { wood: 120, stone: 60 }, time: 20,
+    desc: 'Stocke la nourriture : +500 de capacité par niveau.' },
+  warehouse: { name: 'Entrepôt', icon: '📦', max: 4, start: 0, base: { wood: 140, stone: 80 }, time: 20,
+    desc: 'Stocke bois, pierre, métal, or et diamants : +700 de capacité par niveau.' },
+  sawmill: { name: 'Scierie', icon: '🪚', max: 4, start: 0, base: { wood: 110, stone: 50 }, time: 20,
+    desc: 'Bûcherons au travail : produit du bois. 3 travailleurs par niveau.' },
+  quarry: { name: 'Carrière', icon: '⛏️', max: 4, start: 0, base: { wood: 100, stone: 60 }, time: 20,
+    desc: 'Tailleurs de pierre : produit de la pierre. 3 travailleurs par niveau.' },
+  mine: { name: 'Mine de fer', icon: '🪨', max: 4, start: 0, base: { wood: 150, stone: 100 }, time: 26,
+    desc: 'Galeries et minerai : produit du métal. 3 travailleurs par niveau.' },
+  goldmine: { name: 'Mine d\'or', icon: '🪙', max: 3, start: 0, base: { wood: 160, stone: 120, metal: 20 }, time: 30,
+    desc: 'Filons d\'or : produit de l\'or. 3 travailleurs par niveau.' },
   defenses: { name: 'Défenses', icon: '🛡️', max: 4, start: 0, base: { stone: 200, metal: 40 }, time: 30,
     desc: 'Zone tampon autour du château : pièges qui blessent les zombies et +20 % PV du château par niveau.' },
 };
+// bâtiments à travailleurs : ressource produite par villageois et par seconde
+export const JOBS = {
+  farm:     { res: 'food',  rate: 0.30 },
+  sawmill:  { res: 'wood',  rate: 0.35 },
+  quarry:   { res: 'stone', rate: 0.30 },
+  mine:     { res: 'metal', rate: 0.13 },
+  goldmine: { res: 'gold',  rate: 0.10 },
+};
+export const JOB_SLOTS = 3;           // travailleurs par niveau
+export const FOOD_UPKEEP = { civil: 0.025, army: 0.04 };   // nourriture/s par habitant / soldat
+export function storageCap(res, lv) {  // lv = { granary, warehouse }
+  return res === 'food' ? 500 + 500 * (lv.granary || 0) : 900 + 700 * (lv.warehouse || 0);
+}
 export function buildingCost(id, level) { return scale(BUILDINGS[id].base, level); }
 export function buildingTime(id, level) { return BUILDINGS[id].time * level; }
 

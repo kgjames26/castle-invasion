@@ -1,23 +1,27 @@
 import * as THREE from 'three';
-import { RESOURCES, RES_INFO, HARVEST, CARRY_BASE, CENTER, MAP } from '../data/Config.js';
+import { RESOURCES, ALL_RES, RES_INFO, HARVEST, storageCap, CARRY_BASE, CENTER, MAP } from '../data/Config.js';
 import { CollectionCenter } from '../world/Building.js';
 
 // 5 ressources, gisements, centres de récolte, affectation automatique des cultivateurs
 export class ResourceSystem {
   constructor(game) {
     this.game = game;
-    this.stock = Object.fromEntries(RESOURCES.map(r => [r, 0]));
+    this.stock = Object.fromEntries(ALL_RES.map(r => [r, 0]));
     this.nodes = [];
     this.sites = [];   // gisements épuisés → zones constructibles
     this.centers = [];
-    this.income = Object.fromEntries(RESOURCES.map(r => [r, 0]));
+    this.income = Object.fromEntries(ALL_RES.map(r => [r, 0]));
     this.flashRes = {};
   }
 
   canAfford(cost) { return Object.entries(cost || {}).every(([k, v]) => this.stock[k] >= v); }
   spend(cost) { for (const [k, v] of Object.entries(cost || {})) this.stock[k] -= v; }
   refund(cost, f = 1) { for (const [k, v] of Object.entries(cost || {})) this.stock[k] += Math.floor(v * f); }
+  cap(type) { const P = this.game.production; return storageCap(type, { granary: P.level('granary'), warehouse: P.level('warehouse') }); }
   add(type, n) {
+    const room = Math.max(0, this.cap(type) - this.stock[type]);
+    n = Math.min(n, room);                 // stockage plein : le surplus est perdu
+    if (n <= 0) return;
     this.stock[type] += n;
     this.income[type] += n;
     this.flashRes[type] = 0.5;

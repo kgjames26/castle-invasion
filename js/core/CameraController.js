@@ -48,7 +48,7 @@ export class CameraController {
   panWorld(dx, dz) { this.goal.x += dx; this.goal.z += dz; this.clampGoal(); }
   rotate(da) { this.goal.yaw += da; }
   tilt(dp) { this.goal.pitch = clamp(this.goal.pitch + dp, 0.55, 1.35); }
-  zoom(f) { this.goal.dist = clamp(this.goal.dist * f, 22, 165); }
+  zoom(f) { this.goal.dist = clamp(this.goal.dist * f, 22, this.mode === 'city' ? 210 : 165); }
   focus(x, z) { this.goal.x = x; this.goal.z = z; this.clampGoal(); }
   clampGoal() {
     const b = this.bounds || MAP;

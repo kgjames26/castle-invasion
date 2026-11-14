@@ -1,4 +1,4 @@
-import { RESOURCES, RES_INFO, MAP, UNITS, SIEGE, CENTER } from '../data/Config.js';
+import { RESOURCES, ALL_RES, RES_INFO, MAP, UNITS, SIEGE, CENTER } from '../data/Config.js';
 import { costText, fmtTime } from '../utils/MathUtils.js';
 import { FORMATIONS } from '../formations/FormationTypes.js';
 
@@ -12,10 +12,10 @@ export class HUD {
     this.game = ui.game;
     this.t = 0;
     this.res = $('res');
-    this.res.innerHTML = RESOURCES.map(r => `<div class="res-item" id="r-${r}" data-tip="${RES_INFO[r].name}"><span class="ic">${RES_INFO[r].icon}</span><span class="v">0</span></div>`).join('')
+    this.res.innerHTML = ALL_RES.map(r => `<div class="res-item" id="r-${r}" data-tip="${RES_INFO[r].name}"><span class="ic">${RES_INFO[r].icon}</span><span class="v">0</span></div>`).join('')
       + `<div class="res-item" id="r-pop" data-tip="Population (cultivateurs, ouvriers, troupes) / maximum"><span class="ic">👥</span><span class="v">0</span></div>`
       + `<div class="res-item" id="r-army" data-tip="Armée / logement militaire (Casernes, Champ de tir, Écuries, Dépôt)"><span class="ic">⚔️</span><span class="v">0</span></div>`;
-    this.resEls = Object.fromEntries([...RESOURCES, 'pop', 'army'].map(r => [r, $('r-' + r).querySelector('.v')]));
+    this.resEls = Object.fromEntries([...ALL_RES, 'pop', 'army'].map(r => [r, $('r-' + r).querySelector('.v')]));
     this.wall = $('wall-bar');
     this.wall.innerHTML = Array.from({ length: MAP.SEG_COUNT }, (_, i) => `<i class="${i === MAP.GATE_SEG ? 'gate' : ''}"></i>`).join('');
     this.wallEls = [...this.wall.children];
@@ -53,12 +53,14 @@ export class HUD {
     if (this.t > 0) return;
     this.t = 0.12;
     const g = this.game, R = g.resources;
-    for (const r of RESOURCES) {
+    for (const r of ALL_RES) {
       const v = Math.floor(R.stock[r]);
       const el = this.resEls[r];
       const s = v >= 10000 ? (v / 1000).toFixed(1) + 'k' : String(v);
       if (el.textContent !== s) el.textContent = s;
       el.parentElement.classList.toggle('flash', (R.flashRes[r] || 0) > 0);
+      el.parentElement.classList.toggle('low', r === 'food' && g.production.starving);
+      el.parentElement.classList.toggle('full', v >= R.cap(r));
     }
     const pop = g.production.pop(), cap = g.production.popCap();
     this.resEls.pop.textContent = `${pop}/${cap}`;

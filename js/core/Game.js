@@ -252,7 +252,7 @@ export class Game {
     const t = performance.now() / 1000;
     if (this.view === 'city') {
       this.cam.update(dt);
-      this.city.update(t);
+      this.city.update(t, this.paused ? 0 : dt);
       this.sm.tick(t, this.paused ? 0 : dt);
       this.sm.render();
       this.ui.update(dt);

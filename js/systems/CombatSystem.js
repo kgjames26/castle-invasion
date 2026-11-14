@@ -97,7 +97,7 @@ export class CombatSystem {
 
   playerDmgMul() {
     const p = this.game.production;
-    return (1 + 0.08 * Math.max(0, p.level('barracks') - 1) + 0.05 * p.level('forge')) * (p.hasTech('blessing') ? 1.25 : 1);
+    return (p.starving ? 0.75 : 1) * (1 + 0.08 * Math.max(0, p.level('barracks') - 1) + 0.05 * p.level('forge')) * (p.hasTech('blessing') ? 1.25 : 1);
   }
 
   melee(u, t, mul = 1) {

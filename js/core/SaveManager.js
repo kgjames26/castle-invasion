@@ -1,14 +1,33 @@
 import { VERSION, MAP } from '../data/Config.js';
 
 const KEY = 'castle-invasion-save-v2';
+const OLD_KEY = 'castle-invasion-save-v1';
+
+// Les sauvegardes de la v1 gardent ressources, bâtiments, recherches, vague, troupes et statistiques ;
+// la carte ayant changé, les positions, la muraille et les gisements repartent à neuf.
+function migrateV1(o) {
+  const d = { ...o, v: '2.0.0', orient: 'landscape', migrated: true };
+  const door = MAP.CASTLE_DOOR;
+  d.units = (o.units || []).map((u, i) => ({ ...u, x: door.x - 9 + (i % 6) * 3.4, z: door.z - 4 - Math.floor(i / 6) * 3, wall: 0 }));
+  delete d.wall; delete d.nodes; delete d.centers; delete d.siege; delete d.cam; delete d.castleHp;
+  d.res = { ...o.res, food: 200 };
+  return d;
+}
 
 // Sauvegarde locale : automatique toutes les 30 s et à chaque fin de vague
 export class SaveManager {
   constructor(game) { this.game = game; }
 
-  has() { try { return !!localStorage.getItem(KEY); } catch { return false; } }
-  peek() { try { return JSON.parse(localStorage.getItem(KEY)); } catch { return null; } }
-  clear() { try { localStorage.removeItem(KEY); } catch { /* ignore */ } }
+  has() { try { return !!localStorage.getItem(KEY) || !!localStorage.getItem(OLD_KEY); } catch { return false; } }
+  peek() {
+    try {
+      const cur = localStorage.getItem(KEY);
+      if (cur) return JSON.parse(cur);
+      const old = localStorage.getItem(OLD_KEY);
+      return old ? migrateV1(JSON.parse(old)) : null;
+    } catch { return null; }
+  }
+  clear() { try { localStorage.removeItem(KEY); localStorage.removeItem(OLD_KEY); } catch { /* ignore */ } }
 
   serialize() {
     const g = this.game;
@@ -49,6 +68,7 @@ export class SaveManager {
   apply(d) {
     const g = this.game;
     Object.assign(g.resources.stock, d.res);
+    if (d.res && d.res.food == null) g.resources.stock.food = 200;
     g.time = d.time || 0;
     g.production.load(d.production || {});
     if (g.production.level('defenses')) g.castle.applyDefenses(g.production.level('defenses'));

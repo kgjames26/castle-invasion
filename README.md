@@ -113,3 +113,8 @@ scripts/generate-sw.mjs   Régénère la liste de cache du service worker
 - Format portrait (smartphone, automatique) ou paysage (PC / tablette) choisi dans le menu ; la carte est plus large en paysage.
 - Zombies animés de tailles variées : plus ils sont grands, plus ils sont forts et résistants ; plus ils sont petits, plus ils sont rapides et fragiles.
 - Archer avec tir de flèche animé.
+- Trois zones (Combat / Armée / Village) sur une seule simulation : le temps continue partout.
+- Armée : champ de tir, dépôt, logement militaire séparé, files de production annulables, forge (+5 % dégâts/niveau).
+- Village : nourriture, fermes, moulin, grenier, entrepôt, scierie, carrière, mines ; villageois affectables, animaux, fumées ; famine si la nourriture manque.
+- Combat : apparition des zombies sur tout le front nord, vagues à thèmes, barrière rocheuse à trois passes.
+- Sauvegarde : les parties de la v1 sont migrées (ressources, bâtiments, recherches, vague, troupes).

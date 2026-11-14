@@ -1,5 +1,5 @@
 import { ZONE_OF } from '../world/City.js';
-import { BUILDINGS, UNITS, SIEGE, TECHS, RECIPES, RESOURCES, RES_INFO, CENTER } from '../data/Config.js';
+import { BUILDINGS, UNITS, SIEGE, TECHS, RECIPES, RESOURCES, ALL_RES, JOBS, RES_INFO, CENTER } from '../data/Config.js';
 import { costText, fmtTime } from '../utils/MathUtils.js';
 import { FORMATIONS, formationLock } from '../formations/FormationTypes.js';
 
@@ -75,8 +75,9 @@ export class UndergroundUI {
 
   render(force) {
     const g = this.game, P = g.production, R = g.resources;
-    $('ug-res').innerHTML = RESOURCES.map(r => `<span>${RES_INFO[r].icon} ${Math.floor(R.stock[r])}</span>`).join('')
-      + `<span data-tip="Population civile">👥 ${P.civPop()}/${P.popCap()}</span><span data-tip="Armée / logement militaire">⚔️ ${P.armyPop()}/${P.armyCap()}</span><span data-tip="Chaque ouvrier accélère production et améliorations">👷 ${P.workers} (+${Math.round((P.speedMul() - 1) * 100)} %)</span>`;
+    const net = P.jobCount('farm') ? P.jobRate('farm') * P.jobCount('farm') - P.foodUse() : -P.foodUse();
+    $('ug-res').innerHTML = ALL_RES.map(r => `<span data-tip="${RES_INFO[r].name} (max ${R.cap(r)})" class="${r === 'food' && P.starving ? 'bad' : ''}">${RES_INFO[r].icon} ${Math.floor(R.stock[r])}${r === 'food' ? ` <small>${net >= 0 ? '+' : ''}${net.toFixed(1)}/s</small>` : ''}</span>`).join('')
+      + `<span data-tip="Population civile">👥 ${P.civPop()}/${P.popCap()}</span><span data-tip="Armée / logement militaire">⚔️ ${P.armyPop()}/${P.armyCap()}</span><span data-tip="Chaque villageois accélère production et améliorations">👷 ${P.workers} (+${Math.round((P.speedMul() - 1) * 100)} %)</span>`;
     const W = g.waves, wv = $('ug-wave');
     if (W.state === 'prep') { wv.textContent = `Vague ${W.wave} dans ${fmtTime(W.timer)}`; wv.classList.remove('alert'); }
     else { const rem = W.remaining(); wv.textContent = `⚠ Vague ${W.wave} en cours — ${rem} zombie${rem > 1 ? 's' : ''} · 🏰 ${Math.round(g.castle.hp / g.castle.maxHp * 100)} %`; wv.classList.add('alert'); }
@@ -131,15 +132,27 @@ export class UndergroundUI {
   }
 
   detailHTML(id) {
-    const g = this.game, P = g.production, b = BUILDINGS[id], st = P.buildings[id];
+    const g = this.game, P = g.production, R = g.resources, b = BUILDINGS[id], st = P.buildings[id];
     let h = `<h3>${b.icon} ${b.name} <small style="font-size:13px;color:var(--dim)">${st.level ? 'niveau ' + st.level : 'non construit'}</small><button class="small x" data-a="closepanel">✕</button></h3><div class="desc">${b.desc}</div>${this.upgradeHTML(id)}`;
     const built = st.level > 0;
     if (id === 'quarters') {
       h += `<div class="sect">Production</div><div class="prod">${this.unitBtn('cultivator')}${this.unitBtn('worker')}</div>${this.queueHTML('quarters')}`;
-      h += `<div class="workers">👷 ${P.workers} ouvriers : production ×${P.speedMul().toFixed(2)} · Population max ${P.popCap()}</div>`;
+      h += `<div class="workers">👷 ${P.workers} villageois (${P.idle()} libres) : production ×${P.speedMul().toFixed(2)} · Population civile max ${P.popCap()}</div>`;
       h += `<div class="sect">Récolte</div><div class="prod"><button data-a="center" ${this.btnState(g.resources.canAfford(CENTER.cost) ? null : 'Manque ' + g.resources.missing(CENTER.cost))}><span class="pn">🏚️ ${CENTER.name}</span><span class="pc">${C(CENTER.cost)}</span><span class="pc">Dépôt + 20 % de vitesse autour. À placer sur la carte, derrière la muraille ou sur un gisement épuisé.</span></button></div>`;
       const sites = g.resources.sites.length;
       if (sites) h += `<div class="desc">📍 ${sites} zone(s) constructible(s) libérée(s) par des gisements épuisés.</div>`;
+    } else if (JOBS[id]) {
+      if (built) {
+        const n = P.jobCount(id), sl = P.slots(id), rate = P.jobRate(id) * n, J = JOBS[id];
+        h += `<div class="sect">Travailleurs</div><div class="jobrow"><button data-a="job:${id}:-1" ${n ? '' : 'disabled'}>−</button><b>${n} / ${sl}</b><button data-a="job:${id}:1" ${n < sl && P.idle() > 0 ? '' : 'disabled'}>+</button><span>${RES_INFO[J.res].icon} +${rate.toFixed(2)}/s</span></div>`;
+        h += `<div class="desc">Villageois libres : ${P.idle()} / ${P.workers}. Chaque travailleur produit ${P.jobRate(id).toFixed(2)} ${RES_INFO[J.res].name.toLowerCase()}/s. Ajoute des Maisons et forme des villageois pour produire plus.</div>`;
+        if (id === 'farm') h += `<div class="desc">🌾 Consommation du royaume : ${P.foodUse().toFixed(2)}/s (${P.civPop()} civils, ${P.armyPop()} soldats). Moulin : +${25 * P.level('mill')} %.</div>`;
+        if (R.stock[J.res] >= R.cap(J.res)) h += `<div class="desc" style="color:#ff9a80">Stockage plein : construis un ${J.res === 'food' ? 'Grenier' : 'Entrepôt'}.</div>`;
+      }
+    } else if (id === 'granary' || id === 'warehouse') {
+      if (built) h += `<div class="sect">Stockage</div><div class="desc">${(id === 'granary' ? ['food'] : ['wood', 'stone', 'metal', 'gold', 'diamond']).map(r => `${RES_INFO[r].icon} ${Math.floor(R.stock[r])} / ${R.cap(r)}`).join(' · ')}</div>`;
+    } else if (id === 'mill') {
+      if (built) h += `<div class="desc">Bonus actuel : +${25 * st.level} % de nourriture sur les fermes.</div>`;
     } else if (id === 'barracks') {
       if (built) h += `<div class="sect">Entraînement</div><div class="prod">${this.unitBtn('soldier')}</div>${this.queueHTML('barracks')}`;
       h += `<div class="desc">Logement : +8 par niveau. Armée : ${P.armyPop()}/${P.armyCap()}</div>`;
@@ -180,7 +193,7 @@ export class UndergroundUI {
       }
     } else if (id === 'market') {
       if (built) {
-        h += `<div class="sect">Échanges (taux ${Math.round(P.rate() * 100)} %)</div><div class="trade">${RESOURCES.filter(r => r !== 'gold').map(r => `
+        h += `<div class="sect">Échanges (taux ${Math.round(P.rate() * 100)} %)</div><div class="trade">${ALL_RES.filter(r => r !== 'gold').map(r => `
           <span>${RES_INFO[r].icon} ${RES_INFO[r].name}</span>
           <button data-a="sell:${r}" ${this.btnState(g.resources.stock[r] < 20 ? 'Pas assez' : null)}>Vendre 20 → +${P.tradePrice(r, 'sell')} 🪙</button>
           <button data-a="buy:${r}" ${this.btnState(g.resources.stock.gold < P.tradePrice(r, 'buy') ? 'Pas assez d\'or' : null)}>Acheter 20 ← ${P.tradePrice(r, 'buy')} 🪙</button>`).join('')}</div>`;
@@ -201,6 +214,7 @@ export class UndergroundUI {
     if (a === 'closepanel') { this.closePanel(); return; }
     if (a === 'up') P.upgrade(x);
     else if (a === 'train') P.train(x);
+    else if (a === 'job') P.assign(x, +y);
     else if (a === 'siege') P.buildSiege(x);
     else if (a === 'tech') P.startResearch(x);
     else if (a === 'craft') P.craft(x);
