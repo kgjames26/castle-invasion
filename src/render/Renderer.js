@@ -6,7 +6,7 @@ import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/me
 import { archerPos, formationLayout } from '../sim/army.js';
 import { applyNorthFog } from './fog.js';
 import { StructureView } from './Structures.js';
-import { buildTroopRigs, throwAngle } from './Troops.js';
+import { buildTroopRigs, buildVillagerRigs, throwAngle } from './Troops.js';
 const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1]];      // variantes de modèle par type de zombie
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
 
@@ -25,7 +25,7 @@ export class Renderer {
     this.scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x4a4030, 1.55));
     const sun = new THREE.DirectionalLight(0xfff1d0, 1.5); sun.position.set(-60, 120, 80); this.scene.add(sun);
     this.dummy = new THREE.Object3D(); this.tmpColor = new THREE.Color();
-    this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildSiege(); this.rigs = buildTroopRigs(this.scene); this.buildHighlight();
+    this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildSiege(); this.rigs = buildTroopRigs(this.scene); this.vrigs = buildVillagerRigs(this.scene); this.vMesh.visible = false; this.buildHighlight();
     this.selected = -1; this.clock = 0; this.selSquad = 0; this.targetMode = false; this.tmpC2 = new THREE.Color(); this.white = new THREE.Color(1, 1, 1);
   }
   resize(w, h) { this.renderer.setSize(w, h, false); this.renderer.domElement.style.width = w + 'px'; this.renderer.domElement.style.height = h + 'px'; this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
@@ -68,10 +68,6 @@ export class Renderer {
     // ——— décalques de gisements et de sites ———
     blob(40, 255, 11, 'rgba(46,58,46,A)', 0.5); blob(160, 255, 11, 'rgba(120,122,126,A)', 0.6); blob(182, 236, 8, 'rgba(60,62,72,A)', 0.55); blob(18, 236, 8, 'rgba(70,64,56,A)', 0.5);
     for (let i = 0; i < 90; i++) { g.fillStyle = r() < 0.5 ? 'rgba(90,94,100,.7)' : 'rgba(160,160,164,.7)'; g.fillRect(X(160 + rr(-9, 9)), X(255 + rr(-9, 9)), rr(2, 6), rr(2, 5)); }
-    g.fillStyle = 'rgba(95,72,48,.5)'; g.fillRect(X(86), X(246), X(28), X(12));                                  // terre labourée des fermiers
-    g.strokeStyle = 'rgba(70,52,34,.45)'; g.lineWidth = 2; for (let z = 246.8; z < 258; z += 1.4) { g.beginPath(); g.moveTo(X(86), X(z)); g.lineTo(X(114), X(z)); g.stroke(); }
-    // mares gelées autour des points d'eau
-    for (const [x, z] of [[80, 240], [122, 238]]) { blob(x, z, 6.5, 'rgba(150,185,215,A)', 0.95); g.strokeStyle = 'rgba(255,255,255,.7)'; g.lineWidth = 1.5; g.beginPath(); g.ellipse(X(x), X(z), X(4.2), X(3.4), 0, 0, 7); g.stroke(); g.beginPath(); g.moveTo(X(x - 3), X(z - 1)); g.lineTo(X(x + 1), X(z + 1.5)); g.lineTo(X(x + 3), X(z - 1.2)); g.stroke(); }
     // ——— chemins : bords doux (trois traits superposés), ornières ———
     const path = (pts, w) => {
       const draw = (lw, col) => { g.strokeStyle = col; g.lineWidth = lw * k; g.lineCap = g.lineJoin = 'round'; g.beginPath(); pts.forEach(([x, z], i) => i ? g.lineTo(X(x), X(z)) : g.moveTo(X(x), X(z))); g.stroke(); };
@@ -142,7 +138,7 @@ export class Renderer {
     this.struct = new StructureView(this.scene, this.sim, this.camera);   // toutes les structures (chantiers, bâtiments, fantôme)
     // points de récolte (gisements) : pastilles colorées au sol
     for (const t in TASKS) {
-      const T = TASKS[t]; if (!T.res) continue;
+      const T = TASKS[t]; if (!T.res || t === 'food') continue;
       const d = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 0.3, 14), new THREE.MeshBasicMaterial({ color: RES_INFO[T.res].color, transparent: true, opacity: 0.55 }));
       d.position.set(T.site.x, 0.2, T.site.z); this.scene.add(d);
     }
@@ -184,27 +180,34 @@ export class Renderer {
       this.exDisc.count = nd; this.exRock.count = nr; this.exDisc.instanceMatrix.needsUpdate = this.exRock.instanceMatrix.needsUpdate = true; if (nd) { this.exDisc.instanceColor.needsUpdate = true; this.exRock.instanceColor.needsUpdate = true; }
       const P = E.prospect; this.pRing.visible = !!P; if (P) { const pu = 1 + 0.12 * Math.sin(this.clock * 5) + 0.25 * (1 - P.t / P.dur); this.pRing.position.set(P.x, 0.4, P.z); this.pRing.scale.set(pu, pu, pu); }
     }
-    if (this.kit) this.updateKitEconomy();
-    const vs = E.villagers, VS = 2.8; this.vMesh.count = vs.length; let nc = 0;
+    // ——— villageois : un modèle par métier, animé selon l'état (marche, outil qui frappe, charge portée) ———
+    const R = this.vrigs, vs = E.villagers, t = this.clock, SC = 2.0, FREQ = { wood: 7, stone: 6, iron: 6, gold: 6, food: 3.6, build: 8, repair: 8 }; let nc = 0;
+    for (const k in R) R[k].begin();
+    const lerpAng = (a, b, k) => { const dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
     for (let i = 0; i < vs.length; i++) {
-      const v = vs[i], x = v.px + (v.x - v.px) * alpha, z = v.pz + (v.z - v.pz) * alpha;
-      if (this.chars) {                                    // villageois humanoïde : cap selon le déplacement, balancement à la marche
-        const dx = v.x - v.px, dz = v.z - v.pz, mv = dx * dx + dz * dz > 1e-6; let rot = this.vRot.get(v) ?? 0; if (mv) { rot = Math.atan2(dx, dz); this.vRot.set(v, rot); }
-        const hammer = v.job && v.state === 'building', bob = hammer ? 1 + 0.09 * Math.sin(this.clock * 9 + i) : mv ? 1 + 0.05 * Math.sin(this.clock * 11 + i) : 1;
-        d.position.set(x, 0, z); d.scale.set(1.9, 1.9 * bob, 1.9); d.rotation.set(0, rot, mv ? 0.06 * Math.sin(this.clock * 11 + i) : 0); d.updateMatrix(); this.vMesh.setMatrixAt(i, d.matrix);
-        this.vMesh.setColorAt(i, this.tmpColor.setHex(v.job ? 0xffb35a : VTINT[v.task] || 0xffffff));
-      } else {
-      d.position.set(x, 0, z); d.scale.set(VS * 0.8, VS, VS * 0.8); d.rotation.set(0, 0, 0); d.updateMatrix(); this.vMesh.setMatrixAt(i, d.matrix);
-      this.vMesh.setColorAt(i, v.task === 'repair' || v.job ? this.vCol.repair : this.vCol.idle);
-      }
-      if (v.carry > 0) {                                  // charge portée : cube coloré selon la ressource
-        d.position.set(x, this.chars ? 5.0 : 4.6, z); d.scale.set(1.8, 1.8, 1.8); d.rotation.set(0, 0, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
+      const v = vs[i], x = v.px + (v.x - v.px) * alpha, z = v.pz + (v.z - v.pz) * alpha, dx = v.x - v.px, dz = v.z - v.pz, mv = dx * dx + dz * dz > 2e-6;
+      v.rmv = (v.rmv || 0) + ((mv ? 1 : 0) - (v.rmv || 0)) * 0.25;
+      const key = v.job ? 'build' : v.task === 'repair' ? 'repair' : (v.task || 'idle'), working = v.state === 'gather' || v.state === 'building' || v.state === 'repairing';
+      let want = v.rrot ?? Math.PI;
+      if (mv) want = Math.atan2(dx, dz);
+      else if (v.state === 'building') { const s = this.sim.build.get(v.job); if (s) want = Math.atan2(s.x - v.x, s.z - v.z); }
+      else if (v.state === 'repairing') want = Math.PI;
+      else if (v.state === 'gather' && v.sx !== null && v.sx !== undefined) want = Math.atan2(v.sx - v.x, v.sz - v.z);
+      v.rrot = lerpAng(v.rrot ?? Math.PI, want, mv ? 0.3 : 0.15);
+      const ph = t * 10 + i * 1.7, sw = Math.sin(ph) * 0.7 * v.rmv, ph2 = t * (FREQ[key] || 6) + i * 1.3, sn = Math.sin(ph2), carrying = v.carry > 0;
+      let arm = -0.2 + 0.05 * Math.sin(t * 2 + i);
+      if (working) arm = key === 'food' ? -0.9 + 0.7 * sn : -1.15 + (sn > 0 ? sn : sn * 0.35);
+      else if (carrying) arm = -1.25; else if (mv) arm = -0.5 + 0.35 * Math.sin(ph + Math.PI);
+      const bob = (mv ? Math.abs(Math.sin(ph)) * 0.07 : working ? Math.abs(sn) * 0.05 : 0) * SC;
+      d.position.set(x, bob, z); d.scale.set(SC, SC, SC); d.rotation.set(0, v.rrot, 0); d.updateMatrix();
+      this.tmpColor.setRGB(1, 1, 1); R[key].push(d.matrix, this.tmpColor, [0, sw, -sw, arm]);
+      if (carrying) {                                    // charge portée devant la poitrine : caisse colorée selon la ressource
+        d.position.set(x + Math.sin(v.rrot) * 0.95, 2.0 + bob, z + Math.cos(v.rrot) * 0.95); d.scale.set(1.5, 1.2, 1.5); d.rotation.set(0, v.rrot, 0); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
         this.tmpColor.setHex(RES_INFO[v.carryRes].color); this.cMesh.setColorAt(nc, this.tmpColor); nc++;
       }
     }
-    this.cMesh.count = nc;
-    this.vMesh.instanceMatrix.needsUpdate = true; this.vMesh.instanceColor.needsUpdate = true;
-    this.cMesh.instanceMatrix.needsUpdate = true; this.cMesh.instanceColor.needsUpdate = true;
+    for (const k in R) R[k].end();
+    this.cMesh.count = nc; this.cMesh.instanceMatrix.needsUpdate = true; if (nc) this.cMesh.instanceColor.needsUpdate = true;
   }
   buildUnits() {
     const box = new THREE.BoxGeometry(0.8, 1.7, 0.8); box.translate(0, 0.85, 0);
@@ -304,14 +307,7 @@ export class Renderer {
     this.struct.setKit(kit);   // maisons, tours, moulin, entrepôt, grenier : modèles du kit
     // monuments et décor du village
     const one = (name, x, z, ry, sc) => { const m = new THREE.Mesh(geo[name], kit.material); m.position.set(x, 0, z); m.rotation.y = ry; m.scale.setScalar(sc); this.scene.add(m); return m; };
-    one('Church', 162, 292, -0.3, 1.0); one('Waterhole2', 80, 240, 0, 2.4); one('Waterhole1', 122, 238, 0, 2.4);
-    one('MarketStall1', 82, 280, 0.4, 1.8); one('MarketStall3', 88, 286, -0.3, 1.8); one('MarketStall2', 150, 276, 0.2, 1.5);
-    // chariots : un de plus par niveau de l'amélioration « Chariots » (transport)
-    this.wagons = [['Wagon3', 111, 277, 0.5], ['Wagon1', 119, 280, -0.4], ['Wagon2', 90, 276, 2.6]].map(([n, x, z, r], k) => { const m = one(n, x, z, r, 1.5); m.visible = false; return m; });
-    // petits objets autour des entrepôts (tonneaux, caisses, sacs, bancs)
-    const props = [['Item18', 128, 279], ['Item19', 130, 280.5], ['Item16', 140, 279], ['Item20', 142, 277.5], ['Item21', 138, 281], ['Item11', 60, 276], ['Item19', 70, 277], ['Item18', 72, 278.5], ['Item10', 44, 268], ['Item12', 36, 270], ['Item17', 34, 262], ['Item6', 56, 279], ['Item8', 64, 280]];
-    const pm = {}; for (const [n, x, z] of props) (pm[n] ||= []).push([x, z]);
-    for (const n in pm) { const im = mk(n, pm[n].length); pm[n].forEach(([x, z], i) => put(im, i, x, z, i * 1.7, 2.4, 2.4, 2.4)); im.count = pm[n].length; im.instanceMatrix.needsUpdate = true; }
+    one('Church', 162, 292, -0.3, 1.0);
   }
   updateKitWall() {
     const wall = this.sim.wall, d = this.dummy, c = this.tmpColor, cnt = { Wall1: 0, Wall2: 0, Wall3: 0, Wall4: 0 };
@@ -324,7 +320,6 @@ export class Renderer {
     }
     for (const t in this.kw) { const im = this.kw[t]; im.count = cnt[t]; im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
   }
-  updateKitEconomy() { this.wagons.forEach((w, k) => { w.visible = this.sim.eco.up.carts > k; }); }
   // ——— personnages de l'ancien jeu : zombies animés (VAT), archers, villageois humanoïdes ———
   useCharacters(ch) {
     this.chars = ch; this.vRot = new WeakMap(); const cap = MAX_Z;

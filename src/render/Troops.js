@@ -101,6 +101,40 @@ function ballistaParts() {
   return [part('base', [0, 0, 0], frame), part('bolt', [0, 0, 0], bolt, 'slide')];
 }
 
+// ——— villageois : un modèle par métier (tunique + chapeau + outil dans la main droite) ———
+//  hache (bois) · pic (pierre, fer, or) · houe (ferme) · marteau (chantiers, réparation) · mains nues (libre)
+const TOOLS = {
+  axe: P => [bx(0.07, 0.07, 0.85, WOODC, 0, -0.42, 0.45), bx(0.06, 0.3, 0.28, STEEL, 0, -0.42, 0.9)],
+  pick: P => [bx(0.07, 0.07, 0.95, WOODC, 0, -0.42, 0.5), bx(0.8, 0.09, 0.09, STEEL, 0, -0.42, 0.95), bx(0.1, 0.16, 0.12, STEEL, 0.42, -0.42, 0.95)],
+  hoe: P => [bx(0.06, 0.06, 1.25, WOODC, 0, -0.42, 0.65), bx(0.4, 0.07, 0.22, STEEL, 0, -0.42, 1.28)],
+  hammer: P => [bx(0.07, 0.07, 0.6, WOODC, 0, -0.42, 0.32), bx(0.3, 0.2, 0.2, 0x55565c, 0, -0.42, 0.66)],
+  none: P => [],
+};
+function villagerParts(P) {
+  const body = [
+    bx(0.5, 0.62, 0.3, P.tunic, 0, 1.06, 0), bx(0.54, 0.1, 0.34, LEATHER, 0, 0.78, 0), bx(0.4, 0.34, 0.06, P.apron, 0, 0.98, 0.17),
+    bx(0.27, 0.27, 0.27, SKIN, 0, 1.54, 0.01), bx(0.12, 0.5, 0.12, P.tunic, -0.31, 1.0, 0),
+    ...P.hat(),
+  ];
+  const leg = () => [bx(0.18, 0.7, 0.2, P.legs, 0, -0.35, 0), bx(0.2, 0.1, 0.27, LEATHER, 0, -0.66, 0.03)];
+  const arm = [bx(0.12, 0.5, 0.12, P.tunic, 0, -0.18, 0), ...TOOLS[P.tool](P)];
+  return [part('body', [0, 0, 0], body), part('legL', [-0.12, 0.72, 0], leg(), 'rot', true), part('legR', [0.12, 0.72, 0], leg(), 'rot', true), part('arm', [0.32, 1.3, 0], arm, 'rot', true)];
+}
+const cap = c => () => [bx(0.32, 0.12, 0.34, c, 0, 1.7, 0.01), bx(0.2, 0.05, 0.14, c, 0, 1.66, 0.17)];
+const straw = () => [bx(0.62, 0.05, 0.62, 0xe8c86a, 0, 1.68, 0.01), bx(0.3, 0.16, 0.3, 0xe8c86a, 0, 1.76, 0.01)];
+const hard = c => () => [bx(0.34, 0.16, 0.36, c, 0, 1.7, 0.01), bx(0.44, 0.04, 0.44, c, 0, 1.64, 0.01)];
+export const VILLAGER_STYLES = {
+  idle: { tunic: 0xc9b48a, apron: 0xb8a276, legs: 0x4a3b2a, hat: cap(0x7a5a30), tool: 'none' },
+  wood: { tunic: 0x5f8a45, apron: 0x4f7438, legs: 0x4a3b2a, hat: cap(0x6b4a2c), tool: 'axe' },
+  stone: { tunic: 0x9aa0a6, apron: 0x7c8288, legs: 0x45484f, hat: hard(0xb0b4b8), tool: 'pick' },
+  iron: { tunic: 0x5b6b8a, apron: 0x424e68, legs: 0x35384a, hat: hard(0x8a8f99), tool: 'pick' },
+  gold: { tunic: 0xd9b43a, apron: 0xb8922a, legs: 0x4a3b2a, hat: hard(0xf2d65e), tool: 'pick' },
+  food: { tunic: 0xd9c27a, apron: 0xb89c4a, legs: 0x5a4a30, hat: straw, tool: 'hoe' },
+  repair: { tunic: 0xe67e22, apron: 0xb35f14, legs: 0x4a3b2a, hat: hard(0xf2d65e), tool: 'hammer' },
+  build: { tunic: 0xf0a24a, apron: 0xc0792a, legs: 0x4a3b2a, hat: hard(0xe8e0c8), tool: 'hammer' },
+};
+export function buildVillagerRigs(scene) { const o = {}; for (const k in VILLAGER_STYLES) o[k] = new Rig(scene, villagerParts(VILLAGER_STYLES[k]), 160); return o; }
+
 export const PALETTES = {
   soldier: { cloth: 0x3d7bd6, legs: 0x3a3f52, helm: STEEL, plume: 0xc0392b, shield: 0x2f5fb0, trim: 0xf2d65e },
   heavy: { cloth: 0x6f7f9c, legs: 0x4a5266, helm: DARKSTEEL, plume: 0x2a2f3a, shield: 0x8e98a4, trim: 0xc0392b, heavy: true },

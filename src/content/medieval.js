@@ -100,7 +100,8 @@ export const BUILD = {
   minX: 5, maxX: 195, minZ: 176, towerMinZ: 154, maxZ: 312, gap: 1.2,
   refund: 0.8, moveWork: 6, workerExp: 0.85, maxWorkers: 4, upgradeTime: 0.7,
   maxTowers: 14, houseCost: n => ({ wood: 40 + 4 * n, stone: 8 + 2 * n }), towerUpCost: lv => ({ wood: 50 * lv, stone: 90 * lv }),
-  blockers: [{ x: 100, z: 298, r: 24 }, { x: 162, z: 292, r: 6.5 }, { x: 80, z: 240, r: 3.5 }, { x: 122, z: 238, r: 3.5 }, { x: 82, z: 280, r: 3 }, { x: 88, z: 286, r: 3 }, { x: 150, z: 276, r: 3 }],
+  blockers: [{ x: 100, z: 298, r: 24 }, { x: 162, z: 292, r: 6.5 }],
+  oreR: 6.5, oreSnap: 16,      // gisements : seules les mines s'y posent (centrées dessus) ; aucun autre bâtiment ne peut les recouvrir
 };
 // Tours de défense : tirent seules ; les 6 tours de la muraille existent dès le départ.
 export const TOWER = { range: 44, rangePerLevel: 3, dmg: 22, dmgPerLevel: 0.4, rate: 1.2, ratePerLevel: 0.1, wallXs: [3, 40, 80, 120, 160, 197], wallZ: 146 };

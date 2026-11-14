@@ -94,8 +94,9 @@ export class UI {
     this.closeSheet(); this.closeCard();
     const [hw, hd] = B.half(type, rot), minZ = (type === 'tower' ? BUILD.towerMinZ : BUILD.minZ) + hd + 2;
     let x = s ? s.x : Math.min(BUILD.maxX - hw, Math.max(BUILD.minX + hw, this.cam.tx)), z = s ? s.z : Math.min(BUILD.maxZ - hd, Math.max(minZ, this.cam.tz));
-    this.mode = moveId ? 'move' : 'place'; this.place = { type, x: snap(x), z: snap(z), rot, workers: 1, moveId };
-    if (!s) this.nearestFree();
+    if (type === 'mine') { const o = B.snapOre(x, z) || B.ores().find(q => q.res !== 'stone'); if (o && !s) { x = o.x; z = o.z; this.cam.focusOn(x, z); } }
+    this.mode = moveId ? 'move' : 'place'; this.place = { type, x: type === 'mine' ? x : snap(x), z: type === 'mine' ? z : snap(z), rot, workers: 1, moveId };
+    if (!s && type !== 'mine') this.nearestFree();
     this.placeEl.classList.add('on'); this.html.place = ''; this.syncGhost(); this.refresh(true);
   }
   nearestFree() {
@@ -105,7 +106,7 @@ export class UI {
       if (B.canPlace(p.type, x, z, p.rot, p.moveId).ok) { p.x = x; p.z = z; return; }
     }
   }
-  moveGhost(x, z) { if (!this.place) return; this.place.x = snap(x); this.place.z = snap(z); this.syncGhost(); this.refresh(true); }
+  moveGhost(x, z) { if (!this.place) return; if (this.place.type === 'mine') { const o = this.sim.build.snapOre(x, z); if (o) { x = o.x; z = o.z; } this.place.x = x; this.place.z = z; this.syncGhost(); this.refresh(true); return; } this.place.x = snap(x); this.place.z = snap(z); this.syncGhost(); this.refresh(true); }
   syncGhost() {
     const p = this.place; if (!p) { this.rd.struct.setGhost(null); return; }
     p.check = this.sim.build.canPlace(p.type, p.x, p.z, p.rot, p.moveId);

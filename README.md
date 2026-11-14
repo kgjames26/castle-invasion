@@ -91,3 +91,9 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Bois : la forêt des bûcherons **repousse** (3,2/s) et les arbres rapetissent/regrandissent visiblement.
 - **Prospection** (onglet Villageois) : 40 or + 30 vivres, un villageois libre explore 45 s puis un nouveau gisement de pierre/fer/or apparaît ailleurs (max 3 par ressource) ; les récolteurs se répartissent entre gisements.
 - Zoom max augmenté (min 0,1) ; archers agrandis pour s'accorder aux fantassins.
+
+## Phase 9 — Villageois animés, bâtiments lisibles, gisements
+- Mobilier, puits, mares et terre de la ferme supprimés (sol + décor).
+- Placement : la **mine** se pose uniquement sur un gisement de fer/or (aimantée, y compris gisements découverts) ; aucun autre bâtiment ne peut recouvrir un gisement ; la **ferme** se pose librement et les fermiers y travaillent.
+- Villageois : un modèle par métier (hache, pic, houe, marteau), animés : marche, coups d'outil (bois, pierre, fer, or, ferme, chantier, réparation), charge portée devant la poitrine.
+- Bâtiments redessinés (scierie, carrière, mine, ferme, forge + accessoires sur moulin/entrepôt/grenier) et **enseigne** à l'icône du métier au-dessus de chaque bâtiment.

@@ -46,7 +46,7 @@ export class Economy {
   }
   // ——— gisements : site principal + gisements découverts par prospection ———
   siteList(t) {
-    const T = TASKS[t], out = []; if (!T.deposit) return [{ x: T.site.x, z: T.site.z, si: -1 }];
+    const T = TASKS[t], out = []; if (!T.deposit) { const f = t === 'food' ? this.sim.build.of('farm') : null; return f && (f.state === 'built' || f.state === 'upgrading') ? [{ x: f.x, z: f.z, si: -1 }] : [{ x: T.site.x, z: T.site.z, si: -1 }]; }
     if (this.deposit[t] > 0) out.push({ x: T.site.x, z: T.site.z, si: -1 });
     const ex = this.extra[t]; if (ex) ex.forEach((e, i) => { if (e.amount > 0) out.push({ x: e.x, z: e.z, si: i }); });
     return out;

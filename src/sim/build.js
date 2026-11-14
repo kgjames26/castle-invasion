@@ -2,7 +2,7 @@
 // Cycle de vie : 'site' (chantier initial) → 'built' ; 'upgrading' (amélioration, le bâtiment reste visible) ; 'moving' (déplacé : bloqué
 // jusqu'au passage d'un ouvrier). Les ouvriers sont des villageois LIBRES (sans tâche) : le joueur règle leur nombre par chantier.
 // La simulation ignore tout du rendu ; `eco.level` et `eco.houses` sont recalculés à partir des structures (source de vérité = ici).
-import { STRUCT, BUILDINGS, BUILD, TOWER, ECON } from '../content/medieval.js';
+import { STRUCT, BUILDINGS, BUILD, TOWER, ECON, TASKS } from '../content/medieval.js';
 
 const tmp = new Int32Array(512);
 const WORKING = s => s.state === 'site' || s.state === 'upgrading' || s.state === 'moving';
@@ -38,12 +38,29 @@ export class Build {
   buildTime(type) { return STRUCT[type].time; }
   upTime(s) { return STRUCT[s.type].time * BUILD.upgradeTime * (s.level + 1); }
   // ——— placement ———
+  // gisements connus (principaux + découverts)
+  ores() {
+    const E = this.sim.eco, out = [];
+    for (const r of ['stone', 'iron', 'gold']) { const T = TASKS[r]; out.push({ res: r, x: T.site.x, z: T.site.z }); for (const e of E.extra[r]) out.push({ res: r, x: e.x, z: e.z }); }
+    return out;
+  }
+  // aimante une mine sur le gisement de fer/or le plus proche (sinon null)
+  snapOre(x, z) {
+    let best = null, bd = BUILD.oreSnap;
+    for (const o of this.ores()) if (o.res !== 'stone') { const d = Math.hypot(x - o.x, z - o.z); if (d < bd) { bd = d; best = o; } }
+    return best;
+  }
   canPlace(type, x, z, rot, ignoreId = 0) {
     const [hw, hd] = this.half(type, rot);
     if (x - hw < BUILD.minX || x + hw > BUILD.maxX) return { ok: false, why: 'hors de la zone' };
     const minZ = type === 'tower' ? BUILD.towerMinZ : BUILD.minZ;
     if (z - hd < minZ) return { ok: false, why: type === 'tower' ? 'trop près de la muraille' : 'trop près de la muraille (zone de garnison)' };
     if (z + hd > BUILD.maxZ) return { ok: false, why: 'hors de la zone' };
+    if (type === 'mine') { if (!this.ores().some(o => o.res !== 'stone' && Math.hypot(x - o.x, z - o.z) < 3.5)) return { ok: false, why: 'à poser sur un gisement de fer ou d\'or' }; }
+    else for (const o of this.ores()) {
+      const cx = Math.max(x - hw, Math.min(o.x, x + hw)), cz = Math.max(z - hd, Math.min(o.z, z + hd));
+      if ((o.x - cx) ** 2 + (o.z - cz) ** 2 < BUILD.oreR * BUILD.oreR) return { ok: false, why: 'sur un gisement (réservé aux mines)' };
+    }
     for (const b of BUILD.blockers) {
       const cx = Math.max(x - hw, Math.min(b.x, x + hw)), cz = Math.max(z - hd, Math.min(b.z, z + hd));
       if ((b.x - cx) ** 2 + (b.z - cz) ** 2 < b.r * b.r) return { ok: false, why: 'obstacle' };

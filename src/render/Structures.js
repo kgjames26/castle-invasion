@@ -1,7 +1,7 @@
 // Vue des structures : chantiers standard (tous les bâtiments), bâtiments finis, échafaudage d'amélioration / de déplacement,
 // barres de progression, fantôme de placement, anneau de sélection. Ne modifie jamais la simulation.
 import * as THREE from 'three';
-import { makeModel, pipsFor } from './Buildings.js';
+import { makeModel, pipsFor, signSprite } from './Buildings.js';
 import { mat, GOLD, WOOD, DARK } from './Military.js';
 import { STRUCT, BUILD } from '../content/medieval.js';
 import { W } from '../sim/constants.js';
@@ -35,10 +35,11 @@ export class StructureView {
     // pastilles de niveau (dorées) au-dessus de l'entrée
     const np = pipsFor(s.type); v.pips = [];
     if (np) { const pg = new THREE.BoxGeometry(0.8, 0.8, 0.8), pm = mat(GOLD); for (let i = 0; i < np; i++) { const p = new THREE.Mesh(pg, pm); p.position.set((i - (np - 1) / 2) * 1.2, v.top + 1.4, 0); p.rotation.y = Math.PI / 4; v.g.add(p); v.pips.push(p); } }
+    if (def.ico && s.type !== 'house' && s.type !== 'tower') { v.sign = signSprite(def.ico); v.sign.position.set(0, v.top + 3.8, 0); v.g.add(v.sign); }     // enseigne : l'icône du métier
     v.site = this.siteModel(def, s); v.inner.add(v.site);
     v.scaf = this.scaffold(v); v.inner.add(v.scaf);
     v.bar = new THREE.Group(); const bg = new THREE.Mesh(new THREE.PlaneGeometry(9, 1.3), this.barBg), fl = new THREE.Mesh(new THREE.PlaneGeometry(8.6, 0.9), this.barFill);
-    bg.renderOrder = 10; fl.renderOrder = 11; fl.geometry.translate(4.3, 0, 0); fl.position.set(-4.3, 0, 0.01); v.fill = fl; v.bar.add(bg, fl); v.bar.position.y = v.top + 4.6; v.g.add(v.bar);
+    bg.renderOrder = 10; fl.renderOrder = 11; fl.geometry.translate(4.3, 0, 0); fl.position.set(-4.3, 0, 0.01); v.fill = fl; v.bar.add(bg, fl); v.bar.position.y = v.top + (v.sign ? 7.4 : 4.6); v.g.add(v.bar);
     this.scene.add(v.g); this.map.set(s.id, v); return v;
   }
   // chantier STANDARD : même évolution pour tous les bâtiments (piquets → fondations → murs qui montent → échafaudage → charpente)
@@ -72,7 +73,7 @@ export class StructureView {
         v.state = s.state;
       }
       const site = s.state === 'site', work = site || s.state === 'upgrading' || s.state === 'moving', p = s.progress;
-      if (v.model) v.model.visible = !site;
+      if (v.model) v.model.visible = !site; if (v.sign) v.sign.visible = !site;
       v.site.visible = site; v.scaf.visible = s.state === 'upgrading' || s.state === 'moving';
       if (site) this.pose(v.site, p);
       // pastilles : niveau atteint (la prochaine clignote pendant l'amélioration)
