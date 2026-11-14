@@ -50,3 +50,39 @@ export function stoneMaterial(color = 0xaeb2b8, colored = false) {
   m.customProgramCacheKey = () => 'stone-nfog';
   return m;
 }
+
+// Bâtiments du kit (maisons, grenier, entrepôt, moulin, tours) : la palette du kit est très claire. On garde sa texture mais on recolore
+// les toits (faces inclinées claires) avec une couleur propre à chaque bâtiment, et les murs blancs en crépi chaud, avec un grain léger.
+const kitCache = new Map();
+export function kitMaterial(map, roof = 0xa8432c, plaster = 0xecdcbc) {
+  const key = roof + ':' + plaster; if (kitCache.has(key)) return kitCache.get(key);
+  const m = new THREE.MeshLambertMaterial({ map, side: THREE.DoubleSide }), rc = new THREE.Color(roof), pc = new THREE.Color(plaster);
+  m.onBeforeCompile = sh => {
+    patchNorthFog(sh); sh.uniforms.uRoof = { value: rc }; sh.uniforms.uPlaster = { value: pc };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vSWP;\nvarying vec3 vSWN;')
+      .replace('#include <project_vertex>', `#include <project_vertex>
+        vSWP = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
+        vSWN = normalize( mat3( modelMatrix ) * objectNormal );`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vSWP;\nvarying vec3 vSWN;\nuniform vec3 uRoof;\nuniform vec3 uPlaster;\n${GLSL_STONE}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        { vec3 nn = normalize( vSWN ); float lum = dot( diffuseColor.rgb, vec3( 0.333 ) ), pale = smoothstep( 0.62, 0.85, lum );
+          float slope = smoothstep( 0.25, 0.45, nn.y ) * ( 1.0 - smoothstep( 0.95, 0.99, nn.y ) );
+          float rw = floor( vSWP.y * 3.0 ), sh = sHash( vec2( floor( ( vSWP.x + vSWP.z ) * 2.0 + mod( rw, 2.0 ) * 0.5 ), rw ) );
+          vec3 roofC = uRoof * ( 0.82 + 0.3 * sh );
+          vec3 wallC = uPlaster * ( 0.9 + 0.1 * sHash( floor( vSWP.xz * 3.0 ) + floor( vSWP.y * 3.0 ) ) );
+          diffuseColor.rgb = mix( diffuseColor.rgb, mix( wallC, roofC, slope ), pale );
+          diffuseColor.rgb *= 0.93 + 0.1 * sHash( floor( vSWP.xz * 9.0 + vSWP.y * 9.0 ) ); }`);
+  };
+  m.customProgramCacheKey = () => 'kit-tint-' + key; kitCache.set(key, m); return m;
+}
+// grain léger pour les matériaux unis des bâtiments (planches, pierre) : évite l'aspect « plastique »
+export function patchGrain(sh) {
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGWP;').replace('#include <project_vertex>', `#include <project_vertex>
+    vGWP = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;`);
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\nvarying vec3 vGWP;\nfloat gHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }`)
+    .replace('#include <color_fragment>', `#include <color_fragment>
+    { float g = gHash( floor( vGWP.xz * 4.0 + vGWP.y * 4.0 ) ) * 0.6 + gHash( floor( vec2( vGWP.x + vGWP.z, vGWP.y ) * vec2( 1.0, 7.0 ) ) ) * 0.4;
+      diffuseColor.rgb *= 0.86 + 0.18 * g; }`);
+}

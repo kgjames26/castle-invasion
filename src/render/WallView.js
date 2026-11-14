@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { SEGS, SEG_W, SECTORS, SECTOR_W, WALK_H, GATE_SEGS } from '../sim/constants.js';
 import { STAIR_Z0, STAIR_Z1 } from '../sim/army.js';
+import { stoneMaterial } from './Stone.js';
 
 export const WALL_H = 6.4, GATE_H = 4.4, Z_OUT = 143.5, Z_IN = 148.9, Z_MID = 146.2, THICK = 2.0, STEPS = 12;
 export const STAIR_XS = Array.from({ length: SECTORS * 2 }, (_, i) => ((i / 2) | 0) * SECTOR_W + (i % 2 ? 32 : 8));
@@ -19,7 +20,7 @@ export async function loadWall(url) {
 export class WallView {
   constructor(scene, asset, sim, fog) {
     this.sim = sim; this.d = new THREE.Object3D(); this.c = new THREE.Color(); this.c2 = new THREE.Color(1, 0.35, 0.25); this.m = new THREE.Matrix4(); this.m2 = new THREE.Matrix4(); this.m3 = new THREE.Matrix4();
-    const panelMat = fog(new THREE.MeshLambertMaterial({ map: asset.map, side: THREE.DoubleSide })), stone = fog(new THREE.MeshLambertMaterial({ color: 0xffffff })), unit = new THREE.BoxGeometry(1, 1, 1);
+    const panelMat = fog(new THREE.MeshLambertMaterial({ map: asset.map, side: THREE.DoubleSide })), stone = stoneMaterial(0xffffff), unit = new THREE.BoxGeometry(1, 1, 1);
     const mk = (geo, mat, cap) => { const im = new THREE.InstancedMesh(geo, mat, cap); im.frustumCulled = false; im.count = 0; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); scene.add(im); return im; };
     this.outer = mk(asset.geo, panelMat, SEGS + 2); this.inner = mk(asset.geo, panelMat, SEGS + 2); this.core = mk(unit, stone, SEGS + 2);
     this.leaves = mk(asset.geo, panelMat, 2); this.steps = mk(unit, stone, STAIR_XS.length * STEPS);

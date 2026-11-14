@@ -3,10 +3,11 @@
 //  Écurie = grange + enclos + cheval + fer à cheval · Atelier de siège = charpente + catapulte + rondins et boulets.
 // Origine du groupe = centre de l'emprise, façade vers le sud (+z, côté caméra). Aucun état de jeu ici.
 import * as THREE from 'three';
-import { applyNorthFog } from './fog.js';
+import { patchNorthFog } from './fog.js';
+import { patchGrain } from './Stone.js';
 
 export const mats = new Map();
-export const mat = (c, ds = false) => { const k = c + (ds ? 'd' : ''); if (!mats.has(k)) mats.set(k, applyNorthFog(new THREE.MeshLambertMaterial({ color: c, flatShading: true, side: ds ? THREE.DoubleSide : THREE.FrontSide }))); return mats.get(k); };
+export const mat = (c, ds = false) => { const k = c + (ds ? 'd' : ''); if (!mats.has(k)) { const m = new THREE.MeshLambertMaterial({ color: c, flatShading: true, side: ds ? THREE.DoubleSide : THREE.FrontSide }); m.onBeforeCompile = sh => { patchNorthFog(sh); patchGrain(sh); }; m.customProgramCacheKey = () => 'nfog-grain'; mats.set(k, m); } return mats.get(k); };
 
 function gableGeo(w, d, h) {   // prisme triangulaire : longueur w (x), largeur d (z), hauteur h
   const a = [-w / 2, 0, -d / 2], b = [-w / 2, 0, d / 2], c = [-w / 2, h, 0], a2 = [w / 2, 0, -d / 2], b2 = [w / 2, 0, d / 2], c2 = [w / 2, h, 0];

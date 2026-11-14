@@ -140,3 +140,9 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Ombres douces (PCF) sur muraille, château et bâtiments ; brume du nord qui respire et avance pendant l'assaut ; lueurs additives (torches des portes, impacts, explosions) sans post-traitement ; fumée de cheminées.
 - UI : indicateur de portée (tour ou secteur d'archers), toasts typés et regroupés (brèche, vague, sortie des escouades), flash d'écran, retour tactile du dock (+ vibration), astuces de premier lancement désactivables (`UI_FLAGS.tutorial` ou `?tuto=0`).
 - Château colorié (`Stone.js`, `stoneMaterial(..., true)`) : toits en tuiles rouges (donjon) ou ardoise bleue (tours), murs en grès chaud, mousse au pied. Sol : mousse, galets, fissures, grain deux tons ; touffes d'herbe instanciées balancées par le vent (`buildGrass`, quantité selon la qualité).
+
+## Phase 17 — Passe « améliore tout »
+- Bâtiments du kit recolorés (`kitMaterial` dans Stone.js) : toits variés (tuile, chaume, ardoise, vert-de-gris), crépis chauds ; tours de muraille en ardoise ; grain léger sur les bâtiments en volumes simples (`patchGrain`) ; cœur et escaliers de la muraille en pierre texturée.
+- Environnement : sapins à deux étages aux teintes variées (neige seulement au nord), forêt et sol prolongés autour de la carte (plus de vide noir), herbe givrée claire au nord.
+- Personnages : ombres de contact sous zombies, villageois, recrues et escouades ; teintes de zombies plus marquées par type, blessés rougeâtres.
+- Jouabilité : colosse à partir de la vague 6 (au lieu de 4) ; alerte quand la muraille est abîmée sans réparateur.

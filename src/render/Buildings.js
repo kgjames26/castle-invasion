@@ -5,7 +5,10 @@ import * as THREE from 'three';
 import { B, mat, militaryModels, WOOD, DARK, STONE, STRAW, GOLD, STEEL } from './Military.js';
 import { STRUCT } from '../content/medieval.js';
 
-const kitModel = (kit, name, sc) => { const g = new THREE.Group(), m = new THREE.Mesh(kit.geo[name], kit.material); m.scale.setScalar(sc); g.add(m); return g; };
+import { kitMaterial } from './Stone.js';
+// toits : tuile rouge, chaume, ardoise, tuile brune, vert-de-gris ; crépis : crème, ocre clair, chaux
+const ROOFS = [0xa8432c, 0xb98a3e, 0x4a5f80, 0x7a3f2a, 0x4f7a64], PLASTERS = [0xecdcbc, 0xe2c99a, 0xf0e8d8];
+const kitModel = (kit, name, sc, seed = 0) => { const g = new THREE.Group(), m = new THREE.Mesh(kit.geo[name], kitMaterial(kit.material.map, ROOFS[seed % ROOFS.length], PLASTERS[(seed >> 2) % PLASTERS.length])); m.scale.setScalar(sc); g.add(m); return g; };
 
 // Enseigne : médaillon rond sur un mât, avec l'icône du métier — se lit de loin, d'un coup d'œil.
 const signCache = new Map();
@@ -121,11 +124,11 @@ const HOUSE_SC = [0.85, 0.85, 1.0, 0.8, 1.0];
 export function makeModel(type, kit, seed = 0) {
   if (militaryModels[type]) { const m = militaryModels[type](); return { g: m.g, top: m.pips[1] }; }
   if (kit) {
-    if (type === 'mill') return withProps({ g: kitModel(kit, 'Windmill', 1.05), top: 8 }, millProps);
-    if (type === 'warehouse') return withProps({ g: kitModel(kit, 'House4', 1.2), top: 6.5 }, warehouseProps);
-    if (type === 'granary') return withProps({ g: kitModel(kit, 'House5', 1.4), top: 6 }, granaryProps);
-    if (type === 'house') { const k = seed % 5; return { g: kitModel(kit, 'House' + (k + 1), HOUSE_SC[k]), top: 6 }; }
-    if (type === 'tower') return { g: kitModel(kit, 'Tower2', 1.1), top: 15.5 };
+    if (type === 'mill') return withProps({ g: kitModel(kit, 'Windmill', 1.05, 1), top: 8 }, millProps);
+    if (type === 'warehouse') return withProps({ g: kitModel(kit, 'House4', 1.2, 3), top: 6.5 }, warehouseProps);
+    if (type === 'granary') return withProps({ g: kitModel(kit, 'House5', 1.4, 1), top: 6 }, granaryProps);
+    if (type === 'house') { const k = seed % 5; return { g: kitModel(kit, 'House' + (k + 1), HOUSE_SC[k], seed), top: 6 }; }
+    if (type === 'tower') return { g: kitModel(kit, 'Tower2', 1.1, 2), top: 15.5 };
   } else {
     if (type === 'mill') { const b = new B(); b.box(4.6, 5, 4.6, 0xcfc3a1, 0, 0, 0); const c = new THREE.Mesh(new THREE.ConeGeometry(3.4, 2.6, 6), mat(0x8a5a2b)); c.position.y = 6.3; b.g.add(c); for (let i = 0; i < 4; i++) b.box(0.4, 6, 0.2, 0xe9e1c8, 0, 5, 2.4, 0, 0, i * Math.PI / 2); return { g: b.g, top: 8 }; }
     if (type === 'warehouse') { const b = new B(); b.box(8, 3.6, 7, 0x7a6a55, 0, 0, 0); b.gable(8.6, 7.6, 2.4, 0x5a3a24, 0, 3.6, 0); return { g: b.g, top: 6.5 }; }

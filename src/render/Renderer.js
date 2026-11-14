@@ -7,7 +7,7 @@ import { archerPos, formationLayout, archerPose, rallySlot } from '../sim/army.j
 import { applyNorthFog } from './fog.js';
 import { StructureView } from './Structures.js';
 import { WallView } from './WallView.js';
-import { stoneMaterial } from './Stone.js';
+import { stoneMaterial, kitMaterial } from './Stone.js';
 import { Effects, EFFECTS } from './Effects.js';
 import { ATMOS, CAMERA, quality, setQualityName } from './config.js';
 import { fogUniforms, patchNorthFog } from './fog.js';
@@ -34,7 +34,7 @@ export class Renderer {
     Object.assign(sun.shadow.camera, { left: -A.hw, right: A.hw, top: A.hd, bottom: -A.hd, near: 10, far: 420 }); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.35; sun.shadow.radius = 3;
     this.dummy = new THREE.Object3D(); this.tmpColor = new THREE.Color();
     this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildSiege(); this.rigs = buildTroopRigs(this.scene); this.vrigs = buildVillagerRigs(this.scene); this.vMesh.visible = false; this.buildHighlight();
-    this.buildGrass();
+    this.buildGrass(); this.buildBlobs();
     this.applyQuality();
     this.buildTorches(); this.buildRangeIndicator();
     this.fx = new Effects(this.scene, { enabled: EFFECTS.enabled });   // particules (flèches, zombies, muraille, siège) : vue seule
@@ -68,9 +68,9 @@ export class Renderer {
     mat.customProgramCacheKey = () => 'grass-wind';
     const im = new THREE.InstancedMesh(geo, mat, MAXN); im.frustumCulled = false; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAXN * 3), 3);
     const type = this.sim.terrain.type; let seed = 4242; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647, d = this.dummy, c = this.tmpColor; let n = 0, tries = 0;
-    const cols = { south: [[0.32, 0.5, 0.22], [0.42, 0.55, 0.26], [0.55, 0.55, 0.28]], north: [[0.62, 0.58, 0.38], [0.5, 0.52, 0.36], [0.72, 0.7, 0.55]] };
+    const cols = { south: [[0.32, 0.5, 0.22], [0.42, 0.55, 0.26], [0.55, 0.55, 0.28]], north: [[0.66, 0.66, 0.6], [0.58, 0.6, 0.55], [0.74, 0.74, 0.7]] };   // herbe givrée, claire sur la neige
     while (n < MAXN && tries++ < MAXN * 8) {
-      const south = r() < 0.62, z = south ? 206 + r() * 106 : 30 + r() * 108, x = 2 + r() * 196;
+      const south = r() < 0.86, z = south ? 206 + r() * 106 : 30 + r() * 108, x = 2 + r() * 196;
       if (Math.hypot((x - CASTLE.x) / 38, (z - CASTLE.z) / 28) < 1) continue;                                        // pas sur les pavés du château
       if (Math.abs(x - PLAZA.x) < PLAZA.hw + 2 && Math.abs(z - PLAZA.z) < PLAZA.hd + 2) continue;                       // ni sur la placette
       const t = type[((z / CELL) | 0) * GW + ((x / CELL) | 0)]; if (t === T.ROAD || t === T.ROCK) continue;
@@ -78,6 +78,23 @@ export class Renderer {
       d.position.set(x, 0, z); d.rotation.set(0, r() * 6.28, 0); d.scale.set(k, k * (0.8 + r() * 0.5), k); d.updateMatrix(); im.setMatrixAt(n, d.matrix); im.setColorAt(n, c.setRGB(col[0] * v, col[1] * v, col[2] * v)); n++;
     }
     im.userData.max = n; im.count = n; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; this.scene.add(im); this.grass = im;
+  }
+  // ——— ombres de contact sous les personnages (ils ne projettent pas d'ombre) : disques sombres instanciés, très bon marché ———
+  buildBlobs() {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(0.6, 'rgba(0,0,0,.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
+    const cap = MAX_Z + 600; this.blobs = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false }), cap);
+    this.blobs.frustumCulled = false; this.blobs.renderOrder = 2; this.blobs.count = 0; this.scene.add(this.blobs);
+  }
+  updateBlobs(alpha) {
+    const im = this.blobs, m = im.instanceMatrix.array, cap = im.instanceMatrix.count; let n = 0;
+    const put = (x, z, s, sz = s) => { if (n >= cap) return; const o = n * 16; m[o] = s; m[o + 1] = 0; m[o + 2] = 0; m[o + 3] = 0; m[o + 4] = 0; m[o + 5] = 1; m[o + 6] = 0; m[o + 7] = 0; m[o + 8] = 0; m[o + 9] = 0; m[o + 10] = sz; m[o + 11] = 0; m[o + 12] = x; m[o + 13] = 0.07; m[o + 14] = z; m[o + 15] = 1; n++; };
+    const Z = this.sim.zombies; for (let i = 0; i < Z.n; i++) put(Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, 1.5 * ZOMBIES[Z.type[i]].size);
+    for (const v of this.sim.eco.villagers) put(v.px + (v.x - v.px) * alpha, v.pz + (v.z - v.pz) * alpha, 1.3);
+    for (const w of this.sim.army.walkers) put(w.px + (w.x - w.px) * alpha, w.pz + (w.z - w.pz) * alpha, 1.4);
+    for (const q of this.sim.army.squads) put(q.px + (q.x - q.px) * alpha, q.pz + (q.z - q.pz) * alpha, q.rad * 2.1, q.rad * 1.8);
+    im.count = n; im.instanceMatrix.needsUpdate = true;
   }
   // ——— torches des portes : flamme + lueur (désactivable avec la qualité) ———
   buildTorches() {
@@ -190,8 +207,37 @@ export class Renderer {
       im.instanceMatrix.needsUpdate = true; this.scene.add(im); return im;
     };
     mk(new THREE.DodecahedronGeometry(1, 0), lam(0x8a8f94), rock, 0.55);
-    mk(new THREE.ConeGeometry(0.9, 2.4, 5), lam(0x2f5d3c), tree, 0.5);
-    mk(new THREE.ConeGeometry(0.62, 1.1, 5), lam(0xf2f6fa), tree, 1.2);      // neige sur la cime
+    // forêt (dans la carte et tout autour, hors des limites, pour cacher le vide) : sapins à deux étages, teintes variées, neige légère
+    for (let i = 0; i < 520; i++) { const side = i % 3, x = side === 0 ? -8 - r() * 70 : side === 1 ? W + 8 + r() * 70 : -70 + r() * (W + 140), z = side === 2 ? D + 6 + r() * 60 : 10 + r() * (D + 50); tree.push([x, z, 2.6 + r() * 2.6]); }
+    this.buildForest(tree, r);
+  }
+  buildForest(list, r) {
+    const n = list.length, d = this.dummy, c = this.tmpColor, c2 = new THREE.Color();
+    const parts = [
+      [new THREE.CylinderGeometry(0.16, 0.24, 0.9, 5).translate(0, 0.45, 0), 0x5a3d26, 0],
+      [new THREE.ConeGeometry(0.95, 1.7, 7).translate(0, 1.55, 0), 0x2f5d3c, 1],
+      [new THREE.ConeGeometry(0.7, 1.4, 7).translate(0, 2.45, 0), 0x3a6b45, 1],
+      [new THREE.ConeGeometry(0.34, 0.5, 7).translate(0, 3.05, 0), 0xf2f6fa, 2],
+    ];
+    const ims = parts.map(([g, col]) => { const im = new THREE.InstancedMesh(g, lam(0xffffff), n); im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); this.scene.add(im); return [im, col]; });
+    list.forEach(([x, z, s], i) => {
+      d.position.set(x, 0, z); d.rotation.set(0, i * 1.7, 0); const sy = s * (0.85 + r() * 0.35); d.scale.set(s, sy, s); d.updateMatrix();
+      const hue = r(), v = 0.8 + r() * 0.35, snow = z < 150 ? 1 : 0.35 + r() * 0.4;
+      ims.forEach(([im, col], k) => {
+        im.setMatrixAt(i, d.matrix); c.setHex(col);
+        if (parts[k][2] === 1) c.multiplyScalar(v).lerp(c2.setHex(hue < 0.3 ? 0x4a6a3a : hue < 0.55 ? 0x26503f : 0x2f5d3c), 0.5);
+        if (parts[k][2] === 2) c.multiplyScalar(snow > 0.6 ? 1 : 0.0001 + snow);
+        im.setColorAt(i, c);
+      });
+      if (snow < 0.6) { d.scale.set(0, 0, 0); d.updateMatrix(); ims[3][0].setMatrixAt(i, d.matrix); }   // pas de neige sur les sapins du sud
+    });
+    for (const [im] of ims) { im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.castShadow = true; }
+    // pourtour de la carte : sol prolongé (neige au nord, terre au sud) sous la forêt de bordure
+    const sk = document.createElement('canvas'); sk.width = 4; sk.height = 64; const sg = sk.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 64);
+    gr.addColorStop(0, '#5f6d7d'); gr.addColorStop(0.45, '#bcc8d3'); gr.addColorStop(0.5, '#9a9488'); gr.addColorStop(0.75, '#a99d84'); gr.addColorStop(1, '#8c8270'); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 64);
+    const tex = new THREE.CanvasTexture(sk); tex.colorSpace = THREE.SRGBColorSpace;
+    const skirt = new THREE.Mesh(new THREE.PlaneGeometry(W + 240, D + 160), applyNorthFog(new THREE.MeshLambertMaterial({ map: tex })));
+    skirt.rotation.x = -Math.PI / 2; skirt.position.set(W / 2, -0.06, D / 2 + 20); skirt.receiveShadow = true; this.scene.add(skirt);
   }
   buildWall() {
     this.wallMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(SEG_W - 0.25, 4, 8), lam(0xffffff), SEGS);
@@ -244,8 +290,8 @@ export class Renderer {
       for (let i = 0; i < N; i++) { const a = rn() * 6.283, r = 2 + 12 * Math.sqrt(rn()); this.treePos.push([ws.x + Math.cos(a) * r, ws.z + Math.sin(a) * r * 0.8, 1.35 + rn() * 0.7, rn()]); }
       this.treePos.sort((a, b) => a[3] - b[3]);
       const mk = (geo, mat) => { const im = new THREE.InstancedMesh(geo, mat, N); im.frustumCulled = false; im.count = N; this.scene.add(im); return im; };
-      const trunk = new THREE.CylinderGeometry(0.25, 0.35, 1.6, 6); trunk.translate(0, 0.8, 0); const fol = new THREE.ConeGeometry(1.5, 3.8, 6); fol.translate(0, 3.2, 0); const snow = new THREE.ConeGeometry(1.0, 1.4, 6); snow.translate(0, 4.7, 0);
-      this.treeT = mk(trunk, lam(0x6b4a2c)); this.treeF = mk(fol, lam(0x2f5d3c)); this.treeS = mk(snow, lam(0xf2f6fa)); }
+      const trunk = new THREE.CylinderGeometry(0.25, 0.35, 1.6, 6); trunk.translate(0, 0.8, 0); const fol = new THREE.ConeGeometry(1.5, 3.8, 6); fol.translate(0, 3.2, 0); const snow = new THREE.ConeGeometry(1.05, 2.2, 6); snow.translate(0, 4.7, 0);   // second étage de feuillage (forêt du sud : pas de neige)
+      this.treeT = mk(trunk, lam(0x6b4a2c)); this.treeF = mk(fol, lam(0x2f5d3c)); this.treeS = mk(snow, lam(0x3d7048)); }
     // gisements découverts par prospection : disque coloré + blocs de minerai ; anneau pulsant pendant l'exploration
     { const cap = 14; this.exDisc = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 0.3, 16), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55 }), cap); this.exDisc.frustumCulled = false; this.exDisc.count = 0; this.exDisc.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); this.scene.add(this.exDisc);
       this.exRock = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), lam(0xffffff), cap * 6); this.exRock.frustumCulled = false; this.exRock.count = 0; this.exRock.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 6 * 3), 3); this.scene.add(this.exRock);
@@ -419,7 +465,7 @@ export class Renderer {
     this.wallMesh.visible = false; this.towers.visible = false; this.keepBoxes.visible = false;
     this.kw = { Wall1: mk('Wall1', SEGS), Wall2: mk('Wall2', SEGS), Wall3: mk('Wall3', SEGS), Wall4: mk('Wall4', 4) };
     this.kitWalls = true; this.put = put; if (this.wv) for (const k in this.kw) this.kw[k].visible = false;
-    const tw = [mk('Tower1', 2), mk('Tower2', 6)]; let a = 0, b = 0;
+    const tw = [mk('Tower1', 2), mk('Tower2', 6)]; for (const t of tw) t.material = kitMaterial(kit.material.map, 0x4a5f80, 0xb8b2a6);   // tours : ardoise et pierre grise let a = 0, b = 0;
     for (let i = 0; i <= SECTORS; i++) { const x = Math.min(W - 3, Math.max(3, i * SECTOR_W)); if (i === 0 || i === SECTORS) put(tw[0], a++, x, 146, 0, 1.15, 1.15, 1.15); else put(tw[1], b++, x, 146, 0, 1.1, 1.1, 1.1); }
     tw[0].count = a; tw[1].count = b; for (const t of tw) { t.instanceMatrix.needsUpdate = true; this.shadowize(t); }
     for (const k in this.kw) this.shadowize(this.kw[k]);
@@ -428,7 +474,7 @@ export class Renderer {
     const castle = new THREE.Mesh(geo.Castle, stoneMaterial(0xffffff, true)); castle.position.set(CASTLE.x, 0, CASTLE.z); castle.scale.setScalar(0.96); castle.rotation.y = Math.PI / 2; this.scene.add(castle); this.castleKit = castle; this.shadowize(castle);
     this.struct.setKit(kit);   // maisons, tours, moulin, entrepôt, grenier : modèles du kit
     // monuments et décor du village
-    const one = (name, x, z, ry, sc) => { const m = new THREE.Mesh(geo[name], kit.material); m.position.set(x, 0, z); m.rotation.y = ry; m.scale.setScalar(sc); this.scene.add(m); return m; };
+    const one = (name, x, z, ry, sc) => { const m = new THREE.Mesh(geo[name], kitMaterial(kit.material.map, 0x7a3f2a, 0xe2d6bc)); m.position.set(x, 0, z); m.rotation.y = ry; m.scale.setScalar(sc); this.scene.add(m); return m; };
     one('Church', 162, 292, -0.3, 1.0);
   }
   updateKitWall() {
@@ -451,7 +497,7 @@ export class Renderer {
       im.anim = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); im.anim.setUsage(THREE.DynamicDrawUsage); v.geo.setAttribute('aAnim', im.anim); this.scene.add(im); return im;
     });
     this.zvCount = new Int32Array(this.zv.length); this.zMesh.visible = false;
-    this.zTint = ZOMBIES.map(z => new THREE.Color(0xffffff).lerp(new THREE.Color(z.color), 0.4));
+    this.zTint = ZOMBIES.map(z => new THREE.Color(0xffffff).lerp(new THREE.Color(z.color), 0.62));   // types plus reconnaissables
     const mk = geo => { const im = new THREE.InstancedMesh(geo, ch.archerMat, SECTORS * ARCHER_SLOTS + 150); im.frustumCulled = false; im.count = 0; this.scene.add(im); return im; };
     this.ab = mk(ch.archer.body); this.abow = mk(ch.archer.bow); this.aMesh.visible = false;
     this.vMesh.geometry = ch.villagerGeo; this.vMesh.material = ch.villagerMat;
@@ -520,7 +566,7 @@ export class Renderer {
       m[o] = c * sc; m[o + 1] = 0; m[o + 2] = -s2 * sc; m[o + 3] = 0; m[o + 4] = 0; m[o + 5] = sc; m[o + 6] = 0; m[o + 7] = 0; m[o + 8] = s2 * sc; m[o + 9] = 0; m[o + 10] = c * sc; m[o + 11] = 0; m[o + 12] = x; m[o + 13] = 0; m[o + 14] = z; m[o + 15] = 1;
       const cps = Z.state[i] === 1 ? 1.3 : Math.max(0.25, Zt.speed / (2.2 * sc));
       im.anim.array[k] = ((clock * cps + Z.phase[i] / 6.2832) % 1) * 16;
-      const hurt = Z.hp[i] / Zt.hp < 0.5 ? 0.7 : 1, tt = this.zTint[t], ca = im.instanceColor.array; ca[k * 3] = tt.r * hurt; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt;
+      const hurt = Z.hp[i] / Zt.hp < 0.5 ? 0.72 : 1, tt = this.zTint[t], ca = im.instanceColor.array; ca[k * 3] = tt.r * hurt + (1 - hurt) * 0.5; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt;   // blessé : plus sombre, rougeâtre
     }
     this.zv.forEach((im, v) => { im.count = cnt[v]; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.anim.needsUpdate = true; });
   }
@@ -601,7 +647,7 @@ export class Renderer {
       this.threat[s].material.opacity = o;
     }
     this.updateWall(); this.updateEconomy(alpha); this.updateSiege(alpha); this.struct.update(dtReal, this.clock);
-    this.updateAtmosphere(dtReal);
+    this.updateAtmosphere(dtReal); this.updateBlobs(sim.speed ? alpha : 1);
     this.fx.setTorches(this.torchPos, sim.army.gate, this.clock);
     this.fx.frame(sim, dtReal);   // effets : lit l'état, ne le modifie pas
     this.renderer.render(this.scene, this.camera);

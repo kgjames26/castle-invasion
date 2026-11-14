@@ -282,9 +282,14 @@ export class UI {
     if (!UI_FLAGS.tutorial) return; try { if (localStorage.getItem('castle-tuto')) return; localStorage.setItem('castle-tuto', '1'); } catch { return; }
     [[2500, '👆 Touche ⚒ Bâtir pour construire tes premiers bâtiments'], [9000, '👥 Dans Villageois, répartis tes ouvriers sur les ressources'], [17000, '🛡 Prépare des archers (Armée) avant la première vague']].forEach(([t, m]) => setTimeout(() => this.toast(m, 'info'), t));
   }
+  // conseil : muraille abîmée sans réparateur (une fois par vague)
+  watchRepairs() {
+    const sim = this.sim, w = sim.wall; if (sim.eco.assign.repair > 0 || this.repairHint === sim.wave) return;
+    for (let s = 0; s < SECTORS; s++) if (w.sectorHp(s) / w.sectorMax(s) < 0.9) { this.repairHint = sim.wave; this.toast(`🔧 ${SECTOR_NAMES[s]} abîmée — affecte des réparateurs (Villageois)`, 'warn'); return; }
+  }
   tick(dt) {
     this.watchSquads();
-    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.refresh(false); }
+    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.watchRepairs(); this.refresh(false); }
     const vw = innerWidth, vh = innerHeight;
     for (let s = 0; s < SECTORS; s++) {
       const p = this.rd.project(s * 40 + 20, 8, 143), b = this.badges[s];

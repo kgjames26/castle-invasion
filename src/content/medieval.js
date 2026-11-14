@@ -145,8 +145,8 @@ export const PHASES = { prep: 'Préparation', alert: 'Alerte', assault: 'Assaut'
 export const TIMING = { firstPrep: 60, prep: 30, alert: 10, calm: 15 };
 
 // Composition d'une vague (indicatif, équilibrable sans toucher au moteur)
-// Colosses : à partir de la vague 4, une chance sur deux d'en voir un (un de plus tous les 6 vagues)
-export const giantsFor = (v, r) => v >= 4 && r < 0.55 ? 1 + ((v - 4) / 6 | 0) : 0;
+// Colosses : à partir de la vague 6, une chance sur deux d'en voir un (un de plus toutes les 6 vagues)
+export const giantsFor = (v, r) => v >= 6 && r < 0.55 ? 1 + ((v - 6) / 6 | 0) : 0;
 export const PACK = { base: 5, perWave: 1.6, jitter: 6, spread: 0.9 };
 export function waveSpec(v) {
   const n = Math.round(30 * Math.pow(1.18, Math.min(v, 6) - 1) * Math.pow(1.1, Math.max(0, v - 6)));
