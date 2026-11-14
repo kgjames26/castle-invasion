@@ -1,8 +1,0 @@
-Model Information:
-* title:	Low poly medieval towers pack
-* source:	https://sketchfab.com/3d-models/low-poly-medieval-towers-pack-194aeada8a124ff998200efddc42c5b2
-* author:	assetfactory (https://sketchfab.com/assetfactory)
-
-Model License:
-* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
-* requirements:	Under basic restrictions, use worldwide, on all types of media, commercially or not, and in all types of derivative works

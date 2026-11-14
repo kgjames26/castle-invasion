@@ -1,159 +1,24 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <title>Castle Invasion</title>
-  <meta name="description" content="Défends ta forteresse médiévale contre des vagues de zombies : récolte, village, armée, formations et armes de siège.">
-  <meta name="theme-color" content="#14100c">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="manifest" href="./manifest.json">
-  <link rel="icon" href="./assets/icons/icon-192.png">
-  <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
-  <link rel="stylesheet" href="./css/style.css">
-  <script type="importmap">
-    { "imports": { "three": "./lib/three.module.min.js", "three/addons/": "./lib/addons/" } }
-  </script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#14100c">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Castle Invasion</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="assets/icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">{ "imports": { "three": "./lib/three.module.min.js" } }</script>
 </head>
 <body>
-  <div id="game"></div>
-
-  <!-- HUD principal -->
-  <div id="hud" class="hidden">
-    <div id="top">
-      <div id="res" class="panel"></div>
-      <div id="wave" class="panel">
-        <div id="wave-label">Vague 1 dans 60 s</div>
-        <div id="wave-bar" class="bar"><i></i></div>
-        <div class="row-mini">
-          <span class="mini-label" data-tip="Santé de chaque segment de la muraille (la porte est au centre)">🧱</span>
-          <div id="wall-bar"></div>
-        </div>
-        <div class="row-mini">
-          <span class="mini-label" data-tip="Santé du château. S'il tombe, la partie est perdue.">🏰</span>
-          <div id="castle-bar" class="bar thin"><i></i></div>
-        </div>
-        <button id="btn-early" class="small hidden" data-tip="Lancer la vague tout de suite (bonus d'or selon le temps restant)">⚔️ Lancer</button>
-      </div>
-      <div id="top-right">
-        <button id="btn-compass" class="round" data-tip="Recentrer la vue vers le nord (N)"><span id="compass-n">N</span></button>
-        <span id="save-dot" data-tip="Sauvegarde automatique">💾</span>
-      </div>
-    </div>
-
-    <div id="bottom">
-      <div id="sel" class="panel"></div>
-      <div id="mini-wrap" class="panel"><canvas id="minimap"></canvas></div>
-      <div id="actions-right">
-        <button id="btn-siege" class="big hidden" data-tip="Réserve d'armes de siège à déployer">🛡️<b>Siège</b><em id="siege-badge">0</em></button>
-        <button id="btn-pause" class="big" data-tip="Pause (Espace)">⏸<b>Pause</b></button>
-        <button id="btn-speed" class="big" data-tip="Vitesse du jeu (1, 2, 3)">▶<b>×1</b></button>
-      </div>
-    </div>
-  </div>
-
-  <nav id="nav" class="hidden">
-    <button data-z="combat" class="sel"><span>🏰</span><b>Combat</b></button>
-    <button data-z="army"><span>⚔️</span><b>Armée</b></button>
-    <button data-z="village"><span>🌾</span><b>Village</b></button>
-  </nav>
-
-  <div id="box-rect"></div>
-  <div id="toasts"></div>
-  <div id="banner"></div>
-  <div id="place-banner" class="hidden"><span></span><button id="btn-place-cancel" class="small">Annuler</button></div>
-  <div id="pending-banner" class="hidden"></div>
-  <div id="formation-menu" class="hidden"></div>
-  <div id="reserve-menu" class="panel hidden"></div>
-  <div id="tooltip"></div>
-
-  <!-- Ville : carte secondaire (bâtiments de développement et de création) -->
-  <div id="underground" class="hidden">
-    <div id="ug-labels"></div>
-    <div id="ug-top">
-      <div class="ug-head panel">
-        <div class="ug-title" id="ug-title">⚔️ Armée</div>
-        <div id="ug-res"></div>
-        <div id="ug-wave"></div>
-        <button id="ug-close" class="small">🏰 Combat</button>
-      </div>
-      <div id="ug-grid" class="panel"></div>
-    </div>
-    <div id="ug-detail" class="panel hidden"></div>
-  </div>
-
-  <!-- Menus -->
-  <div id="menu" class="overlay">
-    <div class="menu-box">
-      <h1>Castle<br><span>Invasion</span></h1>
-      <p class="tagline">Récolte. Développe ta ville. Forme tes troupes.<br>Tiens la muraille face aux morts venus du nord.</p>
-      <div id="loading"><div class="bar"><i></i></div><small>Chargement des pierres du royaume…</small></div>
-      <div id="menu-buttons" class="hidden">
-        <button id="btn-continue" class="big-btn hidden">Continuer</button>
-        <button id="btn-new" class="big-btn">Nouvelle partie</button>
-        <div id="fmt" class="fmt-row">
-          <span>Format</span>
-          <button class="chip sel" data-f="auto">Auto</button>
-          <button class="chip" data-f="portrait">📱 Portrait</button>
-          <button class="chip" data-f="landscape">🖥️ Paysage</button>
-        </div>
-        <small id="fmt-hint" class="credits"></small>
-        <button id="btn-help" class="big-btn ghost">Comment jouer</button>
-      </div>
-      <small class="credits">Modèles 3D : assetfactory, Denys Almaral, Bard the Bowman (Sketchfab) · Three.js</small>
-    </div>
-  </div>
-
-  <div id="help" class="overlay hidden">
-    <div class="menu-box help-box">
-      <h2>Comment jouer</h2>
-      <ul>
-        <li><b>But :</b> protéger le château. Ta base est au sud, la muraille au milieu ; les zombies sortent du brouillard au <b>nord</b>, par vagues. Plus ils sont grands, plus ils sont forts ; plus ils sont petits, plus ils sont rapides.</li>
-        <li><b>Ressources :</b> les cultivateurs récoltent seuls 🪨 🪵 🪙 ⛓️ 💎. Les gisements du nord sont plus riches… et plus exposés.</li>
-        <li><b>Armée ⚔️ et Village 🌾 :</b> la barre du bas passe d'une zone à l'autre sans interrompre la partie. <b>Armée</b> : caserne, champ de tir, écurie, atelier, forge, académie, dépôt (logement militaire, files de production). <b>Village</b> : maisons, fermes, scierie, carrière, mines, moulin, grenier, entrepôt, marché. Affecte tes villageois aux métiers : ils produisent, transportent et mangent — sans nourriture, l'armée s'affaiblit.</li>
-        <li><b>Archers :</b> envoie-les sur la muraille (+30 % de portée, hors d'atteinte au corps à corps).</li>
-        <li><b>Formations :</b> sélectionne plusieurs troupes puis « Former ». Ligne, Double ligne, Coin, Carré, Escarmouche, Colonne, Cavalerie en coin.</li>
-        <li><b>Siège :</b> les armes construites vont en réserve, puis se déploient derrière la muraille (bélier : devant). Le bélier détruit les nids au nord.</li>
-        <li><b>Muraille :</b> touche un segment pour le réparer (pierre). Une brèche laisse passer les zombies.</li>
-      </ul>
-      <h3>Contrôles</h3>
-      <div class="cols">
-        <div><b>Mobile</b><br>Toucher : sélectionner / ordonner<br>Glisser : déplacer la vue<br>Appui long + glisser : sélection multiple<br>Deux doigts : zoom + rotation<br>Double-toucher : tout ce type à l'écran</div>
-        <div><b>Ordinateur</b><br>Clic gauche : sélectionner (glisser = cadre)<br>Clic droit : déplacer / attaquer<br>Molette : zoom · Q/E : rotation<br>WASD/ZQSD : caméra · Espace : pause<br>B : ville · G : former · X : dissoudre</div>
-      </div>
-      <button id="help-close" class="big-btn">Compris</button>
-    </div>
-  </div>
-
-  <div id="pause" class="overlay hidden">
-    <div class="menu-box">
-      <h2 id="pause-title">Pause</h2>
-      <button id="btn-resume" class="big-btn">Reprendre</button>
-      <button id="btn-save" class="big-btn ghost">Sauvegarder</button>
-      <button id="btn-mute" class="big-btn ghost">Son : activé</button>
-      <button id="btn-help2" class="big-btn ghost">Comment jouer</button>
-      <button id="btn-quit" class="big-btn ghost">Recommencer une partie</button>
-    </div>
-  </div>
-
-  <div id="gameover" class="overlay hidden">
-    <div class="menu-box">
-      <h2>Le château est tombé</h2>
-      <p id="go-stats"></p>
-      <button id="btn-restart" class="big-btn">Nouvelle partie</button>
-    </div>
-  </div>
-
-  <div id="confirm" class="overlay hidden">
-    <div class="menu-box">
-      <p id="confirm-text"></p>
-      <button id="confirm-yes" class="big-btn">Oui</button>
-      <button id="confirm-no" class="big-btn ghost">Annuler</button>
-    </div>
-  </div>
-
-  <script type="module" src="./js/main.js"></script>
+<div id="app">
+  <header id="top"></header>
+  <nav id="sectors"></nav>
+  <main id="view"></main>
+  <section id="panel"></section>
+  <div id="over"><div class="box"><h2>Le château est tombé</h2><p id="over-stats"></p><button id="over-btn" class="act">Rejouer</button></div></div>
+</div>
+<script type="module" src="src/main.js"></script>
 </body>
 </html>

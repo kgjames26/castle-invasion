@@ -1,8 +1,0 @@
-Model Information:
-* title:	Low poly winter medieval castle and town pack
-* source:	https://sketchfab.com/3d-models/low-poly-winter-medieval-castle-and-town-pack-bd5f956d409b48d3a600261a3f012ca6
-* author:	assetfactory (https://sketchfab.com/assetfactory)
-
-Model License:
-* license type:	SKETCHFAB Standard (https://sketchfab.com/licenses)
-* requirements:	Under basic restrictions, use worldwide, on all types of media, commercially or not, and in all types of derivative works
