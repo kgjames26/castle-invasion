@@ -177,16 +177,19 @@ export function waveConfig(n) { // n commence à 1
   if (n <= WAVES.length) return WAVES[n - 1];
   const k = n - WAVES.length;
   const f = Math.pow(1.13, k);
+  // profil de la vague : 0 équilibrée, 1 nuée rapide, 2 colosses, 3 assaut de siège
+  const m = [[1, 1, 1, 1, 1, 1], [0.5, 2.2, 2, 1, 0.5, 0.7], [0.6, 0.6, 0.6, 0.8, 2.2, 1.6], [0.8, 0.8, 1, 1, 1.2, 2.2]][k % 4];
+  const c = (v, i) => Math.max(1, Math.round(v * f * m[i]));
   return {
     prep: 60,
     groups: [
-      ['classic', Math.round(26 * f), '*', 0, 0.35],
-      ['fast', Math.round(10 * f), '*', 3, 0.35],
-      ['dog', Math.round(8 * f), '*', 5, 0.3],
-      ['jumper', Math.round(6 * f), '*', 8, 0.6],
-      ['golem', Math.round(3 * f), '*', 10, 2],
-      ['golem_ram', Math.round(2 * f), '*', 14, 3],
-      ['thrower', Math.round(4 * f), '*', 12, 1.2],
+      ['classic', c(26, 0), '*', 0, 0.35],
+      ['fast', c(10, 1), '*', 3, 0.35],
+      ['dog', c(8, 1), '*', 5, 0.3],
+      ['jumper', c(6, 3), '*', 8, 0.6],
+      ['golem', c(3, 4), '*', 10, 2],
+      ['golem_ram', c(2, 5), '*', 14, 3],
+      ['thrower', c(4, 3), '*', 12, 1.2],
     ],
   };
 }

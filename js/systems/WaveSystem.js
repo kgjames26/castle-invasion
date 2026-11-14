@@ -1,4 +1,4 @@
-import { MAP, waveConfig, waveScaling, waveHasSiege } from '../data/Config.js';
+import { MAP, ENEMIES, waveConfig, waveScaling, waveHasSiege } from '../data/Config.js';
 import { Enemy } from '../entities/Enemy.js';
 import { ObjectPool } from '../utils/ObjectPool.js';
 
@@ -45,16 +45,38 @@ export class WaveSystem {
     this.queue = [];
     this.clock = 0;
     const alive = this.nests.map(x => x.alive);
+    const L = MAP.minX + 8, Rr = MAP.maxX - 8, Wd = Rr - L;
+    // thème de la vague : détermine où les groupes surgissent du brouillard
+    const theme = ['wide', 'flank', 'gate', 'pincers'][(n - 1) % 4];
+    const flankLeft = Math.random() < 0.5;
+    this.theme = theme;
+    const centerFor = (type, sp) => {
+      let lo = L, hi = Rr;
+      if (sp === 'W') hi = L + Wd / 3; else if (sp === 'C') { lo = L + Wd / 3; hi = L + 2 * Wd / 3; } else if (sp === 'E') lo = L + 2 * Wd / 3;
+      else if (theme === 'flank') { if (flankLeft) hi = L + Wd * 0.4; else lo = Rr - Wd * 0.4; }
+      else if (theme === 'gate' && (ENEMIES[type].siege || type === 'golem')) { lo = -12; hi = 12; }
+      else if (theme === 'pincers') { if (Math.random() < 0.5) hi = L + Wd * 0.25; else lo = Rr - Wd * 0.25; }
+      return lo + Math.random() * (hi - lo);
+    };
     for (const [type, count, sp, delay, interval] of cfg.groups) {
+      // un groupe est découpé en plusieurs bandes qui surgissent à des endroits différents du front
+      const packs = Math.max(1, Math.min(4, Math.round(count / 6)));
+      const centers = Array.from({ length: packs }, () => centerFor(type, sp));
+      const offs = centers.map((_, i) => i * (1.5 + Math.random() * 2.5));
       for (let k = 0; k < count; k++) {
-        let s = sp === '*' ? (k % 3) : SPAWN_KEYS[sp];
-        if (!alive[s]) {
-          // nid détruit : 40 % de ses créatures ne viennent pas, les autres passent par un autre nid
-          if (Math.random() < 0.4) continue;
-          const others = [0, 1, 2].filter(i => alive[i]);
-          if (others.length) s = others[(Math.random() * others.length) | 0];
-        }
-        this.queue.push({ type, s, t: delay + k * interval + Math.random() * 0.3 });
+        const pk = k % packs;
+        const xc = centers[pk];
+        // si le nid le plus proche est détruit, 40 % de ses créatures ne viennent pas
+        let ni = 0, nd = 1e9;
+        this.nests.forEach((nest, i) => { const d = Math.abs(MAP.SPAWNS[i].x - xc); if (d < nd) { nd = d; ni = i; } });
+        if (!alive[ni] && Math.random() < 0.4) continue;
+        const hw = type === 'golem' || type === 'golem_ram' ? 3 : 7;
+        this.queue.push({
+          type,
+          x: Math.max(MAP.minX + 4, Math.min(MAP.maxX - 4, xc + (Math.random() - 0.5) * 2 * hw)),
+          z: MAP.minZ + 3 + Math.random() * 7,
+          t: delay + offs[pk] + Math.floor(k / packs) * interval + Math.random() * 0.3,
+        });
       }
     }
     this.queue.sort((a, b) => b.t - a.t); // pile : le prochain à la fin
@@ -65,9 +87,7 @@ export class WaveSystem {
     this.game.audio?.horn();
   }
 
-  spawn(type, s) {
-    const p = MAP.SPAWNS[s];
-    const x = p.x + (Math.random() - 0.5) * 12, z = p.z + (Math.random() - 0.5) * 3;
+  spawn(type, x, z) {
     const e = this.pool.get();
     e.reset(type, x, z, this.scaling);
     this.game.enemies.push(e);
@@ -86,7 +106,7 @@ export class WaveSystem {
     this.clock += dt;
     while (this.queue.length && this.queue[this.queue.length - 1].t <= this.clock) {
       const q = this.queue.pop();
-      this.spawn(q.type, q.s);
+      this.spawn(q.type, q.x, q.z);
     }
     if (!this.queue.length && !this.game.enemies.some(e => e.alive)) this.complete();
   }
