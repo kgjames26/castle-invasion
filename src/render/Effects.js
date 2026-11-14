@@ -188,6 +188,15 @@ export class Effects {
           this.ring(b.x, b.z - 2, 10, 0.6, [0.55, 0.48, 0.4]); this.addShake(0.6); break;
         }
         case 'holy': this.ring(b.x, b.z, b.r, 0.9, [1, 0.88, 0.45]); this.ring(b.x, b.z, b.r * 0.55, 0.6, [1, 0.97, 0.8]); this.burst(b.x, 0.6, b.z, 34, b.r, 4.5, 1.0, 0.4, -1.5, [1, 0.88, 0.45], true); this.flash(b.x, 2, b.z, b.r * 1.2, 0.5, [1, 0.9, 0.55]); break;
+        case 'bite': this.burst(b.x, 1.0, b.z, 10, 0.6, 1.5, 0.6, 0.16, 7, [0.6, 0.05, 0.05]); break;
+        case 'devour': this.burst(b.x, 0.5, b.z, 26, 1.2, 2.2, 0.9, 0.2, 7, [0.55, 0.04, 0.04]); this.ring(b.x, b.z, b.r * 1.2, 1.6, [0.4, 0.03, 0.03], 0.06); break;
+        case 'tear': {   // le géant déchire sa proie : gerbe de sang, les deux moitiés du corps volent, le sang coule pendant qu'il boit
+          this.burst(b.x, 3.2, b.z, 40, 1.4, 3.5, 1.1, 0.24, 8, [0.6, 0.04, 0.04]);
+          for (const sd of [-1, 1]) this.burst(b.x + sd * 0.4, 3.0, b.z, 1, 0.2, 2.5, 1.3, 0.9, 9, [0.42, 0.36, 0.3]);
+          for (let k = 0; k < 6; k++) this.burst(b.x, 3.4 - k * 0.15, b.z, 5, 0.25, 0.2, 0.7 + k * 0.15, 0.14, 6, [0.5, 0.03, 0.03]);
+          this.ring(b.x, b.z, 1.8, 2.5, [0.4, 0.03, 0.03], 0.06); break;
+        }
+        case 'turn': this.burst(b.x, 1.2, b.z, 24, 1, 1.8, 1.0, 0.25, 1, [0.45, 0.65, 0.3], true); this.flash(b.x, 1.4, b.z, 2.5, 0.4, [0.5, 0.8, 0.3]); break;
         case 'meteorCall': this.ring(b.x, b.z, b.r, 1.4, [1, 0.4, 0.1]); break;
       }
     }

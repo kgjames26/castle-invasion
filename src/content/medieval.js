@@ -158,6 +158,15 @@ export const PRIEST = {
     { level: 3, ico: '🕊', name: 'Sanctuaire', info: 'Les zombies proches de lui sont ralentis et les escouades autour de lui reprennent des forces' },
   ],
 };
+// Geôle (v2.4) : les combattants MORDUS y sont enfermés en attendant le prêtre ; s'ils se transforment derrière les barreaux, les gardes les abattent.
+ARMY_BUILDINGS.prison = { time: 40, base: 0, name: 'Geôle', ico: '🔒', group: 'army', start: 0, max: 3, cost: { wood: 80, stone: 110, iron: 20 }, pos: { x: 122, z: 220 }, size: [10, 5, 8], color: 0x6a6660, info: 'Enferme les combattants mordus (4 cellules par niveau) · chaque niveau retarde la transformation de 30 %' };
+// Morsures (v2.4) : un combattant blessé par un zombie mordeur peut être MORDU au lieu de mourir. Mordu, il tombe (vulnérable : les zombies
+// proches se ruent pour le dévorer), se relève et doit rejoindre la geôle. Le prêtre seul peut le guérir ; sinon il se transforme en zombie.
+//  bite : part des pertes changées en morsures · turn : secondes avant transformation · tackle : part des morsures où le zombie plonge et fait tomber
+//  frenzy : rayon d'attraction d'un mordu à terre · devour : zombies au contact pour le dévorer (guard : vitesse si son escouade est à côté) · blood : un escouade blessée attire de plus loin (×)
+//  surprise : chance qu'un mordu transformé morde un voisin avant que l'escouade réagisse · cells : places par niveau de geôle
+//  biters : types de zombies qui mordent ; killers : types qui tuent sans mordre ; tearers : géants qui déchirent leur proie et boivent son sang
+export const INFECTION = { bite: 0.4, turn: 45, tackle: 0.4, down: 3.2, frenzy: 16, devour: 3, devourTime: 3.5, guard: 0.25, blood: 1.7, surprise: 0.5, cells: 4, prisonSlow: 0.3, heal: 4, biters: [0, 1, 2, 4], killers: [3, 6], tearers: [5] };
 Object.assign(BUILDINGS, ARMY_BUILDINGS);
 // ——— Phase 6 : construction libre ———
 // Structures multiples (placées où l'on veut) : maisons et tours de défense. Les autres bâtiments existent en un seul exemplaire (niveaux).

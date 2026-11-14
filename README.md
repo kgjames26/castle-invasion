@@ -204,3 +204,12 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
   - niv. 1 : Bénédiction (archers et tours du secteur +15 %, +5 %/niveau) et Familles (+8 places de population par niveau)
   - niv. 2 : Exorcisme (lumière sacrée toutes les 8 s sur les zombies proches, +50 % contre les golems)
   - niv. 3 : Sanctuaire (zombies ralentis près de lui, escouades voisines soignées)
+
+## Phase 24 — Morsures, geôle, transformation
+- **Morsures** (src/sim/infection.js, `INFECTION`) : un combattant tué par un zombie « mordeur » (classique, rapide, résistant, briseur) peut être **mordu** au lieu de mourir — mordu debout ou **plaqué au sol** (plongeon). Le lourd et le golem tuent sans mordre ; le **colosse déchire** sa proie en deux et boit son sang.
+- **À terre, le mordu est vulnérable** : les zombies proches se ruent dessus pour le dévorer (ses camarades le protègent tant qu'ils sont à côté). L'**odeur du sang** attire de plus loin vers les escouades blessées.
+- **Geôle** (bâtiment, 3 niveaux, 4 cellules par niveau) : relevé, le mordu boite jusqu'à la geôle et s'y enferme ; chaque niveau retarde la transformation de 30 %. Transformé en cellule, il est abattu par les gardes.
+- **Le prêtre** est le seul à pouvoir guérir un mordu (4 s de soin) : il retourne en réserve.
+- **Transformation** (45 s) : hors de la geôle, le mordu devient un zombie (teinte de sa tunique) et peut **surprendre** un voisin et le mordre à son tour, ou être repoussé.
+- **Animations** : morsure debout (le zombie se penche et happe), plongeon (il se jette à l'horizontale), coup du lourd, déchirement et boisson du colosse ; mordus couchés qui se débattent, puis voûtés et de plus en plus verdâtres ; gerbes et gouttes de sang.
+- Onglet Armée : alerte « mordus » (compte à rebours, ce qu'il manque) ; fiche de la geôle : cellules, mordus et bilan.

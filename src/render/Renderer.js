@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, GATE_SEGS, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT, PLAZA, WALK_H, wallOff, wallSlope } from '../sim/constants.js';
 import { T } from '../sim/terrain.js';
-import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/medieval.js';
+import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO, INFECTION } from '../content/medieval.js';
 import { archerPos, formationLayout, archerPose, rallySlot } from '../sim/army.js';
 import { applyNorthFog } from './fog.js';
 import { StructureView } from './Structures.js';
@@ -459,8 +459,30 @@ export class Renderer {
         else rig.push(d.matrix, tint, [0, 0.35]);
       } else rig.push(d.matrix, tint, [0, sw, -sw, -0.35 - 0.3 * (mv ? 1 : 0) + 0.3 * Math.sin(ph + Math.PI) * (mv ? 1 : 0), 0.2 + 0.3 * (mv ? 1 : 0)]);
     });
+    this.renderBitten(alpha, gold);
     R.soldier.end(); R.heavy.end(); R.cavalry.end(); R.knight.end();
     if (hh) for (const k of hh.hg.skins) { const im = hh.meshes[k]; im.count = Math.min(120, hh.cnt[k]); im.instanceMatrix.needsUpdate = true; im.anim.needsUpdate = true; im.instanceColor.needsUpdate = true; }
+  }
+  // ——— mordus (v2.4) : à terre (couchés, les zombies se ruent dessus), puis relevés, voûtés et verdâtres, qui boitent vers la geôle ; enfermés derrière les barreaux ———
+  renderBitten(alpha, gold) {
+    const I = this.sim.infection; if (!I || !I.list.length) return; const R = this.rigs, d = this.dummy, t = this.clock, tint = this.tmpColor;
+    const SCALE = { soldier: HUMAN_H / 1.85, heavy: HUMAN_H * 1.08 / 1.85, cavalry: HUMAN_H / 1.85, knight: HUMAN_H * 1.1 / 2.0 }, P = I.prison(this.sim);
+    I.list.forEach((b, i) => {
+      const rig = b.type === 'knight' ? (gold ? R.knightGold : R.knight) : b.type === 'cavalry' ? R.soldier : (R[b.type] || R.soldier), sc = SCALE[b.type] || SCALE.soldier;
+      const x = b.px + (b.x - b.px) * alpha, z = b.pz + (b.z - b.pz) * alpha, sick = 1 - Math.max(0, b.t) / INFECTION.turn;   // 0 → 1 à l'approche de la transformation
+      tint.setRGB(1 - 0.35 * sick, 1 - 0.1 * sick, 1 - 0.45 * sick);
+      if (b.state === 'down') {          // couché sur le dos, se débat
+        d.position.set(x, 0.25, z); d.rotation.set(0, b.face, 0); d.rotateX(-Math.PI / 2 + 0.1 * Math.sin(t * 9 + i)); d.scale.setScalar(sc); d.updateMatrix(); rig.push(d.matrix, tint, [0, 0.4 * Math.sin(t * 11 + i), -0.4 * Math.sin(t * 11 + i), -1.6 + 0.6 * Math.sin(t * 13 + i), 0.2]);
+        if (Math.random() < 0.15 * this.fx.q.particles) this.fx.P.emit(x, 0.4, z, (Math.random() - 0.5) * 1.5, 1.2, (Math.random() - 0.5) * 1.5, 0.5, 0.18, 6, [0.55, 0.05, 0.05], 0.4);
+        return;
+      }
+      let px = x, pz = z, face = b.face; const mv = Math.hypot(b.x - b.px, b.z - b.pz) > 0.002;
+      if (b.state === 'jailed' && P) { const k = I.list.filter(o => o.state === 'jailed').indexOf(b); px = P.x + ((k % 4) - 1.5) * 2.45 + ((k / 4 | 0) % 2 ? 0.6 : 0); pz = P.z + 2.3 - ((k / 4) | 0) * 1.3; face = Math.sin(t * 0.7 + k) * 0.6; }   // dans la cage, face aux barreaux
+      const ph = t * 6 + i, sw = mv ? Math.sin(ph) * 0.5 : 0, shake = sick > 0.6 ? Math.sin(t * 40 + i) * 0.04 * (sick - 0.6) * 2.5 : 0;
+      d.position.set(px + shake, mv ? Math.abs(Math.sin(ph)) * 0.04 : 0, pz); d.rotation.set(0, face, 0); d.rotateX(0.35 + 0.25 * sick); d.scale.setScalar(sc); d.updateMatrix();   // voûté, de plus en plus
+      rig.push(d.matrix, tint, [0, sw, -sw, -0.9 + 0.1 * Math.sin(t * 3 + i), 0.1]);
+      if (Math.random() < 0.03 * this.fx.q.particles) this.fx.P.emit(px, 1.0, pz, 0, -0.5, 0, 0.6, 0.1, 6, [0.5, 0.04, 0.04], 0.3);   // goutte de sang
+    });
   }
   // ——— objets du pack (épée du chevalier, cristaux, grimoire…) : reconstruit les modèles qui les utilisent ———
   // coups de mêlée selon le rang : étincelles (Vétéran), arcs de taille dorés (Élite), onde de choc au sol (Légende) — jamais de magie
@@ -701,11 +723,22 @@ export class Renderer {
       }
       const t = Z.type[i], Zt = ZOMBIES[t], pool = ZVAR[t], vi = pool[((Z.phase[i] * 1000) | 0) % pool.length], im = this.zv[vi], k = cnt[vi]++;
       const x = Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, z = Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, dx = Z.x[i] - Z.px[i], dz = Z.z[i] - Z.pz[i];
-      const rot = dx * dx + dz * dz > 4e-6 ? Math.atan2(dx, dz) : 0, c = Math.cos(rot), s2 = Math.sin(rot), sc = Zt.size * HUMAN_H / 1.6, o = k * 16, m = im.instanceMatrix.array;
-      m[o] = c * sc; m[o + 1] = 0; m[o + 2] = -s2 * sc; m[o + 3] = 0; m[o + 4] = 0; m[o + 5] = sc; m[o + 6] = 0; m[o + 7] = 0; m[o + 8] = s2 * sc; m[o + 9] = 0; m[o + 10] = c * sc; m[o + 11] = 0; m[o + 12] = x; m[o + 13] = 0; m[o + 14] = z; m[o + 15] = 1;
+      const zr = this.zRot || (this.zRot = new Float32Array(MAX_Z)), moving = dx * dx + dz * dz > 4e-6; if (moving) zr[i] = Math.atan2(dx, dz);
+      const rot = moving || Z.bite[i] > 0 ? zr[i] : 0, c = Math.cos(rot), s2 = Math.sin(rot), sc = Zt.size * HUMAN_H / 1.6, o = k * 16, m = im.instanceMatrix.array;
+      // morsures (v2.4) : 1 morsure debout (se penche et happe), 2 plongeon (se jette à l'horizontale), 3 déchirement (géant : se cabre, puis boit), 4 coup (lourd)
+      let pitch = 0, fwd = 0, y = 0; const bk = Z.biteK[i], bt = Z.bite[i];
+      if (bt > 0) {
+        if (bk === 1) { const f = 1 - bt / 0.75, e = Math.sin(Math.PI * Math.min(1, f * 1.3)); pitch = 0.55 * e; fwd = 0.45 * e; }
+        else if (bk === 2) { const f = 1 - bt / 1.1; pitch = f < 0.35 ? 1.4 * (f / 0.35) : 1.4; fwd = Math.min(1, f / 0.35) * 1.3; y = f < 0.35 ? 0.35 * Math.sin(Math.PI * f / 0.35) : 0.05; }
+        else if (bk === 3) { const f = 1 - bt / 2.2; pitch = f < 0.35 ? -0.35 * (f / 0.35) : f < 0.5 ? 0.25 : -0.45; }
+        else if (bk === 4) { const f = 1 - bt / 0.9; pitch = f < 0.5 ? -0.3 * (f / 0.5) : -0.3 + 0.9 * ((f - 0.5) / 0.5); }
+      }
+      const cp = Math.cos(pitch), sp = Math.sin(pitch), px0 = x + s2 * fwd, pz0 = z + c * fwd;
+      m[o] = c * sc; m[o + 1] = 0; m[o + 2] = -s2 * sc; m[o + 3] = 0; m[o + 4] = s2 * sp * sc; m[o + 5] = cp * sc; m[o + 6] = c * sp * sc; m[o + 7] = 0; m[o + 8] = s2 * cp * sc; m[o + 9] = -sp * sc; m[o + 10] = c * cp * sc; m[o + 11] = 0; m[o + 12] = px0; m[o + 13] = y; m[o + 14] = pz0; m[o + 15] = 1;
       const cps = Z.state[i] === 1 ? 1.3 : Math.max(0.25, Zt.speed * (Z.slow[i] > 0 ? 0.4 : 1) / (1.6 * sc));
       im.anim.array[k] = ((clock * cps + Z.phase[i] / 6.2832) % 1) * 16;
-      const hurt = Z.hp[i] / Zt.hp < 0.5 ? 0.72 : 1, tt = this.zTint[t], ca = im.instanceColor.array; if (Z.slow[i] > 0) { ca[k * 3] = 0.6; ca[k * 3 + 1] = 0.85; ca[k * 3 + 2] = 1.3; } else { ca[k * 3] = tt.r * hurt + (1 - hurt) * 0.5; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt; }   // gelé : bleuté   // blessé : plus sombre, rougeâtre
+      const hurt = Z.hp[i] / Zt.hp < 0.5 ? 0.72 : 1, tt = Z.turned[i] ? this.turnTint || (this.turnTint = new THREE.Color(0x8fa0b8)) : this.zTint[t], ca = im.instanceColor.array;   // ancien soldat : teinte de sa tunique
+      if (Z.slow[i] > 0) { ca[k * 3] = 0.6; ca[k * 3 + 1] = 0.85; ca[k * 3 + 2] = 1.3; } else { ca[k * 3] = tt.r * hurt + (1 - hurt) * 0.5; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt; }   // gelé : bleuté   // blessé : plus sombre, rougeâtre
     }
     this.zv.forEach((im, v) => { im.count = cnt[v]; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.anim.needsUpdate = true; });
     G.end();

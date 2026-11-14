@@ -1,6 +1,6 @@
 // Prêtre (v2.3) : arrive au village quand l'église est bâtie. Hors assaut, il reste devant l'église ; pendant l'alerte et l'assaut,
 // il va prier dans la cour derrière le secteur de muraille le plus menacé. Pouvoirs selon le niveau de l'église (voir PRIEST).
-import { PRIEST } from '../content/medieval.js';
+import { PRIEST, INFECTION } from '../content/medieval.js';
 import { SECTORS, SECTOR_W, WALL_Z0, WALL_Z1, sectorOfX, wallOff } from './constants.js';
 
 const tmp = new Int32Array(512);
@@ -26,6 +26,16 @@ export class Priest {
     this.cast = Math.max(0, this.cast - dt);
     const fight = sim.phase === 'assault' || sim.phase === 'alert';
     let tx, tz;
+    // mordus : le prêtre va les guérir (ceux qui sont relevés et à l'abri des remparts), le plus pressé d'abord
+    const I = sim.infection; let pat = null;
+    if (I && I.list.length) { let bs = Infinity; for (const b of I.list) { if (b.state === 'down' || I.outside(b)) continue; const sc = b.t + Math.hypot(b.x - this.x, b.z - this.z) / PRIEST.speed; if (sc < bs) { bs = sc; pat = b; } } }
+    if (pat) {
+      this.post = false; this.sector = -1; const dx = pat.x - this.x, dz = pat.z - this.z, d = Math.hypot(dx, dz), st = PRIEST.speed * dt;
+      if (d > 1.4) { this.x += dx / d * Math.min(st, d - 1.2); this.z += dz / d * Math.min(st, d - 1.2); this.face = Math.atan2(dx, dz); this.healing = 0; return; }
+      this.face = Math.atan2(dx, dz); this.cast = 0.3; this.healing = (this.healing || 0) + dt; if (this.healing >= INFECTION.heal) { this.healing = 0; I.cure(sim, pat); }
+      return;
+    }
+    this.healing = 0;
     if (fight) { if ((this.reT = (this.reT || 0) - dt) <= 0 || this.sector < 0) { this.reT = 6; this.sector = this.threat(sim); } tx = this.sector * SECTOR_W + SECTOR_W / 2 + 6; tz = WALL_Z1 + wallOff(tx) + 5; }
     else { this.sector = -1; const h = this.home(sim); tx = h.x; tz = h.z; }
     const dx = tx - this.x, dz = tz - this.z, d = Math.hypot(dx, dz), st = PRIEST.speed * dt;

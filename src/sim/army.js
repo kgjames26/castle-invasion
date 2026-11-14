@@ -1,5 +1,6 @@
 // Armée : réserve, archers de garnison (chemin de ronde), ESCOUADES avec formations (garnison ou sortie sur le champ de bataille),
 // files d'entraînement. Les escouades agissent comme une seule entité : points de vie en réserve commune, membres dessinés par formation.
+import { INFECTION } from '../content/medieval.js';
 import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_XS, WALL_Z0, WALL_Z1, WALK_H, PLAZA, sectorOfX, wallOff } from './constants.js';
 import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN, RANKS, UPGRADES, INFIRMARY } from '../content/medieval.js';
 
@@ -164,13 +165,18 @@ export class Army {
     for (const q of this.squads) if (q.fresh) { q.x = q.px = 100; q.z = q.pz = GARRISON_Z; q.fresh = false; }
   }
   // dégâts reçus par une escouade (formation + armures)
-  hurtSquad(sim, q, dmg) {
+  hurtSquad(sim, q, dmg, zi = -1) {
     if (q.hp <= 0) return;
     q.hp -= dmg * FORMATIONS[q.form].def * sim.eco.defMult(q.type) / this.rank(sim, q.type).res; q.hit = 0.3;
     const n0 = q.n; q.n = Math.max(0, Math.ceil(q.hp / this.unitHp(q.type)));
     // infirmerie : une partie des combattants tombés est relevée et retourne en réserve après soins
-    const save = INFIRMARY.save[Math.min(3, sim.eco.level.infirmary || 0)];
-    for (let k = q.n; k < n0; k++) if (save && sim.rng() < save) { this.reserve[q.type]++; this.saved = (this.saved || 0) + 1; }
+    const save = INFIRMARY.save[Math.min(3, sim.eco.level.infirmary || 0)], Z = sim.zombies, zt = zi >= 0 ? Z.type[zi] : -1;
+    for (let k = q.n; k < n0; k++) {
+      // morsure (v2.4) : un mordeur peut mordre au lieu de tuer (debout ou en plongeant) ; un géant déchire sa proie
+      if (zt >= 0 && INFECTION.biters.includes(zt) && sim.infection && sim.rng() < INFECTION.bite) { const tackle = sim.rng() < INFECTION.tackle; sim.infection.bite(sim, q, zi, tackle); Z.bite[zi] = tackle ? 1.1 : 0.75; Z.biteK[zi] = tackle ? 2 : 1; continue; }
+      if (zt >= 0 && INFECTION.tearers.includes(zt)) { Z.bite[zi] = 2.2; Z.biteK[zi] = 3; sim.blast('tear', Z.x[zi] + Math.sin(Math.atan2(q.x - Z.x[zi], q.z - Z.z[zi])) * 2, Z.z[zi] + Math.cos(Math.atan2(q.x - Z.x[zi], q.z - Z.z[zi])) * 2, 1); sim.events.push({ type: 'torn', unit: q.type }); continue; }
+      if (save && sim.rng() < save) { this.reserve[q.type]++; this.saved = (this.saved || 0) + 1; }
+    }
   }
   // soin (magicien) : rend une part des PV maximum ; les membres tombés ne reviennent pas
   healSquad(q, frac) { const mx = q.n * this.unitHp(q.type), before = q.hp; q.hp = Math.min(mx, q.hp + frac * mx); q.healed = 1; return q.hp - before; }

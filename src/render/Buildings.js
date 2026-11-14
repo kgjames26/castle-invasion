@@ -120,13 +120,27 @@ function towerFallback() {
   return { g: b.g, top: 14 };
 }
 
-const HOUSE_SC = [0.85, 0.85, 1.0, 0.8, 1.0];
+const HOUSE_SC = [0.85, 0.85, 1.0, 0.8, 1.0], SKIN_G = 0xe0b48c;
 
 // Fabrique le modèle d'une structure. `seed` varie l'aspect des maisons. Renvoie { g, top } ; les pastilles de niveau sont ajoutées par le vue.
 export function makeModel(type, kit, seed = 0) {
   if (type === 'wizard') return wizardModel();
   if (type === 'infirmary') return infirmaryModel();
   if (type === 'university') return universityModel();
+  if (type === 'prison') {   // GEÔLE : bâtisse de pierre au fond, cour-cage à barreaux devant (les mordus y sont visibles), garde à la porte, torche
+    const b = new B(), ST = 0x77736c, STD = 0x5a5650, IRON = 0x2e3036;
+    b.box(10, 0.3, 8, 0x8a8680, 0, 0, 0);
+    b.box(10, 4.2, 2.8, ST, 0, 0.3, -2.6); b.box(10.6, 0.5, 3.4, STD, 0, 4.5, -2.6); for (let k = 0; k < 6; k++) b.box(0.8, 0.7, 0.6, STD, -4.4 + k * 1.76, 5.0, -1.2);   // créneaux
+    for (const x of [-3, 0, 3]) b.box(0.9, 0.9, 0.1, 0x1a1612, x, 2.4, -1.15);                                                                   // soupiraux
+    for (let k = 0; k <= 16; k++) b.box(0.09, 2.6, 0.09, IRON, -4.9 + k * 0.6125, 0.3, 3.6);                                                     // barreaux, façade
+    for (const x of [-4.9, 4.9]) for (let k = 0; k <= 7; k++) b.box(0.09, 2.6, 0.09, IRON, x, 0.3, -1.2 + k * 0.68);                             // barreaux, côtés
+    for (const y of [0.5, 2.85]) { b.box(10, 0.12, 0.12, IRON, 0, y, 3.6); for (const x of [-4.9, 4.9]) b.box(0.12, 0.12, 4.8, IRON, x, y, 1.2); }
+    for (let k = 1; k < 4; k++) b.box(0.09, 2.6, 4.8, IRON, -4.9 + k * 2.45, 0.3, 1.2);                                                          // séparations des cellules
+    b.box(1.4, 0.4, 0.6, 0x6b4a2c, -3.6, 0.3, 0.2); b.box(0.5, 0.5, 0.5, 0x8a6a3a, 3.8, 0.3, 2.6);                                               // paillasse, seau
+    b.box(0.5, 1.5, 0.5, 0x3a4a6a, 5.6, 0.3, 3.2); b.box(0.42, 0.42, 0.42, SKIN_G, 5.6, 1.8, 3.2); b.box(0.5, 0.25, 0.5, 0x8e949c, 5.6, 2.25, 3.2); b.box(0.06, 2.8, 0.06, 0x6b4a2c, 6.0, 0.3, 3.2); b.box(0.12, 0.4, 0.12, 0xcfd6dd, 6.0, 3.1, 3.2);   // garde et sa lance
+    b.box(0.15, 1.4, 0.15, 0x4a3426, -5.4, 2.2, 3.4); b.box(0.35, 0.4, 0.35, 0xffb45a, -5.4, 3.6, 3.4);                                         // torche
+    return { g: b.g, top: 7 };
+  }
   if (type === 'church') { if (kit) return { g: kitModel(kit, 'Church', 1.32, 3), top: 14.5 }; const b = new B(); b.box(6, 5, 9, 0xe6dccb, 0, 0, 0.6); b.gable(6.6, 9.6, 2.6, 0x7a3f2a, 0, 5, 0.6); b.box(3.2, 9, 3.2, 0xd8ccb6, 0, 0, -4.2); b.add(new THREE.ConeGeometry(2.4, 3.6, 4), 0x4a5f80, 0, 10.8, -4.2, 0, Math.PI / 4); b.box(0.25, 1.6, 0.25, GOLD, 0, 12.6, -4.2); b.box(1.0, 0.25, 0.25, GOLD, 0, 13.0, -4.2); return { g: b.g, top: 14 }; }
   if (militaryModels[type]) { const m = militaryModels[type](); return { g: m.g, top: m.pips[1] }; }
   if (kit) {

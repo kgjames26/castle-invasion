@@ -1,7 +1,7 @@
 // Hordes : agents individuels en tableaux typés (SoA). Dans ce prototype tous les zombies sont simulés ;
 // l'architecture prévoit des cohortes agrégées au-delà (voir conception §6).
 import { MAX_Z, W, WALL_Z1, WALL_Z0, WALL_STAND_Z, GW, CELL, CASTLE, SECTORS, segOfX, wallOff } from './constants.js';
-import { GOLEM, ZOMBIES, SQUAD } from '../content/medieval.js';
+import { GOLEM, ZOMBIES, SQUAD, INFECTION } from '../content/medieval.js';
 import { COST, T } from './terrain.js';
 
 const INSIDE_Z = WALL_Z1 + 0.8;      // + wallOff(x) : la muraille est en arc
@@ -16,6 +16,8 @@ export class ZombieSwarm {
     this.phase = new Float32Array(n);
     // hordes : chaque zombie garde sa place (ox, oz) autour du centre de son groupe → ils avancent en masse, pas à la file
     this.grp = new Int32Array(n); this.ox = new Float32Array(n); this.oz = new Float32Array(n); this.slow = new Float32Array(n); this.slam = new Float32Array(n); this.slams = [];
+    // morsures (v2.4) : bite = temps restant de l'animation, biteK = 1 morsure debout, 2 plongeon, 3 déchirement (géant), 4 coup (lourd) ; turned = ancien soldat
+    this.bite = new Float32Array(n); this.biteK = new Uint8Array(n); this.turned = new Uint8Array(n); this.atkT = new Float32Array(n);
     this.gx = new Float32Array(GROUPS); this.gz = new Float32Array(GROUPS); this.gn = new Int32Array(GROUPS); this.hpMult = 1;
     this.n = 0; this.kills = 0;
     this.near = new Int16Array(SECTORS);      // zombies proches (z>95) par secteur ciblé
@@ -28,7 +30,7 @@ export class ZombieSwarm {
     const i = this.n++;
     this.x[i] = this.px[i] = x; this.z[i] = this.pz[i] = z;
     this.hp[i] = ZOMBIES[type].hp * this.hpMult; this.type[i] = type; this.sector[i] = sector; this.state[i] = 0;
-    this.grp[i] = grp; this.ox[i] = ox; this.oz[i] = oz; this.slow[i] = 0; this.slam[i] = 1.5;
+    this.grp[i] = grp; this.ox[i] = ox; this.oz[i] = oz; this.slow[i] = 0; this.slam[i] = 1.5; this.bite[i] = 0; this.biteK[i] = 0; this.turned[i] = 0; this.atkT[i] = 0.5;
     this.phase[i] = rng() * 6.28;
     return true;
   }
@@ -42,14 +44,17 @@ export class ZombieSwarm {
     this.x[i] = this.x[l]; this.z[i] = this.z[l]; this.px[i] = this.px[l]; this.pz[i] = this.pz[l];
     this.hp[i] = this.hp[l]; this.type[i] = this.type[l]; this.sector[i] = this.sector[l]; this.state[i] = this.state[l]; this.phase[i] = this.phase[l];
     this.grp[i] = this.grp[l]; this.ox[i] = this.ox[l]; this.oz[i] = this.oz[l]; this.slow[i] = this.slow[l]; this.slam[i] = this.slam[l];
+    this.bite[i] = this.bite[l]; this.biteK[i] = this.biteK[l]; this.turned[i] = this.turned[l]; this.atkT[i] = this.atkT[l];
   }
+  // animation d'attaque au contact d'une escouade : morsure (mordeurs), coup (lourds) ; le plongeon et le déchirement sont déclenchés par la morsure elle-même
+  swing(i, dt, rng) { if (this.bite[i] > 0 || (this.atkT[i] -= dt) > 0) return; this.atkT[i] = 1.0 + rng() * 0.7; const t = this.type[i]; if (INFECTION.killers.includes(t)) { if (t !== 6) { this.bite[i] = 0.9; this.biteK[i] = 4; } } else if (!INFECTION.tearers.includes(t)) { this.bite[i] = 0.75; this.biteK[i] = 1; } }
 
   update(dt, sim) {
     const { flow, wall, terrain, hash, army } = sim;
     const X = this.x, Z = this.z, n = this.n;
     hash.rebuild(X, Z, n);
     this.near.fill(0); this.attacking.fill(0);
-    const squads = army.squads, outside = army.outside;
+    const squads = army.squads, outside = army.outside, INF = sim.infection;
     // centre de chaque horde (zombies encore dehors et en marche)
     const GX = this.gx, GZ = this.gz, GN = this.gn; GN.fill(0); GX.fill(0); GZ.fill(0);
     for (let i = 0; i < n; i++) { const g = this.grp[i]; if (!g || this.hp[i] <= 0 || Z[i] > WALL_STAND_Z + wallOff(X[i]) - 1 || this.state[i] === 1) continue; const k = g % GROUPS; GX[k] += X[i] - this.ox[i]; GZ[k] += Z[i] - this.oz[i]; GN[k]++; }
@@ -63,6 +68,10 @@ export class ZombieSwarm {
       const cost = Math.min(2, COST[terrainType(terrain, gx, gz)]);
       let speed = t.speed / cost;
       if (this.slow[i] > 0) { this.slow[i] -= dt; speed *= 0.4; }
+      if (this.bite[i] > 0) { this.bite[i] -= dt; if (this.biteK[i] >= 2) continue; }          // plongeon / déchirement : immobile le temps de l'animation
+      // un mordu à terre attire les zombies proches : ils se ruent pour le dévorer
+      const prey = INF && INF.list.length ? INF.prey(x, z) : null;
+      if (prey) { const vx = prey.x - x, vz = prey.z - z, d = Math.hypot(vx, vz) || 1; if (d > 0.9) { X[i] = x + vx / d * speed * 1.25 * dt; Z[i] = z + vz / d * speed * 1.25 * dt; } else { this.state[i] = 1; if (this.bite[i] <= 0) { this.bite[i] = 0.6; this.biteK[i] = 1; } } continue; }
 
       if (z > INSIDE_Z + wallOff(x)) {                                   // ——— dans le royaume
         this.state[i] = 2;
@@ -75,7 +84,7 @@ export class ZombieSwarm {
         }
         if (ts) { tx = ts.x; tz = ts.z; }
         const vx = tx - x, vz = tz - z, d = Math.hypot(vx, vz) || 1;
-        if (ts && d < ts.rad + 0.8) { if (ts.attackers < ts.cap) { ts.attackers++; army.hurtSquad(sim, ts, t.unit * dt); } continue; }
+        if (ts && d < ts.rad + 0.8) { if (ts.attackers < ts.cap) { ts.attackers++; this.swing(i, dt, sim.rng); army.hurtSquad(sim, ts, t.unit * dt, i); } continue; }
         if (!ts && d < CASTLE.r * 0.6 + 1.2) { sim.hurtCastle(t.wall * 0.5 * dt); continue; }
         X[i] = x + vx / d * speed * dt; Z[i] = z + vz / d * speed * dt;
         continue;
@@ -86,13 +95,13 @@ export class ZombieSwarm {
         let bd = Infinity;
         for (let k = 0; k < outside.length; k++) {
           const so = outside[k]; if (so.hp <= 0) continue;
-          const d = Math.hypot(so.x - x, so.z - z) - so.rad; if (d < SQUAD.aggro && d < bd) { bd = d; engaged = so; }
+          const d = Math.hypot(so.x - x, so.z - z) - so.rad, ag = SQUAD.aggro * (army.hpRatio(so) < 0.75 ? INFECTION.blood : 1); if (d < ag && d < bd) { bd = d; engaged = so; }   // l'odeur du sang attire de plus loin
         }
       }
       if (engaged) {
         const ex = engaged.x - x, ez = engaged.z - z, ed = Math.hypot(ex, ez) || 1;
         if (ed < engaged.rad + 0.8) {                       // au contact : frappe si une place est libre sur le front de l'escouade
-          if (engaged.attackers < engaged.cap) { engaged.attackers++; army.hurtSquad(sim, engaged, t.unit * dt); this.state[i] = 1; if (Z[i] > 95) this.near[s]++; continue; }
+          if (engaged.attackers < engaged.cap) { engaged.attackers++; this.swing(i, dt, sim.rng); army.hurtSquad(sim, engaged, t.unit * dt, i); this.state[i] = 1; if (Z[i] > 95) this.near[s]++; continue; }
           dx = 0; dz = 0;
         } else { dx = ex / ed; dz = ez / ed; }
       } else if (flow.sample(s, x, z)) {

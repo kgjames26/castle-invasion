@@ -2,7 +2,7 @@
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
 import { SECTORS, SECTOR_NAMES, SECTOR_SHORT, ARCHER_SLOTS, CASTLE, wallOff } from '../sim/constants.js';
-import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP } from '../content/medieval.js';
+import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, INFECTION, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP } from '../content/medieval.js';
 import { MAGE_TIERS } from '../render/Heroes.js';
 import { FORMATS, idealFormat, quality } from '../render/config.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
@@ -250,6 +250,12 @@ export class UI {
   buzz(p) { if (UI_FLAGS.haptics && navigator.vibrate) try { navigator.vibrate(p); } catch { /* non supporté */ } }
   onEvent(e) {
     const sim = this.sim;
+    if (e.type === 'bitten') { if (!this.lastBite || performance.now() - this.lastBite > 2500) { this.lastBite = performance.now(); this.toast(`🧟 ${UNITS[e.unit].name} mordu${e.tackle ? ', plaqué au sol' : ''} ! ${this.sim.infection.prison(this.sim) ? 'Il doit rejoindre la geôle' : 'Sans geôle, il erre dans la cour…'}`, 'warn'); } }
+    else if (e.type === 'cured') this.toast(`⛪ Le prêtre a guéri un ${UNITS[e.unit].name.toLowerCase()} mordu : il retourne en réserve`, 'ok');
+    else if (e.type === 'turned') { this.toast(`☠ Un ${UNITS[e.unit].name.toLowerCase()} mordu s'est transformé en zombie !`, 'danger'); this.buzz([60, 40, 60]); }
+    else if (e.type === 'turnedJail') this.toast('🔒 Un mordu s\'est transformé en cellule : les gardes l\'ont abattu', 'warn');
+    else if (e.type === 'devoured') this.toast(`🩸 Les zombies ont dévoré un ${UNITS[e.unit].name.toLowerCase()} à terre`, 'danger');
+    else if (e.type === 'repelled') this.toast('⚔ L\'escouade a repoussé le soldat transformé', 'info');
     if (e.type === 'priestArrived') { this.toast('⛪ Un prêtre s\'installe à l\'église : il bénira les défenseurs pendant les assauts', 'ok'); }
     if (e.type === 'built') { const d = STRUCT[e.what]; this.toast(e.kind === 'site' ? `${d.ico} ${d.name} terminé !` : e.kind === 'upgrading' ? `⬆ ${d.name} amélioré` : `✥ ${d.name} remis en service`); }
     else if (e.type === 'breach') { this.toast(`💥 Brèche — ${SECTOR_NAMES[e.s]} ! Envoyez des renforts`, 'danger'); this.flashScreen('danger') }
@@ -421,6 +427,9 @@ export class UI {
     if (s.type === 'wizard') h += this.mageHtml(true);
     if (s.type === 'church' && s.level) { const P = this.sim.priest, L = s.level; h += `<div class="rank">⛪ Le prêtre ${P.here ? (P.post ? `prie derrière le secteur <b>${SECTOR_SHORT[P.sector]}</b>` : 'veille sur le village') : 'arrive…'}<small>Pendant l'alerte et l'assaut, il va seul derrière le secteur le plus menacé.</small></div>`
       + `<div class="spells">${PRIEST.powers.map(w => `<span class="${w.level <= L ? 'on' : 'off'}" title="${w.info}">${w.ico}<b>${w.name}</b><small>${w.level <= L ? w.info : 'église niv. ' + w.level}</small></span>`).join('')}</div>`; }
+    if (s.type === 'prison' && s.level) { const I = this.sim.infection, J = I.list.filter(b => b.state === 'jailed'), W = I.list.filter(b => b.state !== 'jailed');
+      h += `<div class="rank">🔒 Cellules : <b>${J.length}/${I.cells(this.sim)}</b> · transformation ralentie de ${Math.round(INFECTION.prisonSlow * s.level * 100)} %<small>Les combattants mordus viennent s'y enfermer. Le prêtre vient les guérir ; s'ils se transforment derrière les barreaux, les gardes les abattent.</small></div>`
+        + (I.list.length ? `<div class="hint small">${[...J, ...W].map(b => `${UNITS[b.type].ico} ${b.state === 'jailed' ? 'en cellule' : b.state === 'down' ? 'à terre !' : 'en route'} · ${Math.max(0, Math.ceil(b.t))} s`).join('<br>')}</div>` : '') + `<div class="hint small">Bilan : ${I.cured} guéri${I.cured > 1 ? 's' : ''} · ${I.turned} transformé${I.turned > 1 ? 's' : ''} · ${I.devoured} dévoré${I.devoured > 1 ? 's' : ''}</div>`; }
     if (s.type === 'publicworks' && s.level) { const R = this.sim.roads, q = R.quality(this.sim), pend = R.list.filter(r => r.built < 1).length; h += `<div class="rank">🛤 Routes : <b>${ROADWORKS.names[q]}</b> — villageois +${Math.round(ROADWORKS.speed[q] * 100)} % de vitesse sur les routes${q < 3 ? ` · niveau ${s.level + 1} : ${ROADWORKS.names[q + 1]}` : ''}${pend ? ` · ${pend} chantier${pend > 1 ? 's' : ''} de route` : ''}<small>Le réseau relie seul chaque nouveau bâtiment ; trace en plus tes propres routes (bois et pierre au mètre).</small></div>` + this.btn('🛤 Tracer une route', `${ROADWORKS.costPerM.wood} ${RES_INFO.wood.ico} + ${ROADWORKS.costPerM.stone} ${RES_INFO.stone.ico} par mètre`, 'road', false, 'act'); }
     if (s.type === 'infirmary' && s.level) h += `<div class="rank">🏥 Soins : <b>${(INFIRMARY.heal[s.level] * 100).toFixed(1)} %</b> des PV par seconde aux escouades en garnison hors combat · <b>${INFIRMARY.save[s.level] * 100} %</b> des combattants tombés sont sauvés (retour en réserve)${this.sim.army.saved ? ` · ${this.sim.army.saved} sauvés` : ''}</div>`;
     if (s.type === 'university' && s.level) h += this.btn('🎓 Améliorations des villageois', '', 'sheet:tech', false, 'act sec');
@@ -481,7 +490,12 @@ export class UI {
   armyHtml() {
     const subs = [['squads', '🛡 Escouades'], ['train', '🪖 Entraîner'], ['ranks', '⭐ Rangs'], ['magic', '🔮 Magie'], ['siege', '🛠 Siège'], ['forge', '🔨 Forge']];
     const body = { squads: () => this.squadsHtml(), train: () => this.trainHtml(), ranks: () => this.ranksHtml(), magic: () => this.mageHtml(false), siege: () => this.siegeHtml(), forge: () => this.forgeHtml() }[this.asub] || (() => this.squadsHtml());
-    return `<div class="subtabs">${subs.map(([k, n]) => `<button data-a="asub:${k}" class="${this.asub === k ? 'on' : ''}">${n}</button>`).join('')}</div>${this.popLine()}${this.asub === 'squads' || this.asub === 'train' ? this.rallyLine() : ''}` + body();
+    return `<div class="subtabs">${subs.map(([k, n]) => `<button data-a="asub:${k}" class="${this.asub === k ? 'on' : ''}">${n}</button>`).join('')}</div>${this.bittenLine()}${this.popLine()}${this.asub === 'squads' || this.asub === 'train' ? this.rallyLine() : ''}` + body();
+  }
+  // mordus : rappel de ce qu'il faut (geôle pour les enfermer, église pour que le prêtre les guérisse)
+  bittenLine() {
+    const I = this.sim.infection; if (!I || !I.list.length) return ''; const jail = I.prison(this.sim), church = this.sim.priest && this.sim.priest.here, n = I.list.length, soon = Math.min(...I.list.map(b => b.t));
+    return `<div class="hint small warnline">🧟 <b>${n} mordu${n > 1 ? 's' : ''}</b> · transformation dans ${Math.max(0, Math.ceil(soon))} s${!jail ? ' · <b>bâtis une geôle</b> pour les enfermer' : ''}${!church ? ' · <b>bâtis une église</b> : seul le prêtre peut les guérir' : ''}</div>`;
   }
   rallyLine() { return `<div class="row">${this.btn(this.rallying ? '✖ Annuler' : '📍 Point de ralliement', this.rallying ? '' : 'par défaut : la placette', 'rally', false, this.rallying ? 'act warnb' : 'act')}${this.rallying ? '<div class="hint small">Touche la carte, dans la cour ou le village.</div>' : ''}</div>`; }
   squadsHtml() {
