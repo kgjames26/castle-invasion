@@ -1,5 +1,5 @@
 // Simulation : 100 % indépendante du rendu (aucune dépendance à Three.js ni au DOM). Pas fixe de 20 Hz.
-import { TICK, SECTORS, SECTOR_W, W, CASTLE, STORE_CAP, ARCHER_SLOTS } from './constants.js';
+import { TICK, SECTORS, SECTOR_W, W, CASTLE } from './constants.js';
 import { makeRng } from './rng.js';
 import { SpatialHash } from './spatial.js';
 import { generateTerrain } from './terrain.js';
@@ -7,7 +7,8 @@ import { FlowFields } from './flowfield.js';
 import { Wall } from './wall.js';
 import { ZombieSwarm } from './zombies.js';
 import { Army } from './army.js';
-import { START, UNITS, WALL, TIMING, waveSpec, ZOMBIES } from '../content/medieval.js';
+import { START, UNITS, TIMING, waveSpec } from '../content/medieval.js';
+import { Economy } from './economy.js';
 
 export class Simulation {
   constructor(seed = 20261114) {
@@ -18,6 +19,8 @@ export class Simulation {
     this.hash = new SpatialHash(4, 4096);
     this.zombies = new ZombieSwarm();
     this.army = new Army();
+    this.eco = new Economy(this);
+    this.scratch = new Int32Array(256);
     this.arrows = [];             // événements visuels (consommés par le rendu)
     this.events = [];             // 'breach', 'repair', 'waveStart', 'waveEnd', 'gameOver'
     this.speed = 1;
@@ -27,13 +30,13 @@ export class Simulation {
     this.rng = makeRng(this.seed);
     this.wall.reset(); this.zombies.clear(); this.zombies.kills = 0;
     this.army = new Army();
+    this.eco.reset();
     this.army.reserve = { ...START.reserve };
     // affectation initiale gratuite (hors réserve)
     for (let s = 0; s < SECTORS; s++) {
       this.army.reserve.archer += START.perSector.archer; this.army.reserve.soldier += START.perSector.soldier;
       this.army.assign(s, 'archer', START.perSector.archer); this.army.assign(s, 'soldier', START.perSector.soldier);
     }
-    this.res = { gold: START.gold, stone: START.stone };
     this.castleHp = CASTLE.hp; this.over = false; this.time = 0;
     this.wave = 1; this.phase = 'prep'; this.timer = TIMING.firstPrep; this.targets = [];
     this.spawn = null; this.assaultTime = 0; this.stats = { breaches: 0 };
@@ -42,20 +45,14 @@ export class Simulation {
 
   // ——— commandes (appelées par l'interface) ———
   assign(s, type, delta) { return this.army.assign(s, type, delta); }
-  recruit(type) {
-    const c = UNITS[type].cost; if (this.res.gold < c) return false;
-    this.res.gold -= c; this.army.reserve[type]++; return true;
-  }
-  repair(s) {
-    const need = this.wall.repairCost(s); if (need <= 0 || this.res.stone < 1) return 0;
-    const { spent, revived } = this.wall.repair(s, Math.min(need, Math.floor(this.res.stone)));
-    this.res.stone -= spent; if (revived) this.flow.rebuild(s); this.events.push({ type: 'repair', s });
-    return spent;
-  }
-  upgrade(s) {
-    const c = this.wall.upgradeCost(s); if (this.res.stone < c) return false;
-    this.res.stone -= c; return this.wall.upgrade(s);
-  }
+  get res() { return this.eco.res; }
+  recruit(type) { if (!this.eco.pay(UNITS[type].cost)) return false; this.army.reserve[type]++; return true; }
+  upgrade(s) { const c = this.wall.upgradeCost(s); if (!c || !this.eco.pay(c)) return false; return this.wall.upgrade(s); }
+  assignVillagers(task, delta) { return this.eco.setAssign(task, delta); }
+  recruitVillager() { return this.eco.recruitVillager(); }
+  upgradeBuilding(b) { return this.eco.upgradeBuilding(b); }
+  buyUpgrade(u) { return this.eco.buyUpgrade(u); }
+  setRepairPriority(s) { this.eco.setRepairPriority(s); }
   skipPrep() { if (this.phase === 'prep') this.timer = 0; }
 
   // ——— événements internes ———
@@ -63,6 +60,7 @@ export class Simulation {
     const s = this.wall.sectorOf(seg); this.stats.breaches++;
     this.flow.rebuild(s); this.events.push({ type: 'breach', s, seg });
   }
+  onRepaired(seg) { const s = this.wall.sectorOf(seg); this.flow.rebuild(s); this.events.push({ type: 'repair', s, seg }); }
   hurtCastle(d) { this.castleHp -= d; if (this.castleHp <= 0 && !this.over) { this.castleHp = 0; this.over = true; this.events.push({ type: 'gameOver' }); } }
 
   // ——— cycle des vagues ———
@@ -96,7 +94,7 @@ export class Simulation {
         }
       } else if (this.zombies.n === 0) {
         const spec = waveSpec(this.wave);
-        this.res.gold = Math.min(STORE_CAP, this.res.gold + spec.reward.gold); this.res.stone = Math.min(STORE_CAP, this.res.stone + spec.reward.stone);
+        for (const r in spec.reward) this.eco.add(r, spec.reward[r]);
         this.events.push({ type: 'waveEnd', wave: this.wave, reward: spec.reward });
         this.phase = 'calm'; this.timer = TIMING.calm; this.spawn = null;
       }
@@ -116,9 +114,8 @@ export class Simulation {
     this.updateWaves(dt);
     this.zombies.update(dt, this);
     this.army.update(dt, this);
+    this.eco.update(dt);
     this.zombies.compact();
-    this.res.gold = Math.min(STORE_CAP, this.res.gold + START.income.gold * dt);
-    this.res.stone = Math.min(STORE_CAP, this.res.stone + START.income.stone * dt);
     for (let i = this.arrows.length - 1; i >= 0; i--) { this.arrows[i].t += dt; if (this.arrows[i].t > 0.4) this.arrows.splice(i, 1); }
   }
   // Danger d'un secteur : 0 calme, 1 menace proche, 2 attaque en cours

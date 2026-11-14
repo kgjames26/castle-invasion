@@ -36,7 +36,12 @@ export class Wall {
     }
     return { spent: Math.ceil((stone * WALL.repairHpPerStone - budget) / WALL.repairHpPerStone), revived };
   }
-  upgradeCost(s) { return this.level[s] >= WALL.maxLevel ? Infinity : WALL.upgradeStoneBase * this.level[s]; }
+  upgradeCost(s) {
+    if (this.level[s] >= WALL.maxLevel) return null;
+    const c = {}; for (const r in WALL.upgradeBase) c[r] = WALL.upgradeBase[r] * this.level[s]; return c;
+  }
+  // soigne un tronçon ; renvoie true s'il vient d'être reconstruit (brèche refermée)
+  heal(seg, hp) { const was = this.hp[seg] <= 0; this.hp[seg] = Math.min(this.segMax(seg), this.hp[seg] + hp); return was && this.hp[seg] > 0; }
   upgrade(s) {
     if (this.level[s] >= WALL.maxLevel) return false;
     const before = []; for (let k = 0; k < SEGS_PER_SECTOR; k++) { const seg = s * SEGS_PER_SECTOR + k; before.push(this.segMax(seg)); }

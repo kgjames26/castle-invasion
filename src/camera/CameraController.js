@@ -22,6 +22,9 @@ export class CameraController {
   }
   setZoom(z) { this.zoom = Math.min(1.7, Math.max(0.3, z)); }
   focusOn(x, z) { this.focus = { x, z }; }
+  // changement de vue instantané (onglets) : position et zoom mémorisés par onglet
+  getView() { return { tx: this.tx, tz: this.tz, zoom: this.zoom }; }
+  setView(v) { this.focus = null; this.tx = v.tx; this.tz = v.tz; this.zoom = v.zoom; this.update(0); }
   worldAt(cx, cy) {
     const r = this.dom.getBoundingClientRect(); const ndc = new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
     this.ray.setFromCamera(ndc, this.cam); const p = new THREE.Vector3(); return this.ray.ray.intersectPlane(this.plane, p) ? p : null;

@@ -1,4 +1,4 @@
-# 🏰 Castle Invasion v3 — prototype de gameplay (Phase 2)
+# 🏰 Castle Invasion v3 — Phases 2 et 3 (combat + économie)
 
 Défense de forteresse médiévale en temps réel contre des hordes de zombies. **Nord en haut**, zombies du nord vers le sud,
 muraille horizontale de 200 m en **5 secteurs**, royaume au sud. Pensé d'abord pour le **smartphone en portrait**.
@@ -19,13 +19,17 @@ node tests/headless.mjs 12 dumb   # joueur passif
 - Zombies : 5 types, champ de flux (Dijkstra) par secteur recalculé à chaque brèche, séparation par hachage spatial, rendu en `InstancedMesh`.
 - Armée : archers (chemin de ronde, 12 max/secteur) et soldats (pied du mur, 10 max/secteur) + réserve ; tir et mêlée automatiques.
 - Vagues : Préparation → Alerte (secteurs ciblés annoncés) → Assaut → Accalmie ; courbe `30 × 1,18^(v−1)`.
-- Ressources provisoires : or (recruter) et pierre (réparer/renforcer), revenu passif — remplacés par la récolte en Phase 3.
-- Sauvegarde versionnée (localStorage, v1, migrations prévues), auto toutes les 30 s et en fin de vague.
+- **Onglet Village (Phase 3)** : 5 ressources (bois, pierre, fer, nourriture, or). Le joueur ne fixe que le **nombre de villageois par tâche** ;
+  chacun sait quoi faire : aller au site, récolter, **tout rapporter au château**, recommencer. Rendement = effectifs × niveau du bâtiment × outils
+  × disponibilité du gisement ; stocks limités (Entrepôt, Grenier) ; nourriture consommée par la population (famine = rendement réduit de moitié).
+- Transport et productivité : Outils, **Chariots** (charge), **Chemins pavés** (vitesse), Charrue, Maçonnerie ; bâtiments améliorables (Scierie, Carrière, Mine, Ferme, Moulin, Grenier, Entrepôt, Maisons).
+- **Équipe de réparation** : des villageois affectés répondent seuls aux dégâts (brèches d'abord, priorité réglable par secteur), consomment la pierre et attendent que les zombies s'écartent.
+- Sauvegarde versionnée (localStorage, v2 ; migration v1→v2 incluse), auto toutes les 30 s et en fin de vague.
 - Portrait : barre des 5 secteurs + panneau contextuel. Paysage : terrain pleine largeur + panneau latéral.
 
 ## Pas encore (phases suivantes)
-Villageois/récolte/bâtiments (3), entraînement/files/types d'unités (4), équilibrage et nouveaux ennemis (5), tours automatiques,
-cohortes de zombies agrégées (> 4 000), personnages archivés, effets et polissage (6). Onglets Armée/Village : absents tant qu'ils seraient factices.
+Entraînement/files/types d'unités (4), équilibrage et nouveaux ennemis (5), tours automatiques,
+cohortes de zombies agrégées (> 4 000), personnages archivés, effets et polissage (6). Onglet Armée : absent tant qu'il serait factice. Les villageois ne peuvent pas encore être attaqués.
 
 ## Structure
 ```

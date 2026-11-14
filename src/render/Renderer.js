@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT } from '../sim/constants.js';
 import { T } from '../sim/terrain.js';
-import { ZOMBIES } from '../content/medieval.js';
+import { ZOMBIES, BUILDINGS, TASKS, RES_INFO } from '../content/medieval.js';
 import { archerPos } from '../sim/army.js';
 import { applyNorthFog } from './fog.js';
 
@@ -21,7 +21,7 @@ export class Renderer {
     this.scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x4a4030, 1.55));
     const sun = new THREE.DirectionalLight(0xfff1d0, 1.5); sun.position.set(-60, 120, 80); this.scene.add(sun);
     this.dummy = new THREE.Object3D(); this.tmpColor = new THREE.Color();
-    this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildUnits(); this.buildHighlight();
+    this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildHighlight();
     this.selected = -1; this.clock = 0;
   }
   resize(w, h) { this.renderer.setSize(w, h, false); this.renderer.domElement.style.width = w + 'px'; this.renderer.domElement.style.height = h + 'px'; this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
@@ -88,7 +88,47 @@ export class Renderer {
     // repères du royaume (provisoires) : zones militaire / village
     const zone = (x, z, w, d, col) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, 3, d), lam(col)); b.position.set(x, 1.5, z); this.scene.add(b); };
     zone(30, 175, 18, 12, 0x7a4040); zone(170, 175, 18, 12, 0x7a4040); zone(100, 180, 14, 10, 0x4a5f7a);        // casernes, champ de tir
-    zone(35, 235, 20, 14, 0xc4a64a); zone(165, 235, 20, 14, 0xc4a64a); zone(100, 240, 16, 12, 0x9a7a4a);        // fermes, village
+  }
+  buildEconomy() {
+    this.bMesh = {};
+    for (const id in BUILDINGS) {
+      const B = BUILDINGS[id], g = new THREE.BoxGeometry(...B.size); g.translate(0, B.size[1] / 2, 0);
+      const m = new THREE.Mesh(g, lam(B.color)); m.position.set(B.pos.x, 0, B.pos.z); this.scene.add(m);
+      const ghost = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false })); ghost.position.copy(m.position); this.scene.add(ghost);
+      this.bMesh[id] = { m, ghost };
+    }
+    // points de récolte (gisements) : pastilles colorées au sol
+    for (const t in TASKS) {
+      const T = TASKS[t]; if (!T.res) continue;
+      const d = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 0.3, 14), new THREE.MeshBasicMaterial({ color: RES_INFO[T.res].color, transparent: true, opacity: 0.55 }));
+      d.position.set(T.site.x, 0.2, T.site.z); this.scene.add(d);
+    }
+    const vg = new THREE.BoxGeometry(0.7, 1.5, 0.7); vg.translate(0, 0.75, 0);
+    this.vMesh = new THREE.InstancedMesh(vg, lam(0xffffff), 160); this.vMesh.frustumCulled = false; this.vMesh.count = 0;
+    this.vMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(160 * 3), 3); this.scene.add(this.vMesh);
+    const cg = new THREE.BoxGeometry(0.7, 0.7, 0.7); this.cMesh = new THREE.InstancedMesh(cg, lam(0xffffff), 160); this.cMesh.frustumCulled = false; this.cMesh.count = 0;
+    this.cMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(160 * 3), 3); this.scene.add(this.cMesh);
+    this.vCol = { idle: new THREE.Color(0xd8b48a), repair: new THREE.Color(0xe67e22) };
+  }
+  updateEconomy(alpha) {
+    const E = this.sim.eco, d = this.dummy;
+    for (const id in this.bMesh) {
+      const lv = E.level[id], { m, ghost } = this.bMesh[id];
+      m.visible = lv > 0; ghost.visible = lv === 0; m.scale.y = 1 + 0.12 * (lv - 1);
+    }
+    const vs = E.villagers, VS = 2.8; this.vMesh.count = vs.length; let nc = 0;
+    for (let i = 0; i < vs.length; i++) {
+      const v = vs[i], x = v.px + (v.x - v.px) * alpha, z = v.pz + (v.z - v.pz) * alpha;
+      d.position.set(x, 0, z); d.scale.set(VS * 0.8, VS, VS * 0.8); d.rotation.set(0, 0, 0); d.updateMatrix(); this.vMesh.setMatrixAt(i, d.matrix);
+      this.vMesh.setColorAt(i, v.task === 'repair' ? this.vCol.repair : this.vCol.idle);
+      if (v.carry > 0) {                                  // charge portée : cube coloré selon la ressource
+        d.position.set(x, 4.6, z); d.scale.set(1.8, 1.8, 1.8); d.updateMatrix(); this.cMesh.setMatrixAt(nc, d.matrix);
+        this.tmpColor.setHex(RES_INFO[v.carryRes].color); this.cMesh.setColorAt(nc, this.tmpColor); nc++;
+      }
+    }
+    this.cMesh.count = nc;
+    this.vMesh.instanceMatrix.needsUpdate = true; this.vMesh.instanceColor.needsUpdate = true;
+    this.cMesh.instanceMatrix.needsUpdate = true; this.cMesh.instanceColor.needsUpdate = true;
   }
   buildUnits() {
     const box = new THREE.BoxGeometry(0.8, 1.7, 0.8); box.translate(0, 0.85, 0);
@@ -144,7 +184,7 @@ export class Renderer {
       const o = dg === 2 ? 0.28 + 0.12 * Math.sin(this.clock * 8) : dg === 1 ? 0.12 : tgt ? 0.1 + 0.08 * Math.sin(this.clock * 5) : 0;
       this.threat[s].material.opacity = o;
     }
-    this.updateWall();
+    this.updateWall(); this.updateEconomy(alpha);
     this.renderer.render(this.scene, this.camera);
   }
 }

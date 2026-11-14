@@ -9,19 +9,67 @@ export const ZOMBIES = [
   { id: 4, name: 'Briseur',     hp: 150, speed: 1.8, wall: 45, unit: 8,  size: 1.25, color: 0xd9822b },
 ];
 export const UNITS = {
-  archer:  { cost: 30, hp: 60,  dmg: 14, rate: 1.2, range: 34 },
-  soldier: { cost: 40, hp: 140, dmg: 11, rate: 0.8, range: 1.7, speed: 3.6, leash: 14, regen: 2 },
+  archer:  { cost: { gold: 25, wood: 15 }, hp: 60,  dmg: 14, rate: 1.2, range: 34 },
+  soldier: { cost: { gold: 30, iron: 15 }, hp: 140, dmg: 11, rate: 0.8, range: 1.7, speed: 3.6, leash: 14, regen: 2 },
 };
 export const WALL = {
   segHp: 400, gateHp: 900, gateSegs: [19, 20],
   maxLevel: 5, levelHpBonus: 0.25, levelDmgCut: 0.10,
-  repairHpPerStone: 8, upgradeStoneBase: 120,
+  repairHpPerStone: 8, upgradeBase: { stone: 120, wood: 60 },
 };
 export const START = {
-  gold: 120, stone: 150, reserve: { archer: 4, soldier: 3 },
+  res: { wood: 150, stone: 150, iron: 60, food: 150, gold: 100 },
+  reserve: { archer: 4, soldier: 3 },
   perSector: { archer: 2, soldier: 1 },
-  income: { gold: 1.5, stone: 1.0 },   // revenu provisoire (remplacé par la récolte à la Phase 3)
+  villagers: 10,
+  assign: { wood: 3, stone: 2, iron: 1, gold: 1, food: 3, repair: 0 },   // répartition de départ (modifiable)
 };
+
+// ——— Économie (Phase 3) ———
+export const RES = ['wood', 'stone', 'iron', 'food', 'gold'];
+export const RES_INFO = {
+  wood: { name: 'Bois', ico: '🪵', color: 0x8b5a2b }, stone: { name: 'Pierre', ico: '🪨', color: 0x9aa0a6 },
+  iron: { name: 'Fer', ico: '⛓', color: 0x5b6b8a }, food: { name: 'Nourriture', ico: '🌾', color: 0xe6c84a },
+  gold: { name: 'Or', ico: '🪙', color: 0xffd23f },
+};
+export const ECON = {
+  villagerSpeed: 3.6, carry: 10, slotsPerLevel: 5, maxLevel: 4,
+  baseStore: 300, storePerLevel: 400,
+  upkeep: { villager: 0.02, unit: 0.03 },    // nourriture / personne / seconde
+  famineMult: 0.5, levelGather: 0.15, millBonus: 0.2,
+  repairHpPerSec: 14, villagerCost: { food: 40 }, popBase: 12, popPerHouseLevel: 6,
+  drop: { x: 100, z: 284 },                  // point de dépôt : le château
+  restock: { gold: 25, stone: 20, iron: 10 },
+};
+// Tâches : chaque villageois sait quoi faire ; le joueur ne règle que les effectifs.
+export const TASKS = {
+  wood:   { name: 'Bûcherons',      ico: '🪵', res: 'wood',  building: 'sawmill', site: { x: 40,  z: 255 }, rate: 1.3,  deposit: 9000 },
+  stone:  { name: 'Carriers',       ico: '🪨', res: 'stone', building: 'quarry',  site: { x: 160, z: 255 }, rate: 1.0,  deposit: 7000 },
+  iron:   { name: 'Mineurs (fer)',  ico: '⛓', res: 'iron',  building: 'mine',    site: { x: 182, z: 236 }, rate: 0.9, deposit: 3500 },
+  gold:   { name: 'Mineurs (or)',   ico: '🪙', res: 'gold',  building: 'mine',    site: { x: 18,  z: 236 }, rate: 0.8,  deposit: 2500 },
+  food:   { name: 'Fermiers',       ico: '🌾', res: 'food',  building: 'farm',    site: { x: 100, z: 252 }, rate: 1.15 },
+  repair: { name: 'Réparation de la muraille', ico: '🔧', building: null, slots: 10 },
+};
+// Bâtiments : niveau 0 = à construire. Coût du niveau N+1 = base × (N+1).
+export const BUILDINGS = {
+  sawmill:   { name: 'Scierie',   ico: '🪚', start: 1, cost: { wood: 60 },             pos: { x: 40,  z: 262 }, size: [9, 5, 7],  color: 0x9b6a3a, info: 'Emplacements bûcherons · +15 % de rendement par niveau' },
+  quarry:    { name: 'Carrière',  ico: '⛏', start: 1, cost: { wood: 60 },             pos: { x: 160, z: 262 }, size: [9, 5, 7],  color: 0x8a8d92, info: 'Emplacements carriers · +15 % de rendement par niveau' },
+  mine:      { name: 'Mine',      ico: '⛓', start: 1, cost: { wood: 100, stone: 60 }, pos: { x: 182, z: 243 }, size: [8, 6, 8],  color: 0x4f5a72, info: 'Emplacements fer + or (partagés) · +15 %/niveau' },
+  farm:      { name: 'Ferme',     ico: '🌾', start: 1, cost: { wood: 70 },             pos: { x: 100, z: 244 }, size: [16, 1.2, 10], color: 0xc9b24a, info: 'Emplacements fermiers · +15 % de rendement par niveau' },
+  mill:      { name: 'Moulin',    ico: '🌀', start: 0, cost: { wood: 90, stone: 40 },  pos: { x: 128, z: 258 }, size: [6, 9, 6],  color: 0xcfc3a1, info: 'Nourriture +20 % par niveau' },
+  granary:   { name: 'Grenier',   ico: '🏚', start: 1, cost: { wood: 80, stone: 30 },  pos: { x: 66,  z: 270 }, size: [9, 6, 7],  color: 0xb08a4a, info: 'Stock de nourriture +400 par niveau' },
+  warehouse: { name: 'Entrepôt',  ico: '📦', start: 1, cost: { wood: 80, stone: 40 },  pos: { x: 134, z: 272 }, size: [10, 6, 8], color: 0x7a6a55, info: 'Stock bois/pierre/fer/or +400 par niveau' },
+  houses:    { name: 'Maisons',   ico: '🏠', start: 1, cost: { wood: 90, stone: 30 },  pos: { x: 100, z: 268 }, size: [12, 5, 8], color: 0xb35a4a, info: 'Population max +6 villageois par niveau' },
+};
+// Améliorations : effets mesurables, coût du niveau N+1 = base × (N+1).
+export const UPGRADES = {
+  tools:   { name: 'Outils',            ico: '🛠', max: 4, cost: { wood: 60, iron: 20 }, per: 0.20, info: 'Récolte +20 % par niveau' },
+  carts:   { name: 'Chariots',          ico: '🛒', max: 3, cost: { wood: 80, iron: 25 }, per: 0.50, info: 'Charge portée +50 % par niveau' },
+  boots:   { name: 'Chemins pavés',     ico: '👢', max: 3, cost: { stone: 70, wood: 40 }, per: 0.20, info: 'Vitesse de marche +20 % par niveau' },
+  plow:    { name: 'Charrue',           ico: '🚜', max: 3, cost: { wood: 70, iron: 20 }, per: 0.25, info: 'Rendement des fermes +25 % par niveau' },
+  masonry: { name: 'Maçonnerie',        ico: '🧱', max: 3, cost: { stone: 80, iron: 30 }, per: 0.30, info: 'Réparation +30 % vitesse, −10 % pierre par niveau' },
+};
+
 export const PHASES = { prep: 'Préparation', alert: 'Alerte', assault: 'Assaut', calm: 'Accalmie' };
 export const TIMING = { firstPrep: 60, prep: 30, alert: 10, calm: 15 };
 
@@ -35,5 +83,5 @@ export function waveSpec(v) {
   frac[3] = v >= 5 ? Math.min(0.10, 0.02 * (v - 4)) : 0;
   frac[0] = 1 - frac[1] - frac[2] - frac[3] - frac[4];
   const sectors = 1 + Math.min(4, Math.floor(v / 3));
-  return { n, frac, sectors, duration: Math.min(45, 15 + n / 20), reward: { gold: 60 + 12 * v, stone: 40 + 8 * v } };
+  return { n, frac, sectors, duration: Math.min(45, 15 + n / 20), reward: { gold: 25 + 6 * v, stone: 20 + 4 * v, iron: 10 + 2 * v } };
 }
