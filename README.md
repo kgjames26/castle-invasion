@@ -241,3 +241,10 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Formations proposées quelle que soit la taille (aussi dans la bulle sur la carte) ; les gros effectifs prennent plus de rangs ; postes de garnison espacés selon la taille.
 - **Production d'unités** : la fiche d'une caserne / écurie / champ de tir montre l'unité en formation (4 étapes animées, barre de progression, file, boutons +1) ; dans la scène, des recrues s'exercent devant le bâtiment (épée contre mannequins, tir sur cibles avec flèches, cavaliers en carrière).
 - **Vue pivotante** : bouton 🧭 (ou touche R) pour regarder vers le sud (village, château) ou vers le nord (muraille, horde), avec rotation animée.
+
+## Phase 29 — Golem zombie à la masse, sol haute qualité, zone de quarantaine, archers vigilants
+- **Golem** redessiné en géant zombie de chairs recousues (voûté, peau gris-vert, côtes à nu, coutures, haillons, chaînes de forçat, petite tête à la mâchoire pendante), armé d'une **énorme masse** cerclée de fer et cloutée : il l'élève au-dessus de la tête puis l'abat sur la muraille, ou **écrase les troupes** (impact au sol, poussière, sang, secousse).
+- **Sol haute qualité** (src/render/Ground.js) : textures de détail procédurales répétées à l'échelle du mètre — herbe (brins), terre (grain, cailloux, fissures), pavés (galets jointoyés) — mélangées dans le shader selon une carte de répartition ; toute la carte en herbe et terre, la cour derrière la muraille, le tour du château et la placette en pavés. Les parcelles de forêt utilisent les mêmes textures.
+- **Zone de quarantaine** (ex-geôle) : enclos grillagé (maille de fer, barbelés, portail, cabane et garde, panneau rouge et blanc), **fixe**, tout à gauche de la placette où attend la réserve, présente dès le début ; améliorable (4 places par niveau).
+- **Archers vigilants** : hors assaut, les 3 archers les plus proches tirent sur un soldat transformé en zombie ; pendant une vague, ils restent concentrés sur la horde.
+- Garde-fou : `node tools/check-comments.mjs` repère le code avalé par un commentaire.

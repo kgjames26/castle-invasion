@@ -2,7 +2,7 @@
 // Cycle de vie : 'site' (chantier initial) → 'built' ; 'upgrading' (amélioration, le bâtiment reste visible) ; 'moving' (déplacé : bloqué
 // jusqu'au passage d'un ouvrier). Les ouvriers sont des villageois LIBRES (sans tâche) : le joueur règle leur nombre par chantier.
 // La simulation ignore tout du rendu ; `eco.level` et `eco.houses` sont recalculés à partir des structures (source de vérité = ici).
-import { STRUCT, BUILDINGS, BUILD, TOWER, ECON, TASKS, RANK_BUILDINGS, RANK_UP , UPGRADES } from '../content/medieval.js';
+import { STRUCT, BUILDINGS, BUILD, TOWER, ECON, TASKS, RANK_BUILDINGS, RANK_UP , UPGRADES, QUARANTINE } from '../content/medieval.js';
 import { sectorOfX, wallOff } from './constants.js';
 
 const tmp = new Int32Array(512);
@@ -14,6 +14,7 @@ export class Build {
   reset() {
     this.items = []; this.nextId = 1; this.version++;
     TOWER.wallXs.forEach((x, k) => this.items.push(this.make('tower', x, TOWER.wallZ + wallOff(x), 0, { fixed: true, wt: k, level: 1, state: 'built', progress: 1 })));
+    this.items.push(this.make('prison', QUARANTINE.x, QUARANTINE.z, 0, { fixed: true, wt: 100, level: 1, state: 'built', progress: 1 }));   // zone de quarantaine : fixe, à gauche de la placette
     this.syncLevels();
   }
   make(type, x, z, rot, o = {}) {
@@ -211,7 +212,7 @@ export class Build {
     if (!st) return;
     for (const o of st.items) {
       if (o.fixed) { const f = this.items.find(s => s.fixed && s.wt === o.wt); if (f) Object.assign(f, { level: o.level, state: o.state, progress: o.progress, work: o.work, workers: o.workers, paid: o.paid }); }
-      else this.items.push({ ...this.make(o.type, o.x, o.z, o.rot, { level: o.level, state: o.state, progress: o.progress, work: o.work, workers: o.workers, paid: o.paid }), id: o.id });   // mêmes ids : les ouvriers retrouvent leur chantier
+      else if (o.type !== 'prison') this.items.push({ ...this.make(o.type, o.x, o.z, o.rot, { level: o.level, state: o.state, progress: o.progress, work: o.work, workers: o.workers, paid: o.paid }), id: o.id });   // mêmes ids : les ouvriers retrouvent leur chantier
     }
     let mx = 0; for (const s of this.items) mx = Math.max(mx, s.id); this.nextId = Math.max(mx + 1, st.next || 1);
     for (const t of this.items) if (t.fixed && t.type === 'tower') t.z = TOWER.wallZ + wallOff(t.x);   // muraille en arc (v2.1)

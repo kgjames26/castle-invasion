@@ -1,5 +1,5 @@
 // Mordus (v2.4) : combattants mordus par un zombie. Cycle : à terre (vulnérable, les zombies se ruent dessus) → se relève → marche
-// vers la geôle (ou erre près de la placette s'il n'y en a pas) → le prêtre vient le guérir (retour en réserve) ; sinon, au bout du
+// vers la zone de quarantaine (ou erre près de la placette si elle est pleine) → le prêtre vient le guérir (retour en réserve) ; sinon, au bout du
 // délai, il se TRANSFORME : en cellule, les gardes l'abattent ; ailleurs, il devient un zombie qui tente de mordre ses voisins.
 import { INFECTION, UNITS } from '../content/medieval.js';
 import { WALL_Z1, PLAZA, wallOff } from './constants.js';
@@ -26,7 +26,7 @@ export class Infection {
     return best;
   }
   update(dt, sim) {
-    const Z = sim.zombies, slowK = 1 / (1 + INFECTION.prisonSlow * (sim.eco.level.prison || 0));   // la geôle retarde la transformation
+    const Z = sim.zombies, slowK = 1 / (1 + INFECTION.prisonSlow * (sim.eco.level.prison || 0));   // la quarantaine retarde la transformation
     for (let k = this.list.length - 1; k >= 0; k--) {
       const b = this.list[k]; b.px = b.x; b.pz = b.z;
       b.t -= dt * (b.state === 'jailed' ? slowK : 1);
@@ -41,14 +41,14 @@ export class Infection {
       if (b.state === 'walk') {
         const P = this.prison(sim);
         if (!b.path) {
-          let tx, tz; if (P && this.jailed() + this.list.filter(o => o.state === 'walk' && o.slot >= 0).length < this.cells(sim)) { b.slot = 1; tx = P.x + ((b.id % 4) - 1.5) * 1.8; tz = P.z + 1; } else { b.slot = -1; tx = PLAZA.x + ((b.id % 7) - 3) * 2.5; tz = PLAZA.z + 6; }
+          let tx, tz; if (P && this.jailed() + this.list.filter(o => o.state === 'walk' && o.slot >= 0).length < this.cells(sim)) { b.slot = 1; tx = P.x + ((b.id % 4) - 1.5) * 2.6; tz = P.z + ((b.id >> 2) % 3 - 1) * 2.4; } else { b.slot = -1; tx = PLAZA.x + ((b.id % 7) - 3) * 2.5; tz = PLAZA.z + 6; }
           b.path = sim.night.route(b.x, b.z, tx, tz);
         }
         const p = b.path[0];
         if (!p) { if (b.slot >= 0 && P) { b.state = 'jailed'; sim.events.push({ type: 'jailed', unit: b.type }); } else b.state = 'wait'; continue; }
         const dx = p[0] - b.x, dz = p[1] - b.z, d = Math.hypot(dx, dz), st = 2.6 * dt;   // il boite
         if (d <= st) { b.x = p[0]; b.z = p[1]; b.path.shift(); } else { b.x += dx / d * st; b.z += dz / d * st; b.face = Math.atan2(dx, dz); }
-      } else if (b.state === 'wait' && this.prison(sim)) { b.state = 'walk'; b.path = null; }    // une geôle vient d'être bâtie
+      } else if (b.state === 'wait' && this.prison(sim) && this.jailed() < this.cells(sim)) { b.state = 'walk'; b.path = null; }    // une place s'est libérée
     }
   }
   // soin par le prêtre

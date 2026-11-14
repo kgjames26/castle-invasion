@@ -16,6 +16,7 @@ import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometr
 import { buildKnightRigs, makeMage, makePriest, poseMage, knightRig, golemRig } from './Heroes.js';
 import { carrierGeometry, TOOL_TINT } from './Village.js';
 import { OreView } from './Ores.js';
+import { groundMaterial, groundDetails } from './Ground.js';
 import { LOADS, buildLoadMeshes, backToolMatrix } from './Loads.js';
 import { FrontierView, RoadView, BrazierView } from './World.js';
 import { RANKS } from '../content/medieval.js';
@@ -149,71 +150,54 @@ export class Renderer {
 
   // Sol : une seule texture 6 px/m, peinte par zones (neige gelée au nord, terre piétinée au front, dalles de la cour, terre battue du village,
   // pavés autour du château), avec chemins à bords doux, gisements, mares gelées, bruit de grain et vignettage. Déterministe (graine fixe).
+  // ——— sol (v2.8) : carte d'ensemble (teintes) + carte de répartition herbe / terre / pavés ; la matière fine vient des textures de détail (Ground.js) ———
   buildGround() {
     const k = 6, cv = document.createElement('canvas'); cv.width = W * k; cv.height = D * k; const g = cv.getContext('2d');
+    const ks = 2, sv = document.createElement('canvas'); sv.width = W * ks; sv.height = D * ks; const sp = sv.getContext('2d');   // R = terre, G = pavés
     let seed = 99; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647, rr = (a, b) => a + (b - a) * r();
-    const X = v => v * k;
-    const lerpHex = (a, b, t) => { const p = h => [(h >> 16) & 255, (h >> 8) & 255, h & 255], A = p(a), B = p(b); return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',')})`; };
-    // fond : dégradé nord → sud (terres gelées sombres → plaine claire → cour → village → pied du château)
+    const X = v => v * k, S = v => v * ks;
+    // fond : prairie, plus fraîche au sud, plus sèche et foulée vers le front
     const grad = g.createLinearGradient(0, 0, 0, D * k);
-    for (const [z, c] of [[0, '#6c7b8c'], [24, '#7e8da0'], [60, '#c3cfda'], [105, '#dce5ec'], [138, '#cdd5dc'], [150, '#8f8c86'], [176, '#a39a8b'], [205, '#cdbd9c'], [250, '#d6d0c0'], [285, '#bdae96'], [320, '#a89f90']]) grad.addColorStop(z / D, c);
-    g.fillStyle = grad; g.fillRect(0, 0, W * k, D * k);
+    for (const [z, c] of [[0, '#4f6a3a'], [40, '#5f7d42'], [100, '#6a8445'], [138, '#76824a'], [150, '#6f6c62'], [205, '#6e8a45'], [260, '#6a8a43'], [320, '#5f7e3e']]) grad.addColorStop(z / D, c);
+    g.fillStyle = grad; g.fillRect(0, 0, W * k, D * k); sp.fillStyle = '#000'; sp.fillRect(0, 0, sv.width, sv.height);
     const blob = (x, z, rad, col, a) => { const gr = g.createRadialGradient(X(x), X(z), 0, X(x), X(z), X(rad)); gr.addColorStop(0, col.replace('A', a)); gr.addColorStop(1, col.replace('A', 0)); g.fillStyle = gr; g.fillRect(X(x - rad), X(z - rad), X(rad * 2), X(rad * 2)); };
-    // marbrure de la neige : grandes taches douces claires et bleutées
-    for (let i = 0; i < 900; i++) { const z = r() * D; if (z > 150 && z < 300 && r() < 0.5) continue; blob(r() * W, z, rr(4, 13), r() < 0.6 ? 'rgba(255,255,255,A)' : 'rgba(110,140,170,A)', rr(0.06, 0.16)); }
+    // terre : teinte brune sur la carte de couleurs + rouge sur la carte de répartition (même forme)
+    const dirt = (x, z, rad, a, col = 'rgba(124,98,66,A)') => { blob(x, z, rad, col, a); const gr = sp.createRadialGradient(S(x), S(z), 0, S(x), S(z), S(rad)); gr.addColorStop(0, `rgba(255,0,0,${Math.min(1, a * 1.6)})`); gr.addColorStop(1, 'rgba(255,0,0,0)'); sp.globalCompositeOperation = 'lighter'; sp.fillStyle = gr; sp.fillRect(S(x - rad), S(z - rad), S(rad * 2), S(rad * 2)); sp.globalCompositeOperation = 'source-over'; };
+    // variations de la prairie : herbe grasse, herbe sèche, fleurs des champs
+    for (let i = 0; i < 1400; i++) { const z = r() * D; if (z > WALL_Z0 - 1 && z < 200) continue; const t = r(); blob(r() * W, z, rr(3, 12), t < 0.4 ? 'rgba(70,104,44,A)' : t < 0.75 ? 'rgba(150,146,78,A)' : 'rgba(96,128,58,A)', rr(0.12, 0.3)); }
     // types de terrain issus de la simulation (forêt, colline, rocher, route)
-    const type = this.sim.terrain.type, pal = { [T.FOREST]: 'rgba(60,92,76,.40)', [T.HILL]: 'rgba(255,255,255,.55)', [T.ROCK]: 'rgba(96,100,106,.55)', [T.ROAD]: 'rgba(124,104,78,.45)' };
-    for (let gz = 0; gz < GD; gz++) for (let gx = 0; gx < GW; gx++) { const t = type[gz * GW + gx]; if (t && pal[t]) blob((gx + .5) * CELL, (gz + .5) * CELL, CELL * 1.5, pal[t].replace(/[\d.]+\)$/, 'A)'), 0.55); }
-    // sous-bois : aiguilles sombres et brindilles
-    for (let gz = 0; gz < GD; gz++) for (let gx = 0; gx < GW; gx++) if (type[gz * GW + gx] === T.FOREST) for (let n = 0; n < 5; n++) { g.fillStyle = r() < 0.7 ? 'rgba(35,55,45,.35)' : 'rgba(255,255,255,.4)'; g.fillRect(X(gx * CELL + r() * CELL), X(gz * CELL + r() * CELL), rr(2, 6), rr(1, 3)); }
-    // front de bataille : boue gelée piétinée, de plus en plus marquée vers la muraille (z 100 → 141)
-    for (let i = 0; i < 220; i++) { const z = rr(96, 141), x = r() * W, len = rr(3, 11), a = 0.05 + 0.2 * (z - 96) / 45; g.strokeStyle = `rgba(104,86,66,${a})`; g.lineWidth = rr(0.5, 1.8) * k; g.lineCap = 'round'; g.beginPath(); g.moveTo(X(x), X(z)); g.lineTo(X(x + rr(-2, 2)), X(z + len)); g.stroke(); }
-    for (let i = 0; i < 160; i++) blob(r() * W, rr(120, 141), rr(2, 6), 'rgba(92,76,58,A)', rr(0.08, 0.22));
-    // ——— dalles de la cour militaire (z 152 → 200) et pavés autour du château ———
-    const flags = (x0, z0, x1, z1, base, rows, clip) => {
-      g.save(); if (clip) clip(); else { g.beginPath(); g.rect(X(x0), X(z0), X(x1 - x0), X(z1 - z0)); g.clip(); }
-      for (let z = z0; z < z1; z += rows) { let x = x0 - r() * 2; while (x < x1) { const w = rr(0.7, 1.5), v = rr(-14, 14); g.fillStyle = `rgb(${base[0] + v},${base[1] + v},${base[2] + v})`; g.fillRect(X(x) + 1, X(z) + 1, X(w) - 2, X(rows) - 2); if (r() < 0.18) { g.fillStyle = 'rgba(255,255,255,.35)'; g.fillRect(X(x) + 2, X(z) + 2, X(w) - 4, rr(2, 6)); } x += w; } }
-      g.restore();
-    };
-    g.fillStyle = '#6e6a63'; g.beginPath(); for (let x = 0; x <= W; x += 5) g.lineTo(X(x), X(WALL_Z0 + wallOff(x))); for (let x = W; x >= 0; x -= 5) g.lineTo(X(x), X(WALL_Z1 + wallOff(x))); g.closePath(); g.fill();   // emprise de la muraille (en arc)
-    flags(0, WALL_Z1, W, 188, [150, 144, 133], 0.8);
-    for (let i = 0; i < 420; i++) blob(r() * W, rr(WALL_Z1, 188), rr(2, 7), 'rgba(250,252,255,A)', rr(0.1, 0.32));       // neige poudrée sur les dalles
-    flags(0, 0, 0, 0, [170, 162, 148], 0.8, () => { g.beginPath(); g.ellipse(X(CASTLE.x), X(CASTLE.z), X(36), X(26), 0, 0, 7); g.clip(); });
-    // ——— village : terre battue, herbe morte, neige par plaques ———
-    for (let i = 0; i < 520; i++) blob(r() * W, rr(203, 292), rr(2, 8), r() < 0.62 ? 'rgba(158,124,82,A)' : 'rgba(255,255,255,A)', rr(0.12, 0.3));
-    for (let i = 0; i < 700; i++) { const x = r() * W, z = rr(203, 296); g.strokeStyle = r() < 0.7 ? 'rgba(120,128,80,.55)' : 'rgba(150,140,90,.5)'; g.lineWidth = 1.4; g.beginPath(); g.moveTo(X(x), X(z)); g.lineTo(X(x + rr(-.4, .4)), X(z - rr(.5, 1.4))); g.stroke(); }
-    // ——— texture fine : mousse et herbe rase, galets, fissures, grain en deux tons (détail visible de près) ———
-    for (let i = 0; i < 260; i++) blob(r() * W, rr(206, 305), rr(2, 7), 'rgba(92,128,66,A)', rr(0.12, 0.3));          // herbe du village
-    for (let i = 0; i < 160; i++) blob(r() * W, rr(40, 138), rr(2, 6), 'rgba(110,126,84,A)', rr(0.08, 0.2));        // herbe gelée du champ de bataille
-    for (let i = 0; i < 2600; i++) { const z = r() * D; if (z > WALL_Z0 - 2 && z < 200) continue; const gr = z > 203; g.fillStyle = r() < 0.5 ? (gr ? 'rgba(76,112,52,.45)' : 'rgba(96,108,84,.35)') : (gr ? 'rgba(168,150,92,.4)' : 'rgba(255,255,255,.35)'); g.fillRect(X(r() * W), X(z), rr(1, 4), rr(1, 6)); }
-    for (let i = 0; i < 900; i++) { const z = r() * D; if (z > WALL_Z0 - 2 && z < 200) continue; g.fillStyle = r() < 0.5 ? 'rgba(110,108,104,.5)' : 'rgba(190,188,182,.5)'; const s = rr(2, 5); g.beginPath(); g.ellipse(X(r() * W), X(z), s, s * 0.7, r() * 3, 0, 7); g.fill(); }   // galets
-    g.strokeStyle = 'rgba(60,56,50,.35)'; g.lineWidth = 1; for (let i = 0; i < 160; i++) { const x = r() * W, z = rr(WALL_Z1 + 2, 186); g.beginPath(); g.moveTo(X(x), X(z)); g.lineTo(X(x + rr(-1.5, 1.5)), X(z + rr(0.5, 2))); g.lineTo(X(x + rr(-2, 2)), X(z + rr(1.5, 3.5))); g.stroke(); }   // fissures des dalles
-    // ——— placette (point de ralliement par défaut) : grandes dalles claires, bordure sombre, rosace centrale ———
-    g.fillStyle = '#8a8478'; g.fillRect(X(PLAZA.x - PLAZA.hw - 1), X(PLAZA.z - PLAZA.hd - 1), X(PLAZA.hw * 2 + 2), X(PLAZA.hd * 2 + 2));
-    flags(PLAZA.x - PLAZA.hw, PLAZA.z - PLAZA.hd, PLAZA.x + PLAZA.hw, PLAZA.z + PLAZA.hd, [214, 206, 190], 1.1);
+    const type = this.sim.terrain.type, pal = { [T.FOREST]: 'rgba(40,66,34,A)', [T.HILL]: 'rgba(140,150,90,A)', [T.ROCK]: 'rgba(110,108,100,A)' };
+    for (let gz = 0; gz < GD; gz++) for (let gx = 0; gx < GW; gx++) { const t = type[gz * GW + gx], x = (gx + .5) * CELL, z = (gz + .5) * CELL; if (t === T.ROAD) dirt(x, z, CELL * 1.2, 0.5); else if (t === T.ROCK) dirt(x, z, CELL * 1.2, 0.35, 'rgba(110,108,100,A)'); else if (t && pal[t]) blob(x, z, CELL * 1.5, pal[t], 0.5); }
+    // front de bataille : terre foulée de plus en plus marquée vers la muraille (z 100 → 141), ornières
+    for (let i = 0; i < 260; i++) { const z = rr(100, 141); dirt(r() * W, z, rr(2.5, 8), 0.12 + 0.4 * (z - 100) / 41); }
+    for (let i = 0; i < 200; i++) { const z = rr(96, 141), x = r() * W, len = rr(3, 11), a = 0.08 + 0.25 * (z - 96) / 45; g.strokeStyle = `rgba(92,72,48,${a})`; g.lineWidth = rr(0.5, 1.6) * k; g.lineCap = 'round'; g.beginPath(); g.moveTo(X(x), X(z)); g.lineTo(X(x + rr(-2, 2)), X(z + len)); g.stroke(); }
+    // ——— pavés : la cour (derrière la muraille), autour du château, la placette ———
+    const pave = (fill, clip, col) => { g.save(); clip(g, X); g.clip(); g.fillStyle = col; g.fillRect(0, 0, cv.width, cv.height); for (let i = 0; i < 260; i++) blob(r() * W, rr(140, 320), rr(2, 7), 'rgba(60,56,50,A)', rr(0.05, 0.14)); g.restore(); sp.save(); clip(sp, S); sp.clip(); sp.fillStyle = '#00ff00'; sp.fillRect(0, 0, sv.width, sv.height); sp.restore(); };
+    const wallPoly = (c, f) => { c.beginPath(); for (let x = 0; x <= W; x += 5) c.lineTo(f(x), f(WALL_Z0 + wallOff(x))); for (let x = W; x >= 0; x -= 5) c.lineTo(f(x), f(WALL_Z1 + wallOff(x))); c.closePath(); };
+    pave(true, (c, f) => { c.beginPath(); for (let x = 0; x <= W; x += 5) c.lineTo(f(x), f(WALL_Z0 + wallOff(x))); c.lineTo(f(W), f(190)); c.lineTo(f(0), f(190)); c.closePath(); }, '#8f8a80');      // cour militaire + emprise de la muraille
+    g.fillStyle = 'rgba(70,66,60,.55)'; wallPoly(g, X); g.fill();
+    pave(true, (c, f) => { c.beginPath(); c.ellipse(f(CASTLE.x), f(CASTLE.z), f(36), f(26), 0, 0, 7); }, '#a29a8c');
+    pave(true, (c, f) => { c.beginPath(); c.rect(f(PLAZA.x - PLAZA.hw - 1), f(PLAZA.z - PLAZA.hd - 1), f(PLAZA.hw * 2 + 2), f(PLAZA.hd * 2 + 2)); }, '#b8af9c');
     g.strokeStyle = 'rgba(96,86,70,.8)'; g.lineWidth = 0.5 * k; g.beginPath(); g.arc(X(PLAZA.x), X(PLAZA.z), X(7), 0, 7); g.stroke(); g.beginPath(); g.arc(X(PLAZA.x), X(PLAZA.z), X(4), 0, 7); g.stroke();
     g.fillStyle = 'rgba(170,40,30,.35)'; g.beginPath(); g.arc(X(PLAZA.x), X(PLAZA.z), X(2.2), 0, 7); g.fill();
-    // ——— décalques de gisements et de sites ———
-    blob(40, 255, 11, 'rgba(46,58,46,A)', 0.5); blob(160, 255, 11, 'rgba(120,122,126,A)', 0.6); blob(182, 236, 8, 'rgba(60,62,72,A)', 0.55); blob(18, 236, 8, 'rgba(70,64,56,A)', 0.5);
-    for (let i = 0; i < 90; i++) { g.fillStyle = r() < 0.5 ? 'rgba(90,94,100,.7)' : 'rgba(160,160,164,.7)'; g.fillRect(X(160 + rr(-9, 9)), X(255 + rr(-9, 9)), rr(2, 6), rr(2, 5)); }
-    // ——— chemins : bords doux (trois traits superposés), ornières ———
+    // bord de la cour : une bande de terre entre les pavés et la prairie du village
+    for (let x = 0; x <= W; x += 3) dirt(x + rr(-1, 1), 191 + rr(-1, 1.5), rr(2, 4), 0.4);
+    // ——— village : chemins de terre battue, cours de ferme, sol foulé devant les bâtiments ———
+    for (let i = 0; i < 160; i++) dirt(r() * W, rr(205, 300), rr(2, 6), rr(0.15, 0.35));
+    dirt(40, 255, 11, 0.55); dirt(160, 255, 11, 0.6, 'rgba(120,122,126,A)'); dirt(182, 236, 8, 0.55, 'rgba(84,80,74,A)'); dirt(18, 236, 8, 0.5, 'rgba(110,96,70,A)');
+    // ——— chemins : bords doux, ornières ———
     const path = (pts, w) => {
       const draw = (lw, col) => { g.strokeStyle = col; g.lineWidth = lw * k; g.lineCap = g.lineJoin = 'round'; g.beginPath(); pts.forEach(([x, z], i) => i ? g.lineTo(X(x), X(z)) : g.moveTo(X(x), X(z))); g.stroke(); };
-      draw(w * 1.5, 'rgba(116,94,68,.14)'); draw(w * 1.15, 'rgba(116,94,68,.3)'); draw(w * 0.8, 'rgba(133,110,80,.5)'); draw(w * 0.22, 'rgba(98,78,56,.4)');
+      draw(w * 1.5, 'rgba(116,94,68,.18)'); draw(w * 1.1, 'rgba(120,96,66,.4)'); draw(w * 0.8, 'rgba(134,108,76,.6)'); draw(w * 0.2, 'rgba(98,78,56,.45)');
+      sp.strokeStyle = 'rgba(255,0,0,.85)'; sp.lineWidth = w * 1.1 * ks; sp.lineCap = sp.lineJoin = 'round'; sp.globalCompositeOperation = 'lighter'; sp.beginPath(); pts.forEach(([x, z], i) => i ? sp.lineTo(S(x), S(z)) : sp.moveTo(S(x), S(z))); sp.stroke(); sp.globalCompositeOperation = 'source-over';
     };
-    path([[100, 150], [100, 200], [100, 284]], 9); path([[100, 238], [40, 255]], 5); path([[100, 238], [160, 255]], 5); path([[100, 262], [182, 243]], 4.5); path([[100, 262], [18, 238]], 4.5); path([[8, 205], [192, 205]], 4);
-    // repères de secteurs sur le champ de bataille
-    // (v2.7) plus de lignes ni de lettres de secteurs peintes sur le terrain
-    g.fillStyle = 'rgba(40,60,90,.32)'; g.font = `bold ${6 * k}px sans-serif`; g.textAlign = 'center';
+    path([[100, PLAZA.z + PLAZA.hd + 1.5], [100, 284]], 9); path([[100, 238], [40, 255]], 5); path([[100, 238], [160, 255]], 5); path([[100, 262], [182, 243]], 4.5); path([[100, 262], [18, 238]], 4.5); path([[8, 205], [192, 205]], 4); path([[100, 60], [100, 141]], 7);
     // vignettage des bords du monde
-    for (const [x0, z0, x1, z1] of [[0, 0, 12, 0], [W, 0, W - 12, 0]]) { const gr = g.createLinearGradient(X(x0), 0, X(x1), 0); gr.addColorStop(0, 'rgba(20,30,40,.35)'); gr.addColorStop(1, 'rgba(20,30,40,0)'); g.fillStyle = gr; g.fillRect(Math.min(X(x0), X(x1)), 0, X(12), D * k); }
-    // grain fin (déterministe) : casse les aplats et donne du relief de loin comme de près
-    const img = g.getImageData(0, 0, cv.width, cv.height), d = img.data; let gs = 12345;
-    for (let i = 0; i < d.length; i += 4) { gs = (gs * 1103515245 + 12345) & 0x7fffffff; const n = ((gs >> 16) & 15) - 7; d[i] += n; d[i + 1] += n; d[i + 2] += n; }
-    g.putImageData(img, 0, 0);
+    for (const [x0, x1] of [[0, 12], [W, W - 12]]) { const gr = g.createLinearGradient(X(x0), 0, X(x1), 0); gr.addColorStop(0, 'rgba(20,30,20,.3)'); gr.addColorStop(1, 'rgba(20,30,20,0)'); g.fillStyle = gr; g.fillRect(Math.min(X(x0), X(x1)), 0, X(12), cv.height); }
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(W, D), applyNorthFog(new THREE.MeshLambertMaterial({ map: tex })));
-    m.rotation.x = -Math.PI / 2; m.position.set(W / 2, 0, D / 2); m.receiveShadow = true; this.scene.add(m);
+    const stex = new THREE.CanvasTexture(sv); stex.colorSpace = THREE.NoColorSpace; stex.magFilter = THREE.LinearFilter;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(W, D), groundMaterial(tex, stex));
+    m.rotation.x = -Math.PI / 2; m.position.set(W / 2, 0, D / 2); m.receiveShadow = true; this.scene.add(m); this.groundMesh = m;
   }
   buildTerrainProps() {
     const type = this.sim.terrain.type, rock = [], tree = [];
@@ -506,7 +490,7 @@ export class Renderer {
         return;
       }
       let px = x, pz = z, face = b.face; const mv = Math.hypot(b.x - b.px, b.z - b.pz) > 0.002;
-      if (b.state === 'jailed' && P) { const k = I.list.filter(o => o.state === 'jailed').indexOf(b); px = P.x + ((k % 4) - 1.5) * 2.45 + ((k / 4 | 0) % 2 ? 0.6 : 0); pz = P.z + 2.3 - ((k / 4) | 0) * 1.3; face = Math.sin(t * 0.7 + k) * 0.6; }   // dans la cage, face aux barreaux
+      if (b.state === 'jailed' && P) { const k = I.list.filter(o => o.state === 'jailed').indexOf(b); px = P.x + ((k % 4) - 1.5) * 3.2 + ((k / 4 | 0) % 2 ? 1.2 : 0); pz = P.z + 2.6 - ((k / 4) | 0) * 2.2; face = Math.sin(t * 0.5 + k * 1.7) * 1.2; }   // dans la cage, face aux barreaux
       const ph = t * 6 + i, sw = mv ? Math.sin(ph) * 0.5 : 0, shake = sick > 0.6 ? Math.sin(t * 40 + i) * 0.04 * (sick - 0.6) * 2.5 : 0;
       d.position.set(px + shake, mv ? Math.abs(Math.sin(ph)) * 0.04 : 0, pz); d.rotation.set(0, face, 0); d.rotateX(0.35 + 0.25 * sick); d.scale.setScalar(sc); d.updateMatrix();   // voûté, de plus en plus
       rig.push(d.matrix, tint, [0, sw, -sw, -0.9 + 0.1 * Math.sin(t * 3 + i), 0.1]);
@@ -742,13 +726,17 @@ export class Renderer {
     const Z = this.sim.zombies, n = Z.n, cnt = this.zvCount.fill(0), clock = this.clock, tc = this.tmpColor;
     const G = this.golems || (this.golems = golemRig(this.scene)), d = this.dummy; G.begin();
     for (let i = 0; i < n; i++) {
-      if (Z.type[i] === 6) {     // golem : pièces animées ; coup de poing à deux mains quand il frappe la muraille
+      if (Z.type[i] === 6) {     // golem : géant zombie à la masse — lève la masse au-dessus de la tête puis l'abat (muraille ou troupes)
         const x = Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, z = Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, dx = Z.x[i] - Z.px[i], dz = Z.z[i] - Z.pz[i], mv = dx * dx + dz * dz > 4e-6;
-        const rot = mv ? Math.atan2(dx, dz) : 0, sc = ZOMBIES[6].size * HUMAN_H / 2.6, ph = clock * 2.2 + Z.phase[i], sw = mv ? Math.sin(ph) * 0.45 : 0;
-        const atk = Z.state[i] === 1, f = atk ? 1 - Math.max(0, Z.slam[i]) / 3.2 : 0, raise = atk ? (f < 0.8 ? -2.9 * (f / 0.8) : -2.9 + 3.4 * ((f - 0.8) / 0.2)) : -0.2 + sw * 0.6;
-        d.position.set(x, Math.abs(Math.sin(ph)) * 0.12 * (mv ? 1 : 0), z); d.rotation.set(atk ? 0.12 * Math.sin(f * 3.14) : 0, rot, 0); d.scale.setScalar(sc); d.updateMatrix();
+        const zr = this.zRot || (this.zRot = new Float32Array(MAX_Z)); if (mv) zr[i] = Math.atan2(dx, dz);
+        const rot = mv || Z.bite[i] > 0 ? zr[i] : 0, sc = ZOMBIES[6].size * HUMAN_H / 3.0, ph = clock * 2.0 + Z.phase[i], sw = mv ? Math.sin(ph) * 0.4 : 0;
+        const crush = Z.biteK[i] === 5 && Z.bite[i] > 0, wallHit = Z.state[i] === 1 && !crush, f = crush ? 1 - Z.bite[i] / 1.4 : wallHit ? 1 - Math.max(0, Z.slam[i]) / 3.5 : 0;
+        const swing = crush || wallHit, up = f < 0.7 ? -3.0 * (f / 0.7) : -3.0 + 3.6 * Math.min(1, (f - 0.7) / 0.15);   // élan lent, frappe brutale
+        const armR = swing ? up : -0.25 + sw * 0.5 + 0.06 * Math.sin(clock * 1.3 + i), armL = swing ? -0.5 - 0.4 * Math.sin(f * 3.14) : -0.15 - sw * 0.6;
+        const lean = swing ? (f < 0.7 ? -0.12 * f : 0.25) : 0.05 * Math.sin(ph * 2);
+        d.position.set(x, Math.abs(Math.sin(ph)) * 0.1 * (mv ? 1 : 0), z); d.rotation.set(lean, rot, mv ? 0.05 * Math.sin(ph) : 0); d.scale.setScalar(sc); d.updateMatrix();
         const hurt = Z.hp[i] / ZOMBIES[6].hp < 0.5 ? 0.75 : 1; tc.setRGB(hurt, hurt * 0.95, hurt * 0.92); if (Z.slow[i] > 0) tc.setRGB(0.7, 0.9, 1.3);
-        G.push(d.matrix, tc, [0, sw, -sw, atk ? raise : raise, atk ? raise : -raise]); continue;
+        G.push(d.matrix, tc, [0, sw, -sw, armL, armR]); continue;
       }
       const t = Z.type[i], Zt = ZOMBIES[t], pool = ZVAR[t], vi = pool[((Z.phase[i] * 1000) | 0) % pool.length], im = this.zv[vi], k = cnt[vi]++;
       const x = Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, z = Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, dx = Z.x[i] - Z.px[i], dz = Z.z[i] - Z.pz[i];

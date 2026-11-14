@@ -47,7 +47,8 @@ export class ZombieSwarm {
     this.bite[i] = this.bite[l]; this.biteK[i] = this.biteK[l]; this.turned[i] = this.turned[l]; this.atkT[i] = this.atkT[l];
   }
   // animation d'attaque au contact d'une escouade : morsure (mordeurs), coup (lourds) ; le plongeon et le déchirement sont déclenchés par la morsure elle-même
-  swing(i, dt, rng) { if (this.bite[i] > 0 || (this.atkT[i] -= dt) > 0) return; this.atkT[i] = 1.0 + rng() * 0.7; const t = this.type[i]; if (INFECTION.killers.includes(t)) { if (t !== 6) { this.bite[i] = 0.9; this.biteK[i] = 4; } } else if (!INFECTION.tearers.includes(t)) { this.bite[i] = 0.75; this.biteK[i] = 1; } }
+  // (golem : coup de masse, biteK 5)
+  swing(i, dt, rng) { if (this.bite[i] > 0 || (this.atkT[i] -= dt) > 0) return; this.atkT[i] = 1.0 + rng() * 0.7; const t = this.type[i]; if (INFECTION.killers.includes(t)) { if (t === 6) { this.bite[i] = 1.4; this.biteK[i] = 5; this.atkT[i] = 1.8; } else { this.bite[i] = 0.9; this.biteK[i] = 4; } } else if (!INFECTION.tearers.includes(t)) { this.bite[i] = 0.75; this.biteK[i] = 1; } }
 
   update(dt, sim) {
     const { flow, wall, terrain, hash, army } = sim;

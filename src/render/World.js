@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FRONTIER, ROADWORKS } from '../content/medieval.js';
 import { FIRE_KEEP } from '../content/medieval.js';
 import { applyNorthFog } from './fog.js';
+import { groundMaterial } from './Ground.js';
 
 const lamV = () => applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
 function colored(geo, hex) { const g = geo.index ? geo.toNonIndexed() : geo; g.deleteAttribute('uv'); const c = new THREE.Color(hex), a = new Float32Array(g.attributes.position.count * 3); for (let i = 0; i < a.length; i += 3) { a[i] = c.r; a[i + 1] = c.g; a[i + 2] = c.b; } g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('normal'); return g; }
@@ -22,7 +23,8 @@ export class FrontierView {
     for (const p of frontier.patches) for (let k = 0; k < this.per; k++) this.trees.push({ p: p.id, x: p.x0 + 1.5 + r() * (FRONTIER.cell - 3), z: p.z0 + 1.5 + r() * (FRONTIER.cell - 3), s: 1.1 + r() * 0.9, oak: r() < 0.35, ry: r() * 6.28, k, tint: 0.82 + r() * 0.3 });
     // sol des forêts : sous-bois sombre (parcelles) ; un anneau signale les parcelles en cours de défrichage
     const pg = new THREE.PlaneGeometry(FRONTIER.cell, FRONTIER.cell); pg.rotateX(-Math.PI / 2);
-    this.floor = new THREE.InstancedMesh(pg, applyNorthFog(new THREE.MeshLambertMaterial({ color: 0xffffff })), frontier.patches.length); this.floor.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(frontier.patches.length * 3), 3); this.floor.receiveShadow = true; this.floor.frustumCulled = false; scene.add(this.floor);
+    const px = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };   // sol des parcelles : mêmes textures de détail (herbe mêlée de terre)
+    this.floor = new THREE.InstancedMesh(pg, groundMaterial(px(255, 255, 255), px(110, 0, 0)), frontier.patches.length); this.floor.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(frontier.patches.length * 3), 3); this.floor.receiveShadow = true; this.floor.frustumCulled = false; scene.add(this.floor);
     const rg = new THREE.RingGeometry(FRONTIER.cell * 0.46, FRONTIER.cell * 0.5, 4, 1); rg.rotateX(-Math.PI / 2); rg.rotateY(Math.PI / 4);
     this.marks = new THREE.InstancedMesh(rg, new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.85, depthWrite: false }), frontier.patches.length); this.marks.frustumCulled = false; this.marks.count = 0; scene.add(this.marks);
     this.ver = -1; this.d = new THREE.Object3D(); this.c = new THREE.Color(); this.sel = -1;
@@ -40,7 +42,7 @@ export class FrontierView {
     for (const m of [this.fir, this.oak, this.stump]) { m.instanceMatrix.needsUpdate = true; if (m.count) m.instanceColor.needsUpdate = true; }
     if (this.ver !== F.version) {
       this.ver = F.version;
-      F.patches.forEach((p, i) => { d.position.set(p.x, 0.03, p.z); d.rotation.set(0, 0, 0); d.scale.setScalar(1); d.updateMatrix(); this.floor.setMatrixAt(i, d.matrix); this.floor.setColorAt(i, p.state === 'open' ? c.setRGB(0.5, 0.45, 0.36) : c.setRGB(0.3, 0.38, 0.24).multiplyScalar(0.9 + (p.seed || 0) * 0.2)); });
+      F.patches.forEach((p, i) => { d.position.set(p.x, 0.03, p.z); d.rotation.set(0, 0, 0); d.scale.setScalar(1); d.updateMatrix(); this.floor.setMatrixAt(i, d.matrix); this.floor.setColorAt(i, p.state === 'open' ? c.setRGB(0.42, 0.52, 0.28) : c.setRGB(0.28, 0.34, 0.2).multiplyScalar(0.9 + (p.seed || 0) * 0.2)); });
       this.floor.instanceMatrix.needsUpdate = true; this.floor.instanceColor.needsUpdate = true;
     }
     for (const p of F.patches) {

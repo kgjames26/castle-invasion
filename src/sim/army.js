@@ -223,8 +223,10 @@ export class Army {
       // morsure (v2.4) : un mordeur peut mordre au lieu de tuer (debout ou en plongeant) ; un géant déchire sa proie
       if (zt >= 0 && INFECTION.biters.includes(zt) && sim.infection && sim.rng() < INFECTION.bite) { const tackle = sim.rng() < INFECTION.tackle; sim.infection.bite(sim, q, zi, tackle); Z.bite[zi] = tackle ? 1.1 : 0.75; Z.biteK[zi] = tackle ? 2 : 1; continue; }
       if (zt >= 0 && INFECTION.tearers.includes(zt)) { Z.bite[zi] = 2.2; Z.biteK[zi] = 3; sim.blast('tear', Z.x[zi] + Math.sin(Math.atan2(q.x - Z.x[zi], q.z - Z.z[zi])) * 2, Z.z[zi] + Math.cos(Math.atan2(q.x - Z.x[zi], q.z - Z.z[zi])) * 2, 1); sim.events.push({ type: 'torn', unit: q.type }); continue; }
+      if (zt === 6 && !this._crushT) { this._crushT = 1; sim.blast('crush', q.x + (Z.x[zi] - q.x) * 0.3, q.z + (Z.z[zi] - q.z) * 0.3, 2.4); sim.events.push({ type: 'crushed', unit: q.type }); continue; }
       if (save && sim.rng() < save) { this.reserve[q.type]++; this.saved = (this.saved || 0) + 1; }
     }
+    if (this._crushT) this._crushT = 0;
   }
   // soin (magicien) : rend une part des PV maximum ; les membres tombés ne reviennent pas
   healSquad(q, frac) { const mx = q.n * this.unitHp(q.type), before = q.hp; q.hp = Math.min(mx, q.hp + frac * mx); q.healed = 1; return q.hp - before; }
@@ -235,6 +237,7 @@ export class Army {
     this.trainTick(dt, sim); this.syncWalkers(sim); this.updateGate(dt);
     // archers
     const AU = UNITS.archer, range = AU.range + 3 * ar, adm = AU.dmg * eco.atkMult('archer') * this.rank(sim, 'archer').force;
+    const assault = sim.phase === 'assault';
     for (let s = 0; s < SECTORS; s++) {
       const a = this.archers[s], nightR = sim.night ? sim.night.rangeMult(s) : 1, bless = sim.priest ? sim.priest.blessMult(sim, s) : 1;   // bénédiction du prêtre
       for (let k = 0; k < a.n; k++) {
@@ -242,13 +245,20 @@ export class Army {
         a.cd[k] -= dt; if (a.cd[k] > 0) continue;
         const p = archerPos(s, k), rg = range * nightR, m = hash.query(p.x, p.z, rg, Z.x, Z.z, tmp);
         let best = -1, bd = Infinity;
-        for (let q = 0; q < m; q++) { const i = tmp[q]; if (Z.hp[i] <= 0) continue; const d = (Z.x[i] - p.x) ** 2 + (Z.z[i] - p.z) ** 2; if (d < bd) { bd = d; best = i; } }
+        for (let q = 0; q < m; q++) { const i = tmp[q]; if (Z.hp[i] <= 0 || (assault && Z.turned[i])) continue; const d = (Z.x[i] - p.x) ** 2 + (Z.z[i] - p.z) ** 2; if (d < bd) { bd = d; best = i; } }   // pendant l'assaut, ils restent concentrés sur la vague
         if (best < 0) { a.cd[k] = 0.25; continue; }
         const fire = eco.up.fireArrows && sim.rng() < UPGRADES.fireArrows.per * eco.up.fireArrows;      // flèche enflammée : le sol prend feu à l'impact
         Z.hit(best, adm * bless * (fire ? 1.25 : 1)); if (sim.arrows.length < 220) sim.arrows.push({ x0: p.x, z0: p.z, x1: Z.x[best], z1: Z.z[best], t: 0, fire });
         if (fire && sim.fires.length < 60) sim.fires.push({ x: Z.x[best], z: Z.z[best], r: 1.8, t: 2.6, small: true });
         a.cd[k] = AU.rate * (0.9 + sim.rng() * 0.2);
       }
+    }
+    // un soldat transformé dans le royaume : hors assaut, quelques archers (les 3 plus proches) s'en aperçoivent et le prennent pour cible
+    if (!assault) for (let i = 0; i < Z.n; i++) {
+      if (!Z.turned[i] || Z.hp[i] <= 0) continue; const cand = [];
+      for (let s = 0; s < SECTORS; s++) { const a = this.archers[s]; for (let k = 0; k < a.n; k++) { if (a.prog[k] < 1e8 || a.cd[k] > 0) continue; const p = archerPos(s, k), d = Math.hypot(p.x - Z.x[i], p.z - Z.z[i]); if (d < 95) cand.push([d, s, k, p]); } }
+      cand.sort((u, v) => u[0] - v[0]);
+      for (const [, s, k, p] of cand.slice(0, 3)) { Z.hit(i, adm); if (sim.arrows.length < 220) sim.arrows.push({ x0: p.x, z0: p.z, x1: Z.x[i], z1: Z.z[i], t: 0 }); this.archers[s].cd[k] = AU.rate * (1 + sim.rng() * 0.3); }
     }
     // escouades
     for (const q of this.squads) this.updateSquad(q, dt, sim, w);

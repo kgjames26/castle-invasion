@@ -244,20 +244,49 @@ export function wizardModel() {
 
 // ——— GOLEM ZOMBIE : corps de blocs de pierre liés par de la chair verdâtre, yeux braisés, poings énormes ———
 //  regarde vers +z, ≈ 2,6 m à l'échelle 1 ; pièces : corps, jambes, bras gauche et droit (coup de poing sismique à deux mains)
+// GOLEM (v2.8) : géant zombie fait de chairs recousues, dans le style des zombies du jeu — voûté, peau gris-vert marbrée, plaies,
+// côtes à nu, coutures, haillons de chemise et de pantalon, ceinture et chaînes de forçat, petite tête enfoncée, mâchoire pendante.
+// Bras gauche ballant, griffu ; main droite serrée sur une ÉNORME MASSE (fût de chêne cerclé de fer, clous) qui frappe la muraille et écrase les troupes.
 export function golemParts() {
-  const ST = 0x8a857c, STD = 0x6a665f, MOSS = 0x5d7a3a, FLESH = 0x6f8a5a, EYE = 0xff7a20;
+  const SK = 0x7f8c6c, SKD = 0x65705a, SKL = 0x98a383, ROT = 0x5d6650, WOUND = 0x6e1c18, BLOOD = 0x8a1e1a, BONE = 0xd9d1b8, CLOTH = 0x4d4034, CLOTHD = 0x3a3027, BELT = 0x2a2018, IRONC = 0x4e5258, SEAM = 0x24201c, EYE = 0xd7f08c, HAIR = 0x2d2a24;
   const body = [
-    bx(1.5, 1.1, 1.0, ST, 0, 1.55, 0, 0.08, 0.05), bx(1.2, 0.7, 0.9, STD, 0, 0.95, 0.02, -0.06), bx(1.7, 0.45, 1.05, ST, 0, 2.2, -0.02, 0, 0.04),   // torse en blocs
-    bx(0.9, 0.5, 0.7, FLESH, 0, 1.3, 0.38), bx(0.5, 0.3, 0.2, MOSS, -0.4, 2.3, 0.45), bx(0.6, 0.2, 0.3, MOSS, 0.5, 1.9, -0.45),                     // chair à vif, mousse
-    bx(0.62, 0.55, 0.6, STD, 0, 2.62, 0.18, 0.1), bx(0.16, 0.1, 0.06, EYE, -0.15, 2.66, 0.49), bx(0.16, 0.1, 0.06, EYE, 0.15, 2.66, 0.49),         // tête + yeux braisés
-    bx(0.5, 0.14, 0.12, 0x2a2622, 0, 2.47, 0.48), bx(0.35, 0.5, 0.35, ST, -0.55, 2.55, -0.25, 0.3), bx(0.3, 0.45, 0.3, ST, 0.6, 2.5, -0.2, -0.25),   // mâchoire, pics dorsaux
+    // bassin, ventre, poitrail énorme penché en avant, bosse de muscles sur les épaules
+    bx(1.15, 0.5, 0.8, CLOTH, 0, 1.12, 0), bx(1.2, 0.18, 0.84, BELT, 0, 1.32, 0), bx(0.2, 0.2, 0.06, IRONC, 0.1, 1.32, 0.43),
+    bx(1.25, 0.75, 0.95, SK, 0, 1.72, 0.12, 0.22), bx(1.0, 0.45, 0.3, SKL, 0, 1.6, 0.55, 0.3),                               // ventre
+    bx(1.7, 0.85, 1.1, SK, 0, 2.3, 0.28, 0.38), bx(1.95, 0.5, 1.0, SKD, 0, 2.7, 0.22, 0.35), bx(0.9, 0.45, 0.6, ROT, 0, 2.95, -0.05, 0.45),   // poitrail, épaules, bosse
+    // côtes à nu (flanc gauche), plaies, coutures
+    ...[0, 1, 2, 3].map(k => bx(0.42, 0.06, 0.08, BONE, -0.55, 2.0 + k * 0.14, 0.72 + k * 0.05, 0.4, 0, -0.15)), bx(0.5, 0.6, 0.06, WOUND, -0.55, 2.2, 0.68, 0.4),
+    bx(0.32, 0.22, 0.05, WOUND, 0.45, 1.75, 0.62, 0.3), bx(0.2, 0.3, 0.05, BLOOD, 0.4, 2.45, 0.78, 0.38),
+    bx(0.05, 0.9, 0.05, SEAM, 0.12, 2.15, 0.82, 0.38), ...[0, 1, 2, 3, 4].map(k => bx(0.18, 0.03, 0.05, SEAM, 0.12, 1.8 + k * 0.17, 0.72 + k * 0.06, 0.38)),
+    bx(0.03, 0.03, 0.9, SEAM, 0.6, 2.6, 0.25, 0, 0.6),
+    // haillons de chemise
+    bx(0.55, 0.5, 0.06, CLOTHD, 0.55, 2.2, 0.8, 0.38, 0, 0.1), bx(0.3, 0.35, 0.06, CLOTH, 0.68, 1.85, 0.68, 0.3, 0, -0.2), bx(1.6, 0.6, 0.06, CLOTHD, 0, 2.3, -0.32, 0.25),
+    // tête petite, enfoncée et en avant : crâne, cheveux épars, yeux pâles, mâchoire pendante, dents
+    bx(0.52, 0.5, 0.5, SK, 0, 2.95, 0.72, 0.25), bx(0.54, 0.12, 0.4, HAIR, 0.05, 3.2, 0.62, 0.2), bx(0.2, 0.08, 0.2, HAIR, -0.18, 3.22, 0.78),
+    bx(0.12, 0.07, 0.05, EYE, -0.12, 3.0, 0.98), bx(0.12, 0.07, 0.05, EYE, 0.12, 3.0, 0.98), bx(0.4, 0.06, 0.06, SKD, 0, 3.07, 0.98),
+    bx(0.42, 0.16, 0.36, SKD, 0, 2.7, 0.82, 0.45), bx(0.34, 0.05, 0.05, BONE, 0, 2.78, 0.98), bx(0.3, 0.04, 0.04, BONE, 0, 2.66, 0.98), bx(0.18, 0.12, 0.04, BLOOD, 0.05, 2.6, 0.98),
+    bx(0.07, 0.07, 0.07, SEAM, 0.24, 3.05, 0.8), bx(0.3, 0.04, 0.04, SEAM, 0.18, 3.12, 0.92, 0, 0, 0.5),
   ];
-  const leg = () => [bx(0.6, 0.95, 0.65, STD, 0, -0.48, 0), bx(0.75, 0.3, 0.85, ST, 0, -0.85, 0.08)];
-  const arm = sx => [bx(0.65, 0.6, 0.65, ST, 0, -0.1, 0), bx(0.5, 0.8, 0.5, FLESH, 0, -0.65, 0), bx(0.5, 0.7, 0.55, STD, 0, -1.2, 0.05), bx(0.95, 0.85, 0.95, ST, 0, -1.85, 0.1), bx(0.25, 0.25, 0.2, MOSS, sx * 0.3, -1.6, 0.5)];
+  // jambes : pantalon en lambeaux, tibias nus, pieds énormes ; chaîne de forçat à la cheville gauche
+  const leg = left => [bx(0.6, 0.55, 0.62, CLOTH, 0, -0.25, 0), bx(0.62, 0.12, 0.64, CLOTHD, 0, -0.55, 0.02, 0.1), bx(0.48, 0.4, 0.5, SK, 0, -0.75, 0.04), bx(0.66, 0.2, 0.9, SKD, 0, -0.98, 0.16), bx(0.6, 0.06, 0.1, BONE, 0, -0.98, 0.62),
+    ...(left ? [bx(0.56, 0.1, 0.56, IRONC, 0, -0.85, 0.04), bx(0.1, 0.1, 0.4, IRONC, 0.32, -0.9, -0.1, 0.5)] : [bx(0.2, 0.25, 0.05, WOUND, 0.1, -0.7, 0.3)])];
+  // bras gauche ballant, très long, main griffue ; menottes et bout de chaîne
+  const armL = [bx(0.7, 0.62, 0.7, SKD, 0, -0.1, 0), bx(0.5, 0.8, 0.5, SK, 0, -0.7, 0.05), bx(0.46, 0.75, 0.46, ROT, 0, -1.4, 0.12), bx(0.5, 0.12, 0.5, IRONC, 0, -1.65, 0.12), bx(0.62, 0.45, 0.55, SK, 0, -2.0, 0.18),
+    ...[-0.2, 0, 0.2].map(x => bx(0.1, 0.32, 0.1, BONE, x, -2.32, 0.38, 0.4)), ...[0, 1, 2, 3].map(k => bx(0.12, 0.12, 0.12, IRONC, 0.12, -1.75 - k * 0.15, 0.2 + k * 0.03)), bx(0.3, 0.3, 0.05, WOUND, 0, -0.8, 0.31)];
+  // bras droit : la MASSE — manche de chêne serré dans le poing, tête en fût cerclé de fer hérissée de clous (pointe vers l'avant, bras baissé)
+  const MW = 0x5a3c22, MWD = 0x46301c, mace = [], A = -1.05, dy = -0.5, dz = 0.866, e2y = 0.866, e2z = 0.5;   // axe du manche : vers l'avant et vers le bas
+  mace.push(bx(0.17, 1.6, 0.17, MW, 0, -2.35, 0.89, A));                                                         // manche, du poing vers l'avant
+  const hx = 0, hy = -2.92, hz = 1.88;                                                                           // tête de la masse
+  mace.push(bx(0.74, 1.0, 0.74, MWD, hx, hy, hz, A));
+  for (const t of [-0.36, 0.36]) mace.push(bx(0.82, 0.12, 0.82, IRONC, hx, hy + dy * t, hz + dz * t, A));        // cercles de fer
+  for (let k = 0; k < 12; k++) { const a = k * 2.0944 + (k >> 2) * 0.5, t = ((k >> 2) - 1) * 0.3, r = 0.42;          // clous en couronnes
+    mace.push(bx(0.15, 0.15, 0.15, 0xa8acb2, hx + Math.cos(a) * r, hy + dy * t + Math.sin(a) * r * e2y, hz + dz * t + Math.sin(a) * r * e2z, 0.78, 0.78, 0)); }
+  mace.push(bx(0.25, 0.25, 0.25, BLOOD, hx + 0.22, hy + dy * 0.45 + 0.1, hz + dz * 0.45, A));                    // sang séché
+  const armR = [bx(0.75, 0.66, 0.75, SKD, 0, -0.1, 0), bx(0.55, 0.85, 0.55, SK, 0, -0.72, 0.05), bx(0.52, 0.8, 0.52, SK, 0, -1.4, 0.12), bx(0.05, 0.6, 0.05, SEAM, 0.28, -1.0, 0.1), bx(0.66, 0.5, 0.62, SKD, 0, -1.95, 0.2), ...mace];
   return [
     part('body', [0, 0, 0], body),
-    part('legL', [-0.42, 0.95, 0], leg(), 'rot', true), part('legR', [0.42, 0.95, 0], leg(), 'rot', true),
-    part('armL', [-1.0, 2.15, 0], arm(-1), 'rot', true), part('armR', [1.0, 2.15, 0], arm(1), 'rot', true),
+    part('legL', [-0.38, 1.05, 0], leg(true), 'rot', true), part('legR', [0.38, 1.05, 0], leg(false), 'rot', true),
+    part('armL', [-1.08, 2.62, 0.28], armL, 'rot', true), part('armR', [1.08, 2.62, 0.28], armR, 'rot', true),
   ];
 }
 export function golemRig(scene) { return new Rig(scene, golemParts(), 32); }

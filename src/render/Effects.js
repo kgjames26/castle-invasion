@@ -197,6 +197,7 @@ export class Effects {
           this.ring(b.x, b.z, 1.8, 2.5, [0.4, 0.03, 0.03], 0.06); break;
         }
         case 'turn': this.burst(b.x, 1.2, b.z, 24, 1, 1.8, 1.0, 0.25, 1, [0.45, 0.65, 0.3], true); this.flash(b.x, 1.4, b.z, 2.5, 0.4, [0.5, 0.8, 0.3]); break;
+        case 'crush': this.ring(b.x, b.z, b.r * 1.6, 0.8, [0.5, 0.42, 0.32]); this.burst(b.x, 0.4, b.z, 22, b.r, 2.2, 1.0, 0.35, 8, COL.dust || [0.55, 0.48, 0.4], false, 1.2); this.burst(b.x, 0.6, b.z, 18, b.r * 0.7, 3, 0.8, 0.2, 9, [0.6, 0.04, 0.04]); this.addShake(0.35); break;
         case 'meteorCall': this.ring(b.x, b.z, b.r, 1.4, [1, 0.4, 0.1]); break;
       }
     }
