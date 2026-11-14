@@ -64,6 +64,9 @@ Three.js (MIT, `lib/THREE_LICENSE`). Packs assetfactory archivés dans `assets/a
 ## Personnages (repris de l'ancien jeu)
 `src/render/Characters.js` charge `assets/characters/` (copies de l'archive v2) : **zombies animés** (cycle de marche, 6 modèles, animation par texture de sommets, un seul appel de rendu par modèle), **archers** « Bard the Bowman » (corps + arc, modèle statique) et **villageois** humanoïdes reconstruits à partir du code du cultivateur de l'ancien jeu (teinte selon la tâche, cap selon le déplacement, balancement). Limites : l'archive ne contient ni course, ni attaque, ni mort animées, ni squelette ; pas de modèle de villageois (le sien est procédural). Sans les fichiers, le rendu retombe sur les boîtes provisoires. Les licences des packs « Polyart Zombies » et « Bard the Bowman » ne sont pas fournies : à vérifier.
 
+## Bâtiments militaires
+`src/render/Military.js` : quatre modèles simples, lisibles en une vue. **Caserne** (halle rouge, écu bleu aux épées croisées, mannequin, lances, bannières) · **Champ de tir** (pelouse, quatre cibles à anneaux, abri et grand arc) · **Écurie** (grange, fer à cheval, enclos avec cheval, foin) · **Atelier de siège** (charpente ouverte, catapulte, rondins, boulets, roue dentée). Les pastilles dorées au-dessus de l'entrée indiquent le niveau. La forge reste un volume provisoire.
+
 ## Ancien jeu (v2)
 Sauvegardé dans `legacy/` (ressource de développement : animations, muraille, zombies, archers, villageois…) et intégralement dans la branche `claude/legacy-v2`. Voir `legacy/README.md`.
 

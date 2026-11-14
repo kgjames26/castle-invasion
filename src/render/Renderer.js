@@ -5,6 +5,7 @@ import { T } from '../sim/terrain.js';
 import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/medieval.js';
 import { archerPos, formationLayout } from '../sim/army.js';
 import { applyNorthFog } from './fog.js';
+import { buildMilitary } from './Military.js';
 const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4]];      // variantes de modèle par type de zombie
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
 
@@ -105,6 +106,8 @@ export class Renderer {
       const m = new THREE.Mesh(g, lam(B.color)); m.position.set(B.pos.x, 0, B.pos.z); this.scene.add(m);
       const ghost = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, depthWrite: false })); ghost.position.copy(m.position); this.scene.add(ghost);
       this.bMesh[id] = { m, ghost };
+      const mil = buildMilitary(id);
+      if (mil) { mil.g.position.copy(m.position); mil.g.visible = false; this.scene.add(mil.g); (this.milB ||= {})[id] = mil; m.visible = false; this.bMesh[id].kit = true; }
     }
     // points de récolte (gisements) : pastilles colorées au sol
     for (const t in TASKS) {
@@ -125,6 +128,7 @@ export class Renderer {
       const lv = E.level[id], { m, ghost } = this.bMesh[id];
       m.visible = lv > 0 && !this.bMesh[id].kit; ghost.visible = lv === 0; m.scale.y = 1 + 0.12 * (lv - 1);
     }
+    if (this.milB) for (const id in this.milB) { const lv = E.level[id], mb = this.milB[id]; mb.g.visible = lv > 0; mb.pips.forEach((p, i) => { p.visible = i < lv; }); }
     if (this.kit) this.updateKitEconomy();
     const vs = E.villagers, VS = 2.8; this.vMesh.count = vs.length; let nc = 0;
     for (let i = 0; i < vs.length; i++) {
