@@ -1,0 +1,19 @@
+{
+  "name": "Castle Invasion",
+  "short_name": "Castle Invasion",
+  "description": "Défense de forteresse médiévale en 3D contre des vagues de zombies.",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#0c0a08",
+  "theme_color": "#14100c",
+  "categories": ["games"],
+  "icons": [
+    { "src": "./assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "./assets/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

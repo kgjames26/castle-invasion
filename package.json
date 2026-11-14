@@ -1,0 +1,13 @@
+{
+  "name": "castle-invasion",
+  "version": "1.0.0",
+  "description": "Castle Invasion — jeu PWA 3D de défense médiévale (Three.js r170, vanilla JS)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes serve -l 5173 .",
+    "start": "npx --yes serve -l 5173 .",
+    "sw": "node scripts/generate-sw.mjs"
+  },
+  "license": "UNLICENSED"
+}
