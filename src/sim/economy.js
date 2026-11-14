@@ -27,7 +27,7 @@ export class Economy {
   cap(r) { return ECON.baseStore + ECON.storePerLevel * this.level[r === 'food' ? 'granary' : 'warehouse']; }
   // Population PARTAGÉE : villageois + toutes les unités militaires (réserve, escouades, garnisons, file d'entraînement)
   popCap() { return ECON.popBase + ECON.popPerHouse * this.houses; }
-  population() { return this.villagers.length + this.sim.army.popUsed(); }
+  population() { return this.villagers.length + this.sim.army.popUsed() + this.sim.siege.popUsed(); }
   popRoom() { return this.popCap() - this.population(); }
   houseCost() { return { wood: 40 + 4 * this.houses, stone: 8 + 2 * this.houses }; }
   buildHouse() { if (this.houses >= ECON.housesMax || !this.pay(this.houseCost())) return false; this.houses++; return true; }

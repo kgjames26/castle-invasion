@@ -33,6 +33,7 @@ export function serialize(sim) {
     spawn: sim.spawn ? { ...sim.spawn, counts: [...sim.spawn.counts] } : null, assaultTime: sim.assaultTime,
     wall: { hp: Array.from(sim.wall.hp), level: Array.from(sim.wall.level) },
     army: sim.army.serialize(),
+    siege: sim.siege.serialize(),
     zombies: zs,
   };
 }
@@ -44,7 +45,7 @@ export function restore(sim, st) {
   sim.wall.hp.set(st.wall.hp); sim.wall.level.set(st.wall.level);
   const Z = sim.zombies; Z.clear(); Z.kills = st.kills;
   for (const [x, z, hp, t, s] of st.zombies) { if (Z.spawn(t, x, z, s, sim.rng)) Z.hp[Z.n - 1] = hp; }
-  sim.army.restore(st.army);
+  sim.army.restore(st.army); sim.siege.restore(st.siege);
   sim.flow.rebuildAll();
 }
 export function save(sim, storage = globalThis.localStorage) {

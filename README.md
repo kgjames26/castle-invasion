@@ -54,5 +54,12 @@ Three.js (MIT, `lib/THREE_LICENSE`). Packs assetfactory archivés dans `assets/a
 - Tests : `npm test` (bot sur plusieurs vagues + sauvegarde) et `node tests/sortie.mjs` (sortie + comparaison des formations).
 - Reporté : ingénieurs / armes de siège, villageois attaquables, équilibrage fin (Phase 5).
 
+## Phase 5 — Armes de siège
+- **Atelier de siège** (Armée → 🛠 Siège) : niveau = 2 armes déployables par niveau ; niv. 1 baliste, niv. 2 catapulte, niv. 3 trébuchet (repris de l'ancien jeu, `SIEGE` dans `content/medieval.js`).
+- Armes fixes derrière la muraille, 3 emplacements par secteur, **portée au-delà de leur secteur** (jusqu'à 82 m pour le trébuchet). Équipage = population partagée. Munitions prélevées dans les stocks (fer / pierre) ; une arme sans munitions devient rouge.
+- Dégâts de zone pour catapulte et trébuchet (cible choisie là où les zombies sont les plus denses) ; la baliste vise le zombie le plus coriace. Les dégâts suivent l'amélioration « Armes affûtées ».
+- Démontage = ½ des ressources rendues. Sauvegarde : champ `siege` (sans changement de version ; les anciennes sauvegardes v3 restent valides).
+- Test : `node tests/siege.mjs`. Reporté : bélier mobile, armes attaquables par les zombies.
+
 ## Ancien jeu (v2)
 Sauvegardé dans `legacy/` (ressource de développement : animations, muraille, zombies, archers, villageois…) et intégralement dans la branche `claude/legacy-v2`. Voir `legacy/README.md`.

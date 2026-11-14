@@ -1,7 +1,7 @@
 // Interface : projection de l'état de la simulation (aucune logique de jeu ici) + envoi de commandes.
 // Trois vues prévues sur UNE seule simulation : COMBAT, VILLAGE (Phase 3), ARMÉE (Phase 4).
 import { SECTORS, SECTOR_NAMES, SECTOR_SHORT, ARCHER_SLOTS, CASTLE } from '../sim/constants.js';
-import { PHASES, UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TASKS, BUILDINGS, UPGRADES, RES, RES_INFO, ECON, waveSpec } from '../content/medieval.js';
+import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, UPGRADES, RES, RES_INFO, ECON, waveSpec } from '../content/medieval.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -11,7 +11,7 @@ const TASK_ORDER = ['wood', 'stone', 'iron', 'gold', 'food'];
 
 export class UI {
   constructor(sim, hooks) {
-    this.sim = sim; this.hooks = hooks; this.sel = -1; this.acc = 0; this.tab = 'combat'; this.sub = 'work'; this.asub = 'squads'; this.selSq = 0; this.targeting = false; this.html = ''; this.pressing = false;
+    this.sim = sim; this.hooks = hooks; this.sel = -1; this.acc = 0; this.tab = 'combat'; this.sub = 'work'; this.asub = 'squads'; this.siegeSec = 2; this.selSq = 0; this.targeting = false; this.html = ''; this.pressing = false;
     this.top = $('#top'); this.sectorsBar = $('#sectors'); this.panel = $('#panel'); this.nav = $('#nav');
     this.top.innerHTML = `
       <div class="res">${RES.map(r => `<span class="r" id="r-${r}">${RES_INFO[r].ico}<b>0</b></span>`).join('')}</div>
@@ -58,6 +58,10 @@ export class UI {
       case 'ua': sim.assignArchers(s, +y); break;
       case 'wall': sim.upgrade(s); break;
       case 'house': sim.buildHouse(); break;
+      case 'sseg': this.siegeSec = +x; break;
+      case 'sbuild': sim.buildSiege(x, this.siegeSec); break;
+      case 'scancel': sim.cancelSiege(); break;
+      case 'sdis': sim.dismantleSiege(+x); break;
       case 'train': sim.train(x, +y); break;
       case 'cancel': sim.cancelTrain(x); break;
       case 'asub': this.asub = x; break;
@@ -116,14 +120,15 @@ export class UI {
       <div class="hint small">Archers en réserve : <b>${army.reserve.archer}</b> — entraîne-en dans l'onglet Armée.</div>
       ${squadsHere.map(q => sqRow(q, false)).join('') || '<div class="hint small">Aucune escouade en garnison ici.</div>'}
       ${others.length ? `<div class="hint small">Envoyer une escouade dans ce secteur :</div>${others.map(q => sqRow(q, true)).join('')}` : ''}
+      ${sim.siege.weapons.some(x => x.sector === s) ? `<div class="hint small">🛠 Siège ici : ${sim.siege.weapons.filter(x => x.sector === s).map(x => SIEGE[x.type].ico).join(' ')} (portée au-delà du secteur)</div>` : ''}
       <div class="row">${this.btn('⬆ Renforcer', uc ? `Niv. ${w.level[s] + 1} · ${this.cost(uc)}` : 'niveau max', 'wall', !uc || !E.afford(uc))}</div>
       <div class="hint small">🔧 ${crew ? `${crew} villageois réparent la muraille` : 'Aucun villageois à la réparation'} — règle-le dans l'onglet Village.</div>`;
   }
   // ——— ARMÉE ———
   armyHtml() {
-    const subs = [['squads', '🛡 Escouades'], ['train', '🪖 Entraîner'], ['forge', '🔨 Forge']];
+    const subs = [['squads', '🛡 Escouades'], ['train', '🪖 Entraîner'], ['siege', '🛠 Siège'], ['forge', '🔨 Forge']];
     let h = `<div class="subtabs">${subs.map(([k, n]) => `<button data-a="asub:${k}" class="${this.asub === k ? 'on' : ''}">${n}</button>`).join('')}</div>${this.popLine()}`;
-    return h + (this.asub === 'squads' ? this.squadsHtml() : this.asub === 'train' ? this.trainHtml() : this.forgeHtml());
+    return h + (this.asub === 'squads' ? this.squadsHtml() : this.asub === 'train' ? this.trainHtml() : this.asub === 'siege' ? this.siegeHtml() : this.forgeHtml());
   }
   squadsHtml() {
     const army = this.sim.army, q = army.squads.find(x => x.id === this.selSq);
@@ -157,6 +162,21 @@ export class UI {
       }).join('') + '</div>';
       h += `<div class="hint small">Réserve : ${UNIT_ORDER.filter(t => UNITS[t].from === b).map(t => `${UNITS[t].ico}${army.reserve[t]}`).join(' ')}</div></div>`;
     }
+    return h;
+  }
+  siegeHtml() {
+    const sim = this.sim, S = sim.siege, E = sim.eco, lv = E.level.workshop, B = BUILDINGS.workshop;
+    const wc = E.buildingCost('workshop');
+    let h = `<div class="card"><div class="ct"><b>${B.ico} ${B.name}</b> <span class="lvl">${lv ? 'Niv. ' + lv + ' · armes ' + S.deployed() + '/' + S.cap(sim) : 'à construire'}</span><small>${B.info}</small></div>${wc ? this.btn(lv ? `Niv. ${lv + 1}` : 'Construire', this.cost(wc), 'bld:workshop', !E.afford(wc), 'act slim') : '<span class="max">max</span>'}</div>`;
+    if (!lv) return h;
+    h += `<div class="prio"><span>Secteur :</span>${SECTOR_SHORT.map((x, i) => `<button class="chipb ${this.siegeSec === i ? 'on' : ''}" data-a="sseg:${i}">${x} <small>${S.inSector(i)}/${SIEGE_RULES.slotsPerSector}</small></button>`).join('')}</div>`;
+    for (const t of SIEGE_ORDER) {
+      const D = SIEGE[t], locked = lv < D.level, off = locked || !S.canBuild(sim, t, this.siegeSec) || !E.afford(D.cost);
+      h += `<div class="card"><div class="ct"><b>${D.ico} ${D.name}</b><small>${locked ? `Atelier niv. ${D.level} requis` : D.info}</small><small>${this.cost(D.cost)} · ${D.time}s · 👥${D.crew} · tir : ${this.cost(D.ammo)}</small></div>${this.btn('Poser', SECTOR_SHORT[this.siegeSec], 'sbuild:' + t, off, 'act slim')}</div>`;
+    }
+    if (S.queue.length) h += `<div class="queue">${S.queue.map((it, i) => `<span class="qi">${SIEGE[it.type].ico}${i === 0 ? `<i style="width:${100 * (1 - it.t / it.full)}%"></i>` : ''}</span>`).join('')}<button class="chipb" data-a="scancel">↩ annuler</button></div>`;
+    if (S.weapons.some(w => w.noAmmo)) h += '<div class="warn">⚠ Munitions épuisées (pierre / fer) : une arme ne tire plus.</div>';
+    for (const w of S.weapons) h += `<div class="row step"><span class="lab">${SIEGE[w.type].ico} ${SIEGE[w.type].name}<small class="sub">${SECTOR_SHORT[w.sector]}${w.noAmmo ? ' · sans munitions' : ''}</small></span>${this.btn('Démonter', '+ ½ ressources', 'sdis:' + w.id, false, 'act slim')}</div>`;
     return h;
   }
   forgeHtml() {

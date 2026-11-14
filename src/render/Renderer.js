@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT } from '../sim/constants.js';
 import { T } from '../sim/terrain.js';
-import { ZOMBIES, UNITS, BUILDINGS, TASKS, RES_INFO } from '../content/medieval.js';
+import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO } from '../content/medieval.js';
 import { archerPos, formationLayout } from '../sim/army.js';
 import { applyNorthFog } from './fog.js';
 
@@ -21,7 +21,7 @@ export class Renderer {
     this.scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x4a4030, 1.55));
     const sun = new THREE.DirectionalLight(0xfff1d0, 1.5); sun.position.set(-60, 120, 80); this.scene.add(sun);
     this.dummy = new THREE.Object3D(); this.tmpColor = new THREE.Color();
-    this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildHighlight();
+    this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildSiege(); this.buildHighlight();
     this.selected = -1; this.clock = 0; this.selSquad = 0; this.targetMode = false; this.tmpC2 = new THREE.Color(); this.white = new THREE.Color(1, 1, 1);
   }
   resize(w, h) { this.renderer.setSize(w, h, false); this.renderer.domElement.style.width = w + 'px'; this.renderer.domElement.style.height = h + 'px'; this.camera.aspect = w / h; this.camera.updateProjectionMatrix(); }
@@ -135,6 +135,38 @@ export class Renderer {
     const ar = new THREE.BoxGeometry(0.16, 0.16, 1.6); this.arMesh = inst(ar, 0xffffff, 256);
     this.zCol = ZOMBIES.map(z => new THREE.Color(z.color));
   }
+  buildSiege() {
+    const inst = (geo, cap) => { const im = new THREE.InstancedMesh(geo, lam(0xffffff), cap); im.frustumCulled = false; im.count = 0; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); this.scene.add(im); return im; };
+    const base = new THREE.BoxGeometry(3, 1.6, 4); base.translate(0, 0.8, 0); const arm = new THREE.BoxGeometry(0.5, 0.5, 4.5); arm.translate(0, 0, -2);
+    this.wBase = inst(base, 24); this.wArm = inst(arm, 24);
+    const ball = new THREE.SphereGeometry(0.6, 6, 5); this.pMesh = inst(ball, 64);
+    const disc = new THREE.CylinderGeometry(1, 1, 0.2, 14); this.iMesh = inst(disc, 40);
+  }
+  updateSiege(alpha) {
+    const S = this.sim.siege, d = this.dummy, c = this.tmpColor; let n = 0;
+    for (const w of S.weapons) {
+      const D = SIEGE[w.type], sc = D.size * 1.8, recoil = Math.max(0, w.rec) / 0.35;
+      d.position.set(w.x, 0, w.z); d.scale.set(sc, sc, sc); d.rotation.set(0, 0, 0); d.updateMatrix(); this.wBase.setMatrixAt(n, d.matrix);
+      c.setHex(D.color); if (w.noAmmo) c.lerp(this.tmpC2.setRGB(0.9, 0.15, 0.1), 0.6); this.wBase.setColorAt(n, c);
+      d.position.set(w.x, 1.8 * sc, w.z - 1 * sc); d.scale.set(sc, sc, sc); d.rotation.set(-0.7 + recoil * 0.9, 0, 0); d.updateMatrix(); this.wArm.setMatrixAt(n, d.matrix);
+      this.wArm.setColorAt(n, c.setHex(0x3a2a18)); n++;
+    }
+    this.wBase.count = this.wArm.count = n; for (const m of [this.wBase, this.wArm]) { m.instanceMatrix.needsUpdate = true; m.instanceColor.needsUpdate = true; }
+    n = 0;
+    for (const p of S.shots) {
+      if (n >= 64) break; const f = Math.min(1, p.t / p.dur), x = p.x0 + (p.x1 - p.x0) * f, z = p.z0 + (p.z1 - p.z0) * f, arc = p.type === 'ballista' ? 3 : 14;
+      d.position.set(x, 3 + arc * Math.sin(Math.PI * f), z); const k = p.type === 'trebuchet' ? 1.8 : p.type === 'catapult' ? 1.3 : 0.7; d.scale.set(k, k, k); d.rotation.set(0, 0, 0); d.updateMatrix(); this.pMesh.setMatrixAt(n, d.matrix);
+      this.pMesh.setColorAt(n, c.setHex(p.type === 'ballista' ? 0xf5e6b0 : 0x6d6d70)); n++;
+    }
+    this.pMesh.count = n; this.pMesh.instanceMatrix.needsUpdate = true; this.pMesh.instanceColor.needsUpdate = true;
+    n = 0;
+    for (const im of S.impacts) {
+      if (n >= 40) break; const f = im.t / 0.5, r = im.r * (0.5 + 0.7 * f);
+      d.position.set(im.x, 0.3, im.z); d.scale.set(r, 1, r * (1 - 0.3 * f)); d.rotation.set(0, 0, 0); d.updateMatrix(); this.iMesh.setMatrixAt(n, d.matrix);
+      this.iMesh.setColorAt(n, c.setRGB(1, 0.55 - 0.3 * f, 0.15)); n++;
+    }
+    this.iMesh.count = n; this.iMesh.instanceMatrix.needsUpdate = true; this.iMesh.instanceColor.needsUpdate = true;
+  }
   buildHighlight() {
     this.hl = new THREE.Mesh(new THREE.PlaneGeometry(SECTOR_W, 60), new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.16, depthWrite: false }));
     this.hl.rotation.x = -Math.PI / 2; this.hl.position.y = 0.2; this.hl.visible = false; this.scene.add(this.hl);
@@ -207,7 +239,7 @@ export class Renderer {
       const o = dg === 2 ? 0.28 + 0.12 * Math.sin(this.clock * 8) : dg === 1 ? 0.12 : tgt ? 0.1 + 0.08 * Math.sin(this.clock * 5) : 0;
       this.threat[s].material.opacity = o;
     }
-    this.updateWall(); this.updateEconomy(alpha);
+    this.updateWall(); this.updateEconomy(alpha); this.updateSiege(alpha);
     this.renderer.render(this.scene, this.camera);
   }
 }

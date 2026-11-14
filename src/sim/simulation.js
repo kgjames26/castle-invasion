@@ -7,6 +7,7 @@ import { FlowFields } from './flowfield.js';
 import { Wall } from './wall.js';
 import { ZombieSwarm } from './zombies.js';
 import { Army } from './army.js';
+import { Siege } from './siege.js';
 import { START, UNITS, TIMING, waveSpec } from '../content/medieval.js';
 import { Economy } from './economy.js';
 
@@ -18,7 +19,7 @@ export class Simulation {
     this.flow = new FlowFields(this.terrain, this.wall);
     this.hash = new SpatialHash(4, 4096);
     this.zombies = new ZombieSwarm();
-    this.army = new Army();
+    this.army = new Army(); this.siege = new Siege();
     this.eco = new Economy(this);
     this.scratch = new Int32Array(256);
     this.arrows = [];             // événements visuels (consommés par le rendu)
@@ -29,7 +30,7 @@ export class Simulation {
   newGame() {
     this.rng = makeRng(this.seed);
     this.wall.reset(); this.zombies.clear(); this.zombies.kills = 0;
-    this.army = new Army();
+    this.army = new Army(); this.siege = new Siege();
     this.eco.reset();
     this.army.reserve = { ...START.reserve };
     for (let s = 0; s < SECTORS; s++) { this.army.reserve.archer += START.perSector.archer; this.army.assignArchers(s, START.perSector.archer); }
@@ -41,7 +42,6 @@ export class Simulation {
   }
 
   // ——— commandes (appelées par l'interface) ———
-  assign(s, type, delta) { return this.army.assign(s, type, delta); }
   get res() { return this.eco.res; }
   // ——— armée ———
   train(type, n = 1) { return this.army.enqueue(this, type, n); }
@@ -55,6 +55,9 @@ export class Simulation {
   squadSortie(id, x, z) { const q = this.squad(id); if (q) this.army.sortie(q, x, z); }
   squadReinforce(id) { const q = this.squad(id); return q ? this.army.reinforce(q) : 0; }
   squadDisband(id) { const q = this.squad(id); if (q) this.army.disband(q); }
+  buildSiege(type, s) { return this.siege.build(this, type, s); }
+  cancelSiege() { return this.siege.cancel(this); }
+  dismantleSiege(id) { return this.siege.dismantle(this, id); }
   buildHouse() { return this.eco.buildHouse(); }
   upgrade(s) { const c = this.wall.upgradeCost(s); if (!c || !this.eco.pay(c)) return false; return this.wall.upgrade(s); }
   assignVillagers(task, delta) { return this.eco.setAssign(task, delta); }
@@ -123,6 +126,7 @@ export class Simulation {
     this.updateWaves(dt);
     this.zombies.update(dt, this);
     this.army.update(dt, this);
+    this.siege.update(dt, this);
     this.eco.update(dt);
     this.zombies.compact();
     for (let i = this.arrows.length - 1; i >= 0; i--) { this.arrows[i].t += dt; if (this.arrows[i].t > 0.4) this.arrows.splice(i, 1); }

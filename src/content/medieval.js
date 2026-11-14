@@ -84,7 +84,17 @@ export const ARMY_BUILDINGS = {
   range:    { name: 'Champ de tir', ico: '🎯', group: 'army', start: 1, cost: { wood: 90, stone: 30 },  pos: { x: 100, z: 176 }, size: [18, 3, 9],  color: 0x4a6f4a, info: 'Archers' },
   forge:    { name: 'Forge',        ico: '🔨', group: 'army', start: 0, max: 1, cost: { wood: 80, stone: 80, iron: 40 }, pos: { x: 100, z: 195 }, size: [10, 6, 8], color: 0x5a4f58, info: 'Débloque les améliorations militaires' },
 };
+ARMY_BUILDINGS.workshop = { name: 'Atelier de siège', ico: '🛠', group: 'army', start: 0, max: 3, cost: { wood: 140, stone: 100, iron: 30 }, pos: { x: 150, z: 205 }, size: [14, 6, 10], color: 0x6a5a45, info: '2 armes déployables par niveau · Niv.1 baliste · Niv.2 catapulte · Niv.3 trébuchet' };
 Object.assign(BUILDINGS, ARMY_BUILDINGS);
+// Armes de siège (reprises de l'ancien jeu) : fixes, derrière la muraille. Munitions prélevées dans les stocks.
+// range/minRange en mètres depuis l'arme ; aoe = rayon d'impact ; speed = m/s du projectile ; crew = places de population.
+export const SIEGE = {
+  ballista:  { name: 'Baliste',   ico: '🎯', range: 46, minRange: 4,  dmg: 85,  aoe: 2.2, reload: 3.0, speed: 55, ammo: { iron: 1 },  cost: { wood: 80, iron: 30 },                       time: 18, level: 1, crew: 2, color: 0x8a6a3a, size: 1.0, info: 'Tir tendu, 85 dégâts : excellente contre les gros zombies' },
+  catapult:  { name: 'Catapulte', ico: '☄', range: 60, minRange: 14, dmg: 60,  aoe: 4.5, reload: 5.0, speed: 26, ammo: { stone: 2 }, cost: { wood: 120, stone: 60, iron: 20 },          time: 25, level: 2, crew: 2, color: 0x7a5a30, size: 1.3, info: 'Tir en cloche, dégâts de zone 4,5 m' },
+  trebuchet: { name: 'Trébuchet', ico: '🏰', range: 82, minRange: 24, dmg: 150, aoe: 6.5, reload: 9.0, speed: 32, ammo: { stone: 5 }, cost: { wood: 200, stone: 120, iron: 60, gold: 50 }, time: 40, level: 3, crew: 3, color: 0x5a4020, size: 1.7, info: 'Portée immense, 150 dégâts de zone 6,5 m, rechargement lent' },
+};
+export const SIEGE_ORDER = ['ballista', 'catapult', 'trebuchet'];
+export const SIEGE_RULES = { perLevel: 2, slotsPerSector: 3, queueMax: 4, speedPerLevel: 0.25, refund: 0.5 };
 // Améliorations : effets mesurables, coût du niveau N+1 = base × (N+1).
 export const UPGRADES = {
   tools:   { name: 'Outils',            ico: '🛠', max: 4, cost: { wood: 60, iron: 20 }, per: 0.20, info: 'Récolte +20 % par niveau' },
