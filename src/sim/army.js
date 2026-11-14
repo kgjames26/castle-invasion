@@ -6,7 +6,8 @@ import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN, RANKS, UPGRADES, INFIRMARY
 
 const tmp = new Int32Array(1024), tmp2 = new Int32Array(1024);
 export const MOVE_Z0 = WALL_Z1 + 4, MOVE_Z1 = 208;          // zone où l'on peut poster une escouade à l'intérieur (cour + placette)
-export const archerPos = (s, k) => { const x = s * SECTOR_W + ((k >> 1) + 0.5) * SECTOR_W / (ARCHER_SLOTS / 2); return { x, z: ARCHER_Z + wallOff(x) + (k & 1) * 2.4 - 1.2 }; };
+// secteur central : la grande porte (x 89-111) n'a pas de chemin de ronde au-dessus, les archers se placent de part et d'autre, en partant d'elle
+export const archerPos = (s, k) => { let x = s * SECTOR_W + ((k >> 1) + 0.5) * SECTOR_W / (ARCHER_SLOTS / 2); if (s === 2) { const j = k >> 1, half = ARCHER_SLOTS / 4, m = j >> 1; x = j % 2 ? 111 + (m + 0.5) * 8.6 / half : 89 - (m + 0.5) * 8.6 / half; } return { x, z: ARCHER_Z + wallOff(x) + (k & 1) * 2.4 - 1.2 }; };
 // ——— archers : montée par l'escalier le plus proche, puis marche sur le chemin de ronde jusqu'à leur créneau ———
 export const STAIR_Z0 = 159, STAIR_Z1 = 150.2, ARCHER_SPEED = 5;
 export const stairX = (s, k) => s * SECTOR_W + (archerPos(s, k).x < s * SECTOR_W + SECTOR_W / 2 ? 8 : 32);

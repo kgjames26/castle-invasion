@@ -10,7 +10,7 @@ import { STAIR_Z0, STAIR_Z1 } from '../sim/army.js';
 import { stoneMaterial } from './Stone.js';
 
 // GATE_HS : hauteur de chaque passage (la porte centrale, la grande porte, est plus haute) ; GATE_TH : hauteur des châtelets
-export const GATE_HS = [4.4, 6.2, 4.4], GATE_TH = [10.5, 13.2, 10.5];
+export const GATE_HS = [4.4, 8.6, 4.4], GATE_TH = [10.5, 16.5, 10.5];   // grande porte : passage 2× plus haut que la muraille n'en laisse aux autres
 export const WALL_H = 6.4, GATE_H = 4.4, Z_OUT = 143.5, Z_IN = 148.9, Z_MID = 146.2, THICK = 2.0, STEPS = 12;
 // muraille en ARC (v2.1) : un point exprimé dans le repère « muraille droite » (x le long du mur, z en profondeur) est reporté sur l'arc :
 // décalé vers le nord de wallOff(x) et tourné selon la pente locale, pour que chaque pièce suive la courbe.
@@ -49,7 +49,7 @@ export class WallView {
     const add = (geo, m, x, y, z, ry = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.y = ry; arcObject(o); o.castShadow = o.receiveShadow = true; this.gatehouse.add(o); return o; };
     const wallSkin = (w, h, x, y, z, ry) => { const o = add(asset.geo, panelMat, x, y, z, ry); o.scale.set(w / 10, h / 4, 0.35); return o; };   // parement du modèle de muraille
     GATE_SEGS.forEach(([a, b], gi) => {
-      const x0 = a * SEG_W, x1 = (b + 1) * SEG_W, gc = (x0 + x1) / 2, TH = GATE_TH[gi], GH = GATE_HS[gi], RW = x1 - x0 + 0.4, RD = THICK + 1.6, RZ = Z_OUT + 0.4, RY0 = GH - 0.6, RH = TH - RY0;
+      const x0 = a * SEG_W, x1 = (b + 1) * SEG_W, gc = (x0 + x1) / 2, TH = GATE_TH[gi], GH = GATE_HS[gi], tall = GH > WALK_H, RW = x1 - x0 + 0.4, RD = tall ? Z_IN + 0.6 - (Z_OUT - 1.4) : THICK + 1.6, RZ = tall ? (Z_IN + 0.6 + Z_OUT - 1.4) / 2 : Z_OUT + 0.4, RY0 = GH - 0.6, RH = TH - RY0;   // grande porte : salle sur toute l'épaisseur
       add(new THREE.BoxGeometry(RW, RH, RD), dark, gc, RY0 + RH / 2, RZ);                                                                   // salle de la herse (cœur)
       wallSkin(RW + 0.1, RH, gc, RY0, RZ - RD / 2 - 0.08, 0); wallSkin(RW + 0.1, RH, gc, RY0, RZ + RD / 2 + 0.08, Math.PI);                    // façades : même parement que la muraille
       add(new THREE.BoxGeometry(RW + 0.5, 0.35, RD + 0.5), dark, gc, RY0 - 0.1, RZ);                                                          // linteau sombre au-dessus de la herse
@@ -90,8 +90,9 @@ export class WallView {
     for (const G of this.gates) {
       const gw = G.x1 - G.x0, gc = (G.x0 + G.x1) / 2, intact = wall.hp[G.segs[0]] > 0 || wall.hp[G.segs[1]] > 0, GH = GATE_HS[G.g];
       if (!intact) continue;
+      if (GH >= WALK_H) continue;                                                  // grande porte : pas de linteau, le châtelet couvre tout
       this.place(this.outer, n, gc, GH, Z_OUT, 0, gw / 10, Math.max(0.05, WALL_H - GH) / 4, THICK); this.tint(this.outer, n, 1, false);
-      const top = Math.max(WALK_H, GH + 0.4); this.place(this.core, n, gc, (GH + top) / 2, Z_MID, 0, gw, top - GH, 4.7); this.core.setColorAt(n, this.c.setRGB(0.5, 0.5, 0.5)); n++; lintels++;
+      this.place(this.core, n, gc, (GH + WALK_H) / 2, Z_MID, 0, gw, WALK_H - GH, 4.7); this.core.setColorAt(n, this.c.setRGB(0.5, 0.5, 0.5)); n++; lintels++;
     }
     this.outer.count = n; this.core.count = n; this.inner.count = n - lintels; this.leaves.count = nl;
     // herses : montent dans le châtelet à l'ouverture ; disparaissent si la porte est détruite

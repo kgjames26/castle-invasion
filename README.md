@@ -213,3 +213,13 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Transformation** (45 s) : hors de la geôle, le mordu devient un zombie (teinte de sa tunique) et peut **surprendre** un voisin et le mordre à son tour, ou être repoussé.
 - **Animations** : morsure debout (le zombie se penche et happe), plongeon (il se jette à l'horizontale), coup du lourd, déchirement et boisson du colosse ; mordus couchés qui se débattent, puis voûtés et de plus en plus verdâtres ; gerbes et gouttes de sang.
 - Onglet Armée : alerte « mordus » (compte à rebours, ce qu'il manque) ; fiche de la geôle : cellules, mordus et bilan.
+
+## Phase 25 — Grande porte, menus en deux temps, gestion des escouades
+- **Grande porte centrale** vraiment plus haute (passage 8,6 m contre 4,4 m) : pas de chemin de ronde au-dessus, châtelet sur toute l'épaisseur du mur ; les archers du secteur central se placent de part et d'autre de la porte.
+- **Menus en deux temps, partout** : chaque onglet s'ouvre sur une grille de **catégories** (tuiles avec icône, résumé, compteur, alerte), puis un **sous-menu** avec « ‹ Retour ».
+  - ⚒ Bâtir : Habitations · Ressources · Stockage · Militaire · Soins et foi (infirmerie, église, geôle) · Ville et savoir · Défense
+  - 🛡 Armée : Escouades · Recruter · Rangs · Magie · Siège · Forge
+  - 👥 Villageois : Récolte · Défrichage et feux · Réparations · Prospection
+  - 📜 Savoir : Améliorations du village · Où améliorer quoi ?
+- **Escouades** : liste (état, santé) → fiche d'une escouade, ordres groupés par intention : 1 · Où l'envoyer (Combattre dehors, Rentrer, Placer à la main, ou garder un secteur sur un plan de la muraille) · 2 · Comment combattre (formation, Tenir / Charger) · 3 · Effectif.
+- **Ordres explicites** : toucher la carte ne déplace plus une escouade par surprise. On choisit l'action (bulle sur la carte : Combattre / Déplacer / Ordres), un bandeau en haut indique quoi toucher, annulable.
