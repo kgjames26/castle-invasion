@@ -234,3 +234,10 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Après chaque vague**, les troupes en réserve complètent les escouades autonomes puis forment de nouvelles escouades (`army.autoForm`).
 - **Placement avant la vague** : bandeau « Vague repoussée · place tes troupes » → mode placement (jeu en pause) : toucher une escouade, puis l'endroit voulu (cour = poste, devant la muraille = attend sur le champ). Aussi depuis Armée › Escouades.
 - **Plus de AG / CG / C / CD / AD** : ni lettres ni lignes peintes sur le terrain ; les pastilles de muraille (sans code) n'apparaissent que sur un pan abîmé ou attaqué ; on parle des repères (porte gauche, mur gauche, grande porte, mur droit, porte droite) ; le choix « garder un secteur » disparaît au profit du placement à la main.
+
+## Phase 28 — Escouade, peloton, escadron · production animée · vue pivotante
+- **Organisation des troupes** (`GRADES`) : escouade 15 hommes, peloton 50, escadron 150. Une troupe ne se forme qu'au complet ; moins de 15 hommes d'une catégorie restent en réserve.
+- **Fusionner** dès qu'il y a assez d'hommes de la même catégorie (troupes en garnison + réserve) ; **séparer** en pelotons ou en escouades (le reste de moins de 15 rentre en réserve). Après chaque vague, les escouades autonomes fusionnent en pelotons, les pelotons en escadrons, et la réserve forme le plus grand grade possible.
+- Formations proposées quelle que soit la taille (aussi dans la bulle sur la carte) ; les gros effectifs prennent plus de rangs ; postes de garnison espacés selon la taille.
+- **Production d'unités** : la fiche d'une caserne / écurie / champ de tir montre l'unité en formation (4 étapes animées, barre de progression, file, boutons +1) ; dans la scène, des recrues s'exercent devant le bâtiment (épée contre mannequins, tir sur cibles avec flèches, cavaliers en carrière).
+- **Vue pivotante** : bouton 🧭 (ou touche R) pour regarder vers le sud (village, château) ou vers le nord (muraille, horde), avec rotation animée.

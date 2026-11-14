@@ -3,7 +3,7 @@ import { Simulation } from '../src/sim/simulation.js';
 import { FORMATIONS } from '../src/content/medieval.js';
 function run(form, type) {
   const sim = new Simulation(); sim.eco.res.gold = 1e5;
-  sim.army.reserve[type] += 20; const q = sim.formSquad(type, 20, 2) || sim.army.squads.at(-1);
+  sim.army.reserve[type] += 20; const q = sim.formSquad(type, 15, 2) || sim.army.squads.at(-1);
   sim.squadForm(q.id, form); sim.squadStance(q.id, 'charge');
   for (let i = 0; i < 60; i++) sim.zombies.spawn(0, 90 + (i % 10) * 2, 90 + (i / 10 | 0) * 2, 2, sim.rng);
   sim.squadSortie(q.id, 100, 120);

@@ -72,7 +72,16 @@ export const FORMATIONS = {
   square:  { name: 'Carré',    ico: '■', engage: 0.8,  contact: 1.2, def: 0.85, atk: 0.9, speed: 0.85, charge: 0,   info: 'Défend de partout : −15 % de dégâts reçus' },
   column:  { name: 'Colonne',  ico: '║', engage: 0.35, contact: 0.7, def: 1.0,  atk: 1.0, speed: 1.25, charge: 0,   info: 'Marche rapide, combat faible' },
 };
-export const SQUAD = { sortieZ: [58, 139], garrisonLeash: 16, intercept: 80, chargeRange: 28, aggro: 9, maxSquads: 60 };
+// Organisation des troupes (v2.8) : ESCOUADE 15 hommes · PELOTON 50 · ESCADRON 150. Moins de 15 hommes d'une catégorie : ils restent en réserve.
+// On fusionne dès qu'il y a assez d'hommes de la même catégorie pour le grade au-dessus ; on sépare en groupes plus petits (le reste < 15 rentre en réserve).
+export const GRADES = {
+  escouade: { name: 'Escouade', plural: 'Escouades', size: 15, ico: '▪' },
+  peloton:  { name: 'Peloton',  plural: 'Pelotons',  size: 50, ico: '▪▪' },
+  escadron: { name: 'Escadron', plural: 'Escadrons', size: 150, ico: '▪▪▪' },
+};
+export const GRADE_ORDER = ['escouade', 'peloton', 'escadron'];
+export const gradeFor = n => n <= 15 ? 'escouade' : n <= 50 ? 'peloton' : 'escadron';
+export const SQUAD = { sortieZ: [58, 139], garrisonLeash: 16, intercept: 80, chargeRange: 28, aggro: 9, maxSquads: 40 };
 export const TRAIN = { baseQueue: 5, queuePerLevel: 5, speedPerLevel: 0.25 };
 export const WALL = {
   segHp: 400, gateHp: 900,

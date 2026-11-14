@@ -1,6 +1,6 @@
 // Armée : réserve, archers de garnison (chemin de ronde), ESCOUADES avec formations (garnison ou sortie sur le champ de bataille),
 // files d'entraînement. Les escouades agissent comme une seule entité : points de vie en réserve commune, membres dessinés par formation.
-import { INFECTION } from '../content/medieval.js';
+import { INFECTION, GRADES, gradeFor } from '../content/medieval.js';
 import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_XS, WALL_Z0, WALL_Z1, WALK_H, PLAZA, sectorOfX, wallOff } from './constants.js';
 import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN, RANKS, UPGRADES, INFIRMARY } from '../content/medieval.js';
 
@@ -31,9 +31,10 @@ export function formationLayout(form, n, size = 1) {
   const key = form + '|' + n + '|' + size; let L = cache.get(key); if (L) return L;
   const xs = new Float32Array(n), zs = new Float32Array(n), sp = 1.7 * size;
   const grid = (cols, spx, spz, rows) => { for (let k = 0; k < n; k++) { xs[k] = ((k % cols) - (cols - 1) / 2) * spx; zs[k] = (((k / cols) | 0) - (rows - 1) / 2) * spz; } };
-  if (form === 'line') { const c = Math.ceil(n / 2); grid(c, sp, sp, 2); }
-  else if (form === 'phalanx') { const c = Math.ceil(n / 3); grid(c, sp * 0.75, sp * 0.75, 3); }
-  else if (form === 'column') { grid(2, sp, sp, Math.ceil(n / 2)); }
+  // les gros effectifs (pelotons, escadrons) prennent plus de rangs plutôt que de s'étirer sur toute la muraille
+  if (form === 'line') { const r = Math.max(2, Math.ceil(n / 22)), c = Math.ceil(n / r); grid(c, sp, sp, r); }
+  else if (form === 'phalanx') { const r = Math.max(3, Math.ceil(n / 16)), c = Math.ceil(n / r); grid(c, sp * 0.75, sp * 0.75, r); }
+  else if (form === 'column') { const c = Math.max(2, Math.ceil(n / 30)); grid(c, sp, sp, Math.ceil(n / c)); }
   else if (form === 'square') { const c = Math.ceil(Math.sqrt(n)); grid(c, sp, sp, c); }
   else { // coin : 1, 2, 3… membres par rangée, pointe vers le nord
     let rows = 0, t = 0; while (t < n) { rows++; t += rows; }
@@ -124,30 +125,58 @@ export class Army {
   gateNear(x) { let best = 0, bd = Infinity; GATE_XS.forEach((gx, g) => { const d = Math.abs(gx - x); if (d < bd) { bd = d; best = g; } }); return best; }
   // ——— escouades ———
   unitHp(type) { return UNITS[type].hp; }
-  maxN(type) { return UNITS[type].squad; }
-  formSquad(type, size, sector = 2) {
+  maxN(type, q) { return GRADES[q && q.grade || 'escouade'].size; }   // effectif maximal selon le grade (escouade 15, peloton 50, escadron 150)
+  formSquad(type, size, sector = 2, grade = null) {
     const U = UNITS[type]; if (!U.squad || this.squads.length >= SQUAD.maxSquads) return null;
-    const n = Math.min(size, U.squad, this.reserve[type]); if (n <= 0) return null;
+    const g0 = grade || gradeFor(size), n = Math.min(size, GRADES[g0].size, this.reserve[type]); if (n < GRADES[g0].size) return null;   // une troupe ne se forme qu'au complet (escouade 15, peloton 50, escadron 150)
     this.reserve[type] -= n;
-    const q = { id: this.nextId++, type, n, hp: n * U.hp, form: U.form, mode: 'garrison', sector, x: 0, z: 0, px: 0, pz: 0, postX: 0, postZ: 0, tx: 0, tz: 0, way: [], stance: 'hold', auto: true, atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: true, rad: 3 };
+    const q = { id: this.nextId++, type, n, grade: g0, hp: n * U.hp, form: U.form, mode: 'garrison', sector, x: 0, z: 0, px: 0, pz: 0, postX: 0, postZ: 0, tx: 0, tz: 0, way: [], stance: 'hold', auto: true, atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: true, rad: 3 };
     this.squads.push(q); this.layoutPosts(); return q;
   }
-  reinforce(q) { const k = Math.min(this.maxN(q.type) - q.n, this.reserve[q.type]); if (k <= 0) return 0; this.reserve[q.type] -= k; q.n += k; q.hp += k * this.unitHp(q.type); return k; }
+  reinforce(q) { const k = Math.min(this.maxN(q.type, q) - q.n, this.reserve[q.type]); if (k <= 0) return 0; this.reserve[q.type] -= k; q.n += k; q.hp += k * this.unitHp(q.type); return k; }
   // placement avant la vague : l'escouade est posée directement à l'endroit touché (cour = poste ; devant la muraille = sur le champ)
   place(q, x, z) {
     x = Math.min(196, Math.max(4, x)); q.way = []; q.auto = false;
     if (z < WALL_Z0 + wallOff(x) - 1) { q.mode = 'field'; q.tx = x; q.tz = Math.min(SQUAD.sortieZ[1], Math.max(SQUAD.sortieZ[0], z)); q.x = q.px = q.tx; q.z = q.pz = q.tz; this.layoutPosts(); return; }
     z = Math.min(MOVE_Z1, Math.max(MOVE_Z0, z)); q.mode = 'garrison'; q.sector = sectorOfX(x); q.custom = { x, z }; this.layoutPosts(); q.x = q.px = x; q.z = q.pz = z;
   }
-  // après chaque vague : les troupes en réserve complètent les escouades autonomes, puis forment de nouvelles escouades
+  // hommes disponibles d'une catégorie pour fusionner autour de q : autres troupes en garnison + réserve
+  poolFor(q, onlyAuto = false) { return this.squads.filter(o => o !== q && o.type === q.type && (!onlyAuto || o.auto) && o.mode === 'garrison').reduce((a, o) => a + o.n, q.n + (this.reserve[q.type] || 0)); }
+  canRegroup(q, grade, onlyAuto = false) { return GRADES[grade].size > q.n && this.poolFor(q, onlyAuto) >= GRADES[grade].size; }
+  // fusionner : q absorbe les troupes voisines de la même catégorie (puis la réserve) jusqu'au grade visé — seulement s'il y a assez d'hommes
+  regroup(q, grade, onlyAuto = false) {
+    if (!this.canRegroup(q, grade, onlyAuto)) return 0;
+    const cap = GRADES[grade].size, others = this.squads.filter(o => o !== q && o.type === q.type && (!onlyAuto || o.auto) && o.mode === 'garrison').sort((a, b) => a.n - b.n || Math.hypot(a.x - q.x, a.z - q.z) - Math.hypot(b.x - q.x, b.z - q.z));
+    q.grade = grade;
+    for (const o of others) { if (q.n >= cap) break; const take = Math.min(o.n, cap - q.n), hpPer = o.hp / Math.max(1, o.n); q.n += take; q.hp += take * hpPer; o.n -= take; o.hp -= take * hpPer; if (o.n > 0 && o.n < 15) { this.reserve[o.type] += o.n; o.n = 0; } }
+    this.reinforce(q); this.squads = this.squads.filter(o => o.n > 0); this.layoutPosts(); return q.n;
+  }
+  // séparer : escadron → pelotons (ou escouades), peloton → escouades ; un reste de moins de 15 hommes rentre en réserve
+  split(q, to = null) {
+    const g = to || (q.grade === 'escadron' ? 'peloton' : 'escouade'), part = GRADES[g].size, hpPer = q.hp / Math.max(1, q.n); let made = 0;
+    if (q.n < part * 2 && !(q.n >= part + 15)) return 0;
+    while (q.n - part >= part && this.squads.length < SQUAD.maxSquads) { const o = { ...q, id: this.nextId++, n: part, hp: part * hpPer, grade: g, way: [], custom: q.custom ? { x: q.custom.x + 7 * (made + 1), z: q.custom.z } : null, fresh: false, auto: q.auto }; o.x += 5 * (made + 1); q.n -= part; q.hp -= part * hpPer; this.squads.push(o); made++; }
+    // le reste : une escouade si ≥ 15, sinon en réserve
+    if (q.n > part) { const rest = q.n - part; if (rest >= 15 && g !== 'escouade' && this.squads.length < SQUAD.maxSquads) { const k = rest - (rest % 15); for (let i = 0; i < k / 15; i++) { const o = { ...q, id: this.nextId++, n: 15, hp: 15 * hpPer, grade: 'escouade', way: [], custom: null, fresh: false }; o.x += 5 * (made + 1); this.squads.push(o); made++; } q.n -= k; q.hp -= k * hpPer; }
+      const left = q.n - part; if (left > 0) { this.reserve[q.type] += left; q.n -= left; q.hp -= left * hpPer; } }
+    q.grade = g; this.layoutPosts(); return made;
+  }
+  // après chaque vague : la réserve complète les troupes autonomes ; les escouades autonomes d'un même type se regroupent en pelotons,
+  // les pelotons en escadrons quand l'effectif le permet ; enfin la réserve restante forme de nouvelles troupes (le plus grand grade possible)
   autoForm(sim) {
-    let formed = 0, filled = 0;
+    let formed = 0, filled = 0, merged = 0;
     for (const t of ['knight', 'heavy', 'cavalry', 'soldier']) {
       for (const q of this.squads) if (q.type === t && q.auto && this.reserve[t] > 0) filled += this.reinforce(q);
-      const min = Math.max(3, Math.ceil(UNITS[t].squad / 2));
-      while (this.reserve[t] >= min && this.squads.length < SQUAD.maxSquads) { const s = [2, 1, 3, 0, 4][this.squads.length % 5]; if (!this.formSquad(t, UNITS[t].squad, s)) break; formed++; }
+      for (const [from, to] of [['escouade', 'peloton'], ['peloton', 'escadron']]) {
+        const pool = this.squads.filter(q => q.type === t && q.auto && q.mode === 'garrison' && q.grade === from);
+        if (pool.length >= 2) { const head = pool.sort((a, b) => b.n - a.n)[0], before = this.squads.length; if (this.regroup(head, to, true)) merged += before - this.squads.length; }
+      }
+      while (this.squads.length < SQUAD.maxSquads) {
+        const r = this.reserve[t], g = r >= 150 ? 'escadron' : r >= 50 ? 'peloton' : r >= 15 ? 'escouade' : null; if (!g) break;   // moins de 15 : ils restent en réserve
+        const s = [2, 1, 3, 0, 4][this.squads.length % 5]; if (!this.formSquad(t, GRADES[g].size, s, g)) break; formed++;
+      }
     }
-    return { formed, filled };
+    return { formed, filled, merged };
   }
   disband(q) { this.reserve[q.type] += q.n; this.squads.splice(this.squads.indexOf(q), 1); this.layoutPosts(); }
   setForm(q, f) { if (FORMATIONS[f]) q.form = f; }
@@ -171,12 +200,14 @@ export class Army {
     q.way.push({ x: tx, z: tz });
   }
   layoutPosts() {
-    const idx = new Array(SECTORS).fill(0);
+    const idx = new Array(SECTORS).fill(null);
     for (const q of this.squads) {
       if (q.mode !== 'garrison') continue;
       if (q.custom) { q.postX = q.custom.x; q.postZ = q.custom.z; if (q.fresh) { q.x = q.px = q.postX; q.z = q.pz = q.postZ; q.fresh = false; } continue; }
-      const k = idx[q.sector]++, col = k % 4, row = (k / 4) | 0;
-      q.postX = q.sector * SECTOR_W + 5 + col * 10; q.postZ = GARRISON_Z + row * 7 + (UNITS[q.type].size > 1.2 && q.type === 'cavalry' ? 3 : 0);
+      // postes côte à côte selon la taille de chaque troupe (un escadron prend plus de place qu'une escouade)
+      const L = formationLayout(q.form, Math.max(1, q.n), UNITS[q.type].size), r = Math.max(3, L.radius) + 1, cur = idx[q.sector] || (idx[q.sector] = { x: q.sector * SECTOR_W + 1, z: GARRISON_Z, row: 0 });
+      if (cur.x + 2 * r > (q.sector + 1) * SECTOR_W + 4 && cur.x > q.sector * SECTOR_W + 2) { cur.x = q.sector * SECTOR_W + 1; cur.z += cur.row + 1.5; cur.row = 0; }
+      q.postX = cur.x + r; q.postZ = cur.z + r * 0.6 + (q.type === 'cavalry' ? 3 : 0); cur.x += 2 * r; cur.row = Math.max(cur.row, 2 * r * 0.6);
       if (q.fresh) { q.x = q.px = q.postX; q.z = q.pz = q.postZ; q.fresh = false; }
     }
     for (const q of this.squads) if (q.fresh) { q.x = q.px = 100; q.z = q.pz = GARRISON_Z; q.fresh = false; }
@@ -277,7 +308,7 @@ export class Army {
   serialize() {
     return {
       reserve: { ...this.reserve }, archers: this.archers.map(a => a.n), nextId: this.nextId, rally: { ...this.rally },
-      squads: this.squads.map(q => ({ id: q.id, type: q.type, n: q.n, hp: Math.round(q.hp), form: q.form, mode: q.mode, sector: q.sector, x: +q.x.toFixed(2), z: +q.z.toFixed(2), tx: q.tx, tz: q.tz, stance: q.stance, custom: q.custom || null, auto: q.auto })), autoArchers: this.autoArchers,
+      squads: this.squads.map(q => ({ id: q.id, type: q.type, n: q.n, hp: Math.round(q.hp), form: q.form, grade: q.grade, mode: q.mode, sector: q.sector, x: +q.x.toFixed(2), z: +q.z.toFixed(2), tx: q.tx, tz: q.tz, stance: q.stance, custom: q.custom || null, auto: q.auto })), autoArchers: this.autoArchers,
       queues: Object.fromEntries(TRAIN_BUILDINGS.map(b => [b, this.queues[b].map(i => ({ type: i.type, t: +i.t.toFixed(2), full: i.full }))])),
     };
   }
@@ -291,5 +322,5 @@ export class Army {
     for (const q of this.squads) { const o = st.squads.find(s => s.id === q.id); q.x = q.px = o.x; q.z = q.pz = o.z; q.fresh = false; if (o.mode === 'field') this.route(q, o.tx, o.tz); else this.route(q, q.postX, q.postZ); }
     for (const b of TRAIN_BUILDINGS) this.queues[b] = (st.queues?.[b] || []).map(i => ({ ...i }));
   }
-  formSquadRaw(o) { return { id: o.id, type: o.type, n: o.n, hp: o.hp, form: o.form, mode: o.mode, sector: o.sector, x: o.x, z: o.z, px: o.x, pz: o.z, postX: 0, postZ: 0, tx: o.tx, tz: o.tz, custom: o.custom || null, auto: o.auto !== false, way: [], stance: o.stance || 'hold', atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: false, rad: 3 }; }
+  formSquadRaw(o) { return { id: o.id, type: o.type, n: o.n, grade: o.grade || gradeFor(o.n), hp: o.hp, form: o.form, mode: o.mode, sector: o.sector, x: o.x, z: o.z, px: o.x, pz: o.z, postX: 0, postZ: 0, tx: o.tx, tz: o.tz, custom: o.custom || null, auto: o.auto !== false, way: [], stance: o.stance || 'hold', atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: false, rad: 3 }; }
 }

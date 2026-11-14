@@ -11,22 +11,22 @@ const run = (sim, s) => { for (let i = 0; i < s * 20; i++) sim.tick(); };
   sim.assignArchers(4, 1); ok(!A.autoArchers, 'placement manuel : l\'IA laisse la main au joueur');
 }
 { // escouade sans ordre : court vers la brèche ; un ordre du joueur la rend manuelle
-  const sim = new Simulation(), A = sim.army; A.reserve.soldier = 10; const q = sim.formSquad('soldier', 10, 2); run(sim, 5);
+  const sim = new Simulation(), A = sim.army; A.reserve.soldier = 15; const q = sim.formSquad('soldier', 15, 2); run(sim, 5);
   for (let k = 32; k < 40; k++) sim.wall.hp[k] = 0; sim.skipPrep(); for (let i = 0; i < 6; i++) sim.zombies.spawn(0, 170 + i, 158, 4, sim.rng);
   run(sim, 4); ok(q.sector === 4, `l'escouade sans ordre va colmater la brèche (secteur ${q.sector})`);
   sim.squadGarrison(q.id, 1); ok(!q.auto && q.sector === 1, 'un ordre du joueur : escouade manuelle'); run(sim, 4); ok(q.sector === 1, 'elle garde l\'ordre du joueur');
   sim.squadAuto(q.id); run(sim, 3); ok(q.auto && q.sector === 4, 'rendue à l\'IA : elle repart vers la brèche');
 }
 { // cavaliers : sortie courte contre un petit groupe au pied du mur, puis retour
-  const sim = new Simulation(), A = sim.army; for (let s = 0; s < 5; s++) A.archers[s].n = 0; A.autoArchers = false; A.reserve.cavalry = 8; const q = sim.formSquad('cavalry', 8, 2); run(sim, 5); sim.skipPrep();
+  const sim = new Simulation(), A = sim.army; for (let s = 0; s < 5; s++) A.archers[s].n = 0; A.autoArchers = false; A.reserve.cavalry = 15; const q = sim.formSquad('cavalry', 15, 2); run(sim, 5); sim.skipPrep();
   for (let i = 0; i < 3; i++) sim.zombies.spawn(0, 96 + i * 3, WALL_Z0 + wallOff(100) - 3, 2, sim.rng);
   let out = false; for (let i = 0; i < 20 * 8 && !out; i++) { sim.tick(); out = q.mode === 'field'; } ok(out, 'les cavaliers sortent d\'eux-mêmes contre un petit groupe');
   let back = false; for (let i = 0; i < 20 * 60 && !back; i++) { sim.tick(); back = q.mode === 'garrison'; } ok(back, `puis rentrent quand le danger est passé (${sim.zombies.n} zombies restants)`);
 }
 { // après la vague : les troupes disponibles forment des escouades ; placement avant la vague suivante
-  const sim = new Simulation(), A = sim.army; A.reserve.soldier = 22; A.reserve.heavy = 5; const n0 = A.squads.length;
+  const sim = new Simulation(), A = sim.army; A.reserve.soldier = 47; A.reserve.heavy = 16; const n0 = A.squads.length;
   let ev = null; sim.skipPrep(); for (let i = 0; i < 20 * 400 && !ev; i++) { sim.tick(); ev = sim.events.find(e => e.type === 'autoFormed'); sim.events.length = 0; }
-  ok(ev && A.squads.length >= n0 + 3, `escouades formées après la vague (${A.squads.length - n0}, réserve restante ${A.reserve.soldier})`);
+  ok(ev && A.squads.length >= n0 + 2 && A.reserve.soldier < 15, `escouades formées après la vague (${A.squads.length - n0}, réserve restante ${A.reserve.soldier})`);
   const q = A.squads[0]; sim.squadPlace(q.id, 60, 180); ok(Math.abs(q.x - 60) < 0.01 && Math.abs(q.z - 180) < 0.01 && !q.auto, 'placement : l\'escouade est posée à l\'endroit choisi');
   sim.squadPlace(q.id, 60, 115); ok(q.mode === 'field' && q.z < 140, 'placée devant la muraille : elle attend sur le champ');
 }

@@ -2,7 +2,7 @@
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
 import { SECTORS, SECTOR_NAMES, SECTOR_AT, ARCHER_SLOTS, CASTLE, wallOff } from '../sim/constants.js';
-import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, INFECTION, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP } from '../content/medieval.js';
+import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, INFECTION, GRADES, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP } from '../content/medieval.js';
 import { MAGE_TIERS } from '../render/Heroes.js';
 import { FORMATS, idealFormat, quality } from '../render/config.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
@@ -33,7 +33,7 @@ export class UI {
     this.top.innerHTML = `
       <div class="rline">${RES.map(r => `<span class="rchip" id="r-${r}"><i>${RES_INFO[r].ico}</i><b>0</b></span>`).join('')}<span class="rchip pop" id="r-pop"><i>👥</i><b>0</b></span></div>
       <div class="wline"><div class="wave"><div class="wt"><b id="wave-title">Vague 1</b><span id="wave-phase" class="phase"></span></div><div class="cbar"><span>🏰 Château</span><div class="bar"><i id="castle-bar"></i></div></div></div>
-        <button id="b-skip" class="rb" title="Lancer la vague">▶</button><button id="b-speed" class="rb">×1</button><button id="b-menu" class="rb">☰</button></div>`;
+        <button id="b-skip" class="rb" title="Lancer la vague">▶</button><button id="b-turn" class="rb" title="Pivoter la vue (vers le sud / vers le nord)">🧭</button><button id="b-speed" class="rb">×1</button><button id="b-menu" class="rb">☰</button></div>`;
     this.dock.innerHTML = Object.entries(SHEETS).map(([k, n]) => { const [ic, ...t] = n.split(' '); return `<button class="dk" data-sheet="${k}">${ic}<span>${t.join(' ')}</span></button>`; }).join('');
     this.badges = [];
     for (let s = 0; s < SECTORS; s++) {
@@ -44,6 +44,7 @@ export class UI {
     $('#b-skip').addEventListener('click', () => sim.skipPrep());
     $('#b-speed').addEventListener('click', e => { sim.speed = sim.speed === 1 ? 2 : sim.speed === 2 ? 4 : sim.speed === 4 ? 0 : 1; e.currentTarget.textContent = sim.speed ? '×' + sim.speed : '⏸'; });
     $('#b-menu').addEventListener('click', () => this.toggleSheet('menu'));
+    $('#b-turn').addEventListener('click', e => { this.cam.turn(); this.buzz(10); e.currentTarget.classList.toggle('on', this.cam.facingSouth()); this.toast(this.cam.facingSouth() ? '🧭 Vue vers le sud : le village et le château' : '🧭 Vue vers le nord : la muraille et la horde', 'info'); });
     $('#over-btn').addEventListener('click', () => { this.showOver(false); this.openSheet('newgame'); });
     this.dock.addEventListener('click', e => { const b = e.target.closest('[data-sheet]'); if (b) { this.buzz(12); b.classList.remove('tap'); void b.offsetWidth; b.classList.add('tap'); this.toggleSheet(b.dataset.sheet); } });
     this.dock.addEventListener('pointerdown', e => { const b = e.target.closest('.dk'); if (b) b.classList.add('down'); });
@@ -231,12 +232,14 @@ export class UI {
       case 'deploy': this.startDeploy(); break;
       case 'deployend': this.endDeploy(); break;
       case 'invitex': this.invite = false; this.renderOrder(); break;
+      case 'regroup': { const q = sim.squad(this.selSq); if (q && sim.squadRegroup(q.id, x)) { this.toast(`⬆ ${this.unitName(q)} formé : ${q.n} hommes`, 'ok'); } break; }
+      case 'split': { const q = sim.squad(this.selSq); if (q) { const k = sim.army.split(q, x); this.toast(k ? `⬇ Troupe séparée en ${k + 1} ${GRADES[x].plural.toLowerCase()}` : 'Pas assez d\'hommes pour séparer', k ? 'ok' : 'warn'); this.nav.army = 'squads'; } break; }
       case 'sqauto': { sim.squadAuto(this.selSq); this.toast('⚜ L\'escouade est autonome', 'info'); break; }
       case 'autoarch': { sim.setAutoArchers(!sim.army.autoArchers); this.toast(sim.army.autoArchers ? '🏹 Les archers se placent seuls sur les remparts' : '🏹 Placement manuel des archers (touche un secteur)', 'info'); break; }
       case 'sqorders': { const id = this.selSq; this.openSheet('army'); this.nav.army = 'sq.' + id; this.pickSquad(id); break; }
       case 'sqsee': { const q = sim.squad(this.selSq); if (q) { this.closeSheet(); this.cam.focusOn(q.x, q.z); this.openSquad(q.id); } break; }
       case 'sq': this.pickSquad(+x); break;
-      case 'newsq': { const q = sim.formSquad(x, UNITS[x].squad, 2); if (q) { this.pickSquad(q.id); this.nav.army = 'sq.' + q.id; this.toast(`${UNITS[x].ico} Escouade formée : choisis maintenant où l'envoyer`, 'ok'); } break; }
+      case 'newsq': { const g = y || 'escouade', q = sim.formSquad(x, GRADES[g].size, 2, g); if (q) { this.pickSquad(q.id); this.nav.army = 'sq.' + q.id; this.toast(`${UNITS[x].ico} ${GRADES[g].name} formé${g === 'escouade' ? 'e' : ''} : choisis maintenant où l'envoyer`, 'ok'); } break; }
       case 'form': sim.squadForm(this.selSq, x); break;
       case 'stance': sim.squadStance(this.selSq, x); break;
       case 'gar': { sim.squadGarrison(this.selSq, +x); this.endOrder(); const q = sim.squad(this.selSq); if (q) this.toast(`🛡 ${UNITS[q.type].name} ×${q.n} : rentre garder ${SECTOR_AT[+x]}`, 'info'); break; }
@@ -289,7 +292,7 @@ export class UI {
     else if (e.type === 'autoRepair') this.toast(`🔧 Réparation automatique : ${e.n} villageois empruntés`, 'info');
     else if (e.type === 'autoRepairDone') this.toast(`🔧 Muraille réparée — ${e.n} villageois retournent à leur tâche`, 'ok');
     else if (e.type === 'mage') this.toast(e.what === 'summoned' ? '🔮 Le magicien est arrivé ! Il agit seul : soins, réparations, sorts.' : '💀 Le magicien est tombé — il reviendra dans 30 s', e.what === 'summoned' ? 'ok' : 'danger');
-    else if (e.type === 'autoFormed') this.toast(`⚜ Les troupes disponibles ${e.formed ? `forment ${e.formed} nouvelle${e.formed > 1 ? 's' : ''} escouade${e.formed > 1 ? 's' : ''}` : ''}${e.formed && e.filled ? ' et ' : ''}${e.filled ? `complètent les escouades (+${e.filled})` : ''}`, 'ok');
+    else if (e.type === 'autoFormed') { const p = []; if (e.formed) p.push(`${e.formed} nouvelle${e.formed > 1 ? 's' : ''} troupe${e.formed > 1 ? 's' : ''}`); if (e.merged) p.push(`${e.merged} fusion${e.merged > 1 ? 's' : ''} en peloton ou escadron`); if (e.filled) p.push(`+${e.filled} renforts`); this.toast(`⚜ Après la vague : ${p.join(' · ')}`, 'ok'); }
     else if (e.type === 'waveEnd') { if (sim.army.squads.length) { this.invite = true; setTimeout(() => this.renderOrder(), 50); } const r = e.reward || {}; this.toast(`🏆 Vague ${e.wave} repoussée · ${Object.keys(r).map(k => `+${r[k]} ${RES_INFO[k].ico}`).join(' ')}`, 'ok'); this.buzz([30, 30, 30]); }
   }
   // ——— mise à jour de l'affichage ———
@@ -440,7 +443,7 @@ export class UI {
     else h += `<div class="hint small">${def.info}</div>`;
     if (s.type === 'house') h += `<div class="hint small">Population : ${E.population()}/${E.popCap()}</div>`;
     for (const t of TB[s.type] || []) h += this.taskRow(t);
-    if (TRAIN_BUILDINGS.includes(s.type)) { const q = sim.army.queues[s.type]; h += `<div class="hint small">File d'entraînement : ${q.length}/${sim.army.queueMax(sim, s.type)}</div>` + this.btn('🪖 Entraîner', '', 'sheet:army:train', false, 'act sec'); }
+    if (TRAIN_BUILDINGS.includes(s.type) && s.level) h += this.productionHtml(s);
     if (s.type === 'workshop') h += this.btn('🛠 Armes de siège', '', 'sheet:army:siege', false, 'act sec');
     if (s.type === 'forge') h += this.btn('🔨 Améliorations', '', 'sheet:army:forge', false, 'act sec');
     if (s.type === 'wizard') h += this.mageHtml(true);
@@ -481,6 +484,23 @@ export class UI {
       <div class="hint small">🔧 ${crew ? `${crew} villageois réparent la muraille` : 'Aucun réparateur'} (menu 👥).</div>`;
   }
   // ——— feuille BÂTIR ———
+  // production d'unités (fiche d'une caserne, d'une écurie, d'un champ de tir) : l'unité en cours passe par 4 étapes animées,
+  // la file d'attente, et les boutons pour en commander d'autres ; dans la scène, les recrues s'entraînent devant le bâtiment
+  productionHtml(s) {
+    const sim = this.sim, army = sim.army, E = sim.eco, q = army.queues[s.type], max = army.queueMax(sim, s.type), types = UNIT_ORDER.filter(t => UNITS[t].from === s.type);
+    const STEPS = { barracks: ['📜 Enrôlement', '🧥 Équipement', '⚔ Maniement de l\'épée', '✅ Prêt'], range: ['📜 Enrôlement', '🏹 Remise de l\'arc', '🎯 Tir sur cible', '✅ Prêt'], stable: ['📜 Enrôlement', '🐴 Choix du cheval', '🏇 Dressage', '✅ Prêt'] }[s.type];
+    let h = '<div class="prod">';
+    if (q.length) {
+      const it = q[0], f = 1 - it.t / it.full, st = Math.min(3, Math.floor(f * 4)), U = UNITS[it.type];
+      h += `<div class="pnow"><span class="pico">${U.ico}</span><div class="pbody"><b>${U.name} en formation</b><div class="psteps">${STEPS.map((x, i) => `<span class="${i < st ? 'done' : i === st ? 'cur' : ''}">${x}</span>`).join('')}</div>
+        <div class="bar big prog"><i style="width:${Math.round(f * 100)}%"></i></div><small>prêt dans ${Math.ceil(it.t)} s · il rejoindra la réserve${q.length > 1 ? ` · ensuite ${q.length - 1} en file` : ''}</small></div></div>`;
+      if (q.length > 1) h += `<div class="queue">${q.slice(1).map(x => `<span class="qi">${UNITS[x.type].ico}</span>`).join('')}</div>`;
+    } else h += '<div class="hint small">Personne en formation. Commande des unités ci-dessous.</div>';
+    h += `<div class="row wrapr">${types.map(t => { const U = UNITS[t], uc = army.unitCost(sim, t), ok = army.canTrain(sim, t); return this.btn(`${U.ico} +1 ${U.name}`, ok ? `${this.cost(uc)} · 👥${U.pop}` : `niv. ${U.minLevel} requis`, `train:${t}:1`, !ok || !E.afford(uc) || E.popRoom() < U.pop || q.length >= max, 'act slim'); }).join('')}</div>`;
+    return h + `<div class="hint small">File : ${q.length}/${max} · réserve : ${types.map(t => `${UNITS[t].ico} ${army.reserve[t]}`).join(' · ')}</div></div>`;
+  }
+  // nom d'une troupe selon son grade : « Peloton de fantassins »
+  unitName(q) { const t = UNITS[q.type].name.toLowerCase(); return `${GRADES[q.grade || 'escouade'].name} de ${t}s`; }
   // ——— navigation en deux temps (v2.5), utilisée partout : d'abord une grille de CATÉGORIES, puis le sous-menu choisi ———
   cats(sheet, items) {
     return `<div class="cats">${items.map(it => `<button class="cat${it.alert ? ' alert' : ''}${it.off ? ' off' : ''}" data-a="nav:${sheet}:${it.k}"><span class="ci">${it.ico}</span><b>${it.name}</b><small>${it.sub || ''}</small>${it.badge ? `<em>${it.badge}</em>` : ''}</button>`).join('')}</div>`;
@@ -559,13 +579,13 @@ export class UI {
   // 🛡 Armée : catégories, puis le sous-menu ; les escouades se gèrent une par une (sq.ID)
   armyHtml() {
     const sim = this.sim, army = sim.army, E = sim.eco, nav = this.nav.army || '';
-    if (nav.startsWith('sq.')) { const q = sim.squad(+nav.slice(3)); if (q) return this.back('army', 'Escouades', 'squads') + this.squadView(q); this.nav.army = 'squads'; }
-    const views = { squads: ['🛡 Escouades', () => this.squadsHtml()], newsq: ['➕ Nouvelle escouade', () => this.newSquadHtml()], train: ['🪖 Recruter', () => this.trainHtml()], ranks: ['⭐ Rangs', () => this.ranksHtml()], magic: ['🔮 Magie', () => this.mageHtml(false)], siege: ['🛠 Siège', () => this.siegeHtml()], forge: ['🔨 Forge', () => this.forgeHtml()] };
+    if (nav.startsWith('sq.')) { const q = sim.squad(+nav.slice(3)); if (q) return this.back('army', 'Troupes', 'squads') + this.squadView(q); this.nav.army = 'squads'; }
+    const views = { squads: ['🛡 Troupes', () => this.squadsHtml()], newsq: ['➕ Nouvelle troupe', () => this.newSquadHtml()], train: ['🪖 Recruter', () => this.trainHtml()], ranks: ['⭐ Rangs', () => this.ranksHtml()], magic: ['🔮 Magie', () => this.mageHtml(false)], siege: ['🛠 Siège', () => this.siegeHtml()], forge: ['🔨 Forge', () => this.forgeHtml()] };
     const v = views[nav];
     if (v) return this.back('army', v[0], nav === 'newsq' ? 'squads' : '') + this.bittenLine() + (nav === 'squads' || nav === 'train' ? this.popLine() : '') + v[1]();
     const field = army.squads.filter(q => q.mode === 'field').length, res = ['soldier', 'heavy', 'knight', 'cavalry'].reduce((a, t) => a + (army.reserve[t] || 0), 0), queue = TRAIN_BUILDINGS.reduce((a, b) => a + (army.queues[b] ? army.queues[b].length : 0), 0);
     return this.bittenLine() + this.popLine() + this.cats('army', [
-      { k: 'squads', ico: '🛡', name: 'Escouades', sub: army.squads.length ? `${army.squads.length} escouade${army.squads.length > 1 ? 's' : ''}${field ? ` · ${field} au combat` : ''}` : 'aucune : formes-en une', badge: res ? `${res} en réserve` : '', alert: army.squads.some(q => army.hpRatio(q) < 0.4) },
+      { k: 'squads', ico: '🛡', name: 'Troupes', sub: army.squads.length ? ['escadron', 'peloton', 'escouade'].map(g => { const c = army.squads.filter(q => q.grade === g).length; return c ? `${c} ${(c > 1 ? GRADES[g].plural : GRADES[g].name).toLowerCase()}` : ''; }).filter(Boolean).join(' · ') + (field ? ` · ${field} au combat` : '') : 'aucune : formes-en une', badge: res ? `${res} en réserve` : '', alert: army.squads.some(q => army.hpRatio(q) < 0.4) },
       { k: 'train', ico: '🪖', name: 'Recruter', sub: 'entraîner des soldats', badge: queue ? `${queue} en file` : '' },
       { k: 'ranks', ico: '⭐', name: 'Rangs', sub: 'rendre les unités plus fortes' },
       { k: 'magic', ico: '🔮', name: 'Magie', sub: sim.mages.list.length ? 'magicien en jeu' : 'magicien autonome' },
@@ -585,41 +605,48 @@ export class UI {
     if (!army.squads.length) h += '<div class="hint">Aucune escouade. Recrute des soldats (🪖 Recruter), puis forme une escouade avec ta réserve.</div>';
     h += '<div class="blist">' + army.squads.map(q => {
       const U = UNITS[q.type], st = q.mode === 'field' ? (q.fight > 0 ? '⚔ au combat' : q.way.length ? '🚶 en route vers le front' : '⚔ sur le champ de bataille') : (q.way.length ? '🚶 en route' : q.custom ? '🛡 à son poste' : `🛡 garde ${SECTOR_AT[q.sector]}`), r = army.hpRatio(q);
-      return `<button class="brow sqrow${r < 0.4 ? ' hurt' : ''}" data-a="nav:army:sq.${q.id}"><span class="ci">${U.ico}</span><div class="bt"><b>${U.name} ×${q.n}</b> <span class="lvl">${st}</span> <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '⚜ autonome' : '📯 tes ordres'}</span><div class="bar"><i style="width:${Math.round(r * 100)}%"></i></div></div><span class="go">›</span></button>`;
+      return `<button class="brow sqrow${r < 0.4 ? ' hurt' : ''}" data-a="nav:army:sq.${q.id}"><span class="ci">${U.ico}</span><div class="bt"><b>${this.unitName(q)}</b> <small class="cnt">${q.n}/${army.maxN(q.type, q)}</small> <span class="lvl">${st}</span> <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '⚜ autonome' : '📯 tes ordres'}</span><div class="bar"><i style="width:${Math.round(r * 100)}%"></i></div></div><span class="go">›</span></button>`;
     }).join('') + '</div>';
-    h += `<div class="row">${this.btn('🎯 Placer les troupes', this.sim.phase === 'assault' ? 'après la vague' : 'jeu en pause, place chaque escouade', 'deploy', this.sim.phase === 'assault' || !army.squads.length, 'act')}${this.btn('➕ Nouvelle escouade', 'depuis la réserve', 'nav:army:newsq', army.squads.length >= SQUAD.maxSquads, 'act sec')}</div>`;
+    h += `<div class="row">${this.btn('🎯 Placer les troupes', this.sim.phase === 'assault' ? 'après la vague' : 'jeu en pause, place chaque escouade', 'deploy', this.sim.phase === 'assault' || !army.squads.length, 'act')}${this.btn('➕ Nouvelle troupe', 'escouade, peloton ou escadron', 'nav:army:newsq', army.squads.length >= SQUAD.maxSquads, 'act sec')}</div>`;
     h += `<div class="hint small">⚜ Sans ordre de ta part, chaque escouade est <b>autonome</b> : elle garde le secteur le plus menacé, court colmater les brèches, et les cavaliers, chevaliers et lourds en forme font de courtes sorties. Dès que tu donnes un ordre, elle t'obéit (📯). Après chaque vague, les troupes disponibles forment d'elles-mêmes de nouvelles escouades.</div>`;
     h += `<div class="row">${this.btn(`${army.autoArchers ? '✅' : '⬜'} 🏹 Archers autonomes`, army.autoArchers ? 'ils montent seuls et vont où ça presse' : 'placement manuel (touche un secteur)', 'autoarch', false, 'act' + (army.autoArchers ? '' : ' sec'))}</div>` + this.rallyLine();
     return h;
   }
   newSquadHtml() {
-    const army = this.sim.army;
-    return '<div class="hint small">Choisis le type d\'unité. L\'escouade se forme avec les soldats en réserve.</div><div class="blist">' + ['soldier', 'heavy', 'knight', 'cavalry'].map(t => {
-      const U = UNITS[t], n = army.reserve[t] || 0, ok = n > 0 && army.squads.length < SQUAD.maxSquads;
-      return `<div class="brow${ok ? '' : ' off'}"><span class="ci">${U.ico}</span><div class="bt"><b>${U.name}</b> <span class="lvl">${n} en réserve</span><small>jusqu'à ${U.squad} par escouade${n ? '' : ' · recrute-en d\'abord'}</small></div>${this.btn('Former', '', 'newsq:' + t, !ok, 'act slim')}</div>`;
+    const army = this.sim.army, room = army.squads.length < SQUAD.maxSquads;
+    return '<div class="hint small">Escouade <b>15</b> hommes · peloton <b>50</b> · escadron <b>150</b>. Avec moins de 15 hommes d\'une catégorie, ils restent en réserve.</div><div class="blist">' + ['soldier', 'heavy', 'knight', 'cavalry'].map(t => {
+      const U = UNITS[t], n = army.reserve[t] || 0;
+      return `<div class="brow${n >= 15 ? '' : ' off'}"><span class="ci">${U.ico}</span><div class="bt"><b>${U.name}s</b> <span class="lvl">${n} en réserve</span><small>${n >= 15 ? 'choisis la taille de la troupe' : `encore ${15 - n} pour une escouade`}</small></div>${['escouade', 'peloton', 'escadron'].map(g => this.btn(GRADES[g].name, String(GRADES[g].size), `newsq:${t}:${g}`, !room || n < GRADES[g].size, 'act slim' + (g === 'escouade' ? '' : ' sec'))).join('')}</div>`;
     }).join('') + '</div>';
   }
   // ordres d'UNE escouade, groupés par intention : OÙ (combattre, garder un secteur, rentrer, déplacer) · COMMENT (formation, posture) · EFFECTIF
   squadView(q) {
-    const army = this.sim.army, U = UNITS[q.type], mx = army.maxN(q.type), rk = army.rank(this.sim, q.type), F = FORMATIONS[q.form], field = q.mode === 'field';
-    let h = `<div class="ptitle">${U.ico} ${U.name} ×${q.n}<span class="lvl">⭐ ${rk.name}</span></div>
+    const army = this.sim.army, U = UNITS[q.type], mx = army.maxN(q.type, q), rk = army.rank(this.sim, q.type), F = FORMATIONS[q.form], field = q.mode === 'field';
+    let h = `<div class="ptitle">${U.ico} ${this.unitName(q)} · ${q.n} hommes<span class="lvl">⭐ ${rk.name}</span></div>
       <div class="hpline"><div class="bar big"><i style="width:${Math.min(100, army.hpRatio(q) * 100)}%"></i></div><span>${Math.round(q.hp)} PV · ${q.n}/${mx}</span></div>
       <div class="hint small">${field ? '⚔ Sur le champ de bataille' : q.custom ? '🛡 À son poste' : `🛡 Garde ${SECTOR_AT[q.sector]}`}${q.way.length ? ' · en marche' : ''}</div>`;
     h += q.auto ? '<div class="aibox">⚜ <b>Autonome</b> : elle choisit seule son poste, ses sorties, sa formation. Donne un ordre ci-dessous pour reprendre la main.</div>'
       : `<div class="aibox man">📯 <b>Elle suit tes ordres.</b> ${this.btn('⚜ La rendre autonome', 'elle se débrouillera seule', 'sqauto', false, 'act slim')}</div>`;
     h += `<div class="tgrp">1 · Où l'envoyer ?</div><div class="bigacts">${this.bigAct('⚔', 'Combattre dehors', 'puis touche le champ de bataille', 'sqgo:sortie', false)}${field ? this.bigAct('↩', 'Rentrer', 'retour derrière la muraille', 'gar:' + q.sector) : ''}${this.bigAct('📍', 'Placer à la main', 'puis touche la carte', 'sqgo:move')}</div>`;
-    h += `<div class="tgrp">2 · Comment combattre ?</div><div class="fgrid">${Object.keys(FORMATIONS).map(f => `<button class="fbtn ${q.form === f ? 'on' : ''}" data-a="form:${f}"><b>${FORMATIONS[f].ico}</b>${FORMATIONS[f].name}</button>`).join('')}</div><div class="hint small">${F.info}</div>
+    h += `<div class="tgrp">2 · Formation et posture</div><div class="hint small">Toutes les formations sont possibles, quelle que soit la taille (escouade, peloton ou escadron) : un gros effectif prend simplement plus de rangs.</div><div class="fgrid">${Object.keys(FORMATIONS).map(f => `<button class="fbtn ${q.form === f ? 'on' : ''}" data-a="form:${f}"><b>${FORMATIONS[f].ico}</b>${FORMATIONS[f].name}</button>`).join('')}</div><div class="hint small">${F.info}</div>
       <div class="row">${this.btn('🛡 Tenir la position', 'défend sa place', 'stance:hold', false, 'act slim' + (q.stance === 'charge' ? ' sec' : ''))}${this.btn('🔥 Charger', 'fonce sur les zombies', 'stance:charge', false, 'act slim' + (q.stance === 'charge' ? '' : ' sec'))}</div>`;
-    h += `<div class="tgrp">3 · Effectif</div><div class="row">${this.btn('➕ Compléter', `réserve ${army.reserve[q.type]}`, 'reinf', q.n >= mx || army.reserve[q.type] <= 0, 'act slim')}${this.btn('↩ Dissoudre', 'retour en réserve', 'disb', false, 'act slim sec')}${this.btn('👁 Voir', 'sur la carte', 'sqsee', false, 'act slim sec')}</div>`;
+    const pool = army.poolFor(q), g = q.grade, cat = U.name.toLowerCase() + 's';
+    h += `<div class="tgrp">3 · Organisation</div><div class="hint small">${pool} ${cat} disponibles (troupes en garnison + réserve). Escouade 15 · peloton 50 · escadron 150.</div><div class="row wrapr">`
+      + (g === 'escouade' ? this.btn('⬆ Former un peloton', army.canRegroup(q, 'peloton') ? 'fusionne avec les voisins (50)' : `il faut 50 ${cat}`, 'regroup:peloton', !army.canRegroup(q, 'peloton'), 'act slim') : '')
+      + (g !== 'escadron' ? this.btn('⬆⬆ Former un escadron', army.canRegroup(q, 'escadron') ? 'fusionne (150)' : `il faut 150 ${cat}`, 'regroup:escadron', !army.canRegroup(q, 'escadron'), 'act slim' + (g === 'escouade' ? ' sec' : '')) : '')
+      + (g === 'escadron' ? this.btn('⬇ Séparer en pelotons', '3 × 50', 'split:peloton', q.n < 65, 'act slim sec') : '')
+      + (g !== 'escouade' ? this.btn('⬇ Séparer en escouades', 'groupes de 15 · le reste en réserve', 'split:escouade', q.n < 30, 'act slim sec') : '') + '</div>';
+    h += `<div class="tgrp">4 · Effectif</div><div class="row">${this.btn('➕ Compléter', `jusqu'à ${mx} · réserve ${army.reserve[q.type]}`, 'reinf', q.n >= mx || army.reserve[q.type] <= 0, 'act slim')}${this.btn('↩ Dissoudre', 'retour en réserve', 'disb', false, 'act slim sec')}${this.btn('👁 Voir', 'sur la carte', 'sqsee', false, 'act slim sec')}</div>`;
     return h;
   }
   // bulle d'escouade (ancrée sur la carte) : ordres directs
   squadCard(q) {
-    const army = this.sim.army, U = UNITS[q.type], mx = army.maxN(q.type), field = q.mode === 'field';
+    const army = this.sim.army, U = UNITS[q.type], mx = army.maxN(q.type, q), field = q.mode === 'field';
     const where = field ? '⚔ Sur le champ' : q.custom ? '🛡 À son poste' : '🛡 Garde ' + SECTOR_AT[q.sector];
-    return `<div class="ptitle">${U.ico} ${U.name} ×${q.n} <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '⚜' : '📯'}</span><span class="lvl">${where}${q.way.length ? ' · en marche' : ''}</span></div>
+    return `<div class="ptitle">${U.ico} ${this.unitName(q)} <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '⚜' : '📯'}</span><span class="lvl">${where}${q.way.length ? ' · en marche' : ''}</span></div>
       <div class="hpline"><div class="bar big"><i style="width:${Math.min(100, army.hpRatio(q) * 100)}%"></i></div><span>${q.n}/${mx}</span></div>
-      <div class="bigacts">${this.bigAct('⚔', 'Combattre', 'touche ensuite le champ', 'sqgo:sortie')}${field ? this.bigAct('↩', 'Rentrer', 'à son poste', 'gar:' + q.sector) : this.bigAct('📍', 'Déplacer', 'touche ensuite la carte', 'sqgo:move')}${this.bigAct('⚙', 'Ordres', 'secteur, formation…', 'sqorders')}</div>`;
+      <div class="bigacts">${this.bigAct('⚔', 'Combattre', 'touche ensuite le champ', 'sqgo:sortie')}${field ? this.bigAct('↩', 'Rentrer', 'à son poste', 'gar:' + q.sector) : this.bigAct('📍', 'Déplacer', 'touche ensuite la carte', 'sqgo:move')}${this.bigAct('⚙', 'Ordres', 'organisation, effectif…', 'sqorders')}</div>
+      <div class="fgrid mini">${Object.keys(FORMATIONS).map(f => `<button class="fbtn ${q.form === f ? 'on' : ''}" data-a="form:${f}" title="${FORMATIONS[f].info}"><b>${FORMATIONS[f].ico}</b>${FORMATIONS[f].name}</button>`).join('')}</div>`;
   }
   // ⭐ Rangs : où et comment faire monter chaque type d'unité ; ce que change le rang suivant
   ranksHtml() {

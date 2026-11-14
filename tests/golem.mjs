@@ -19,7 +19,7 @@ ok(golemsFor(4) === 0 && golemsFor(5) === 1 && golemsFor(11) === 3, 'golems à p
 }
 { // infirmerie : soigne au repos et sauve une partie des tombés
   const sim = new Simulation(); rich(sim); built(sim, 'infirmary', 140, 290, 3);
-  sim.army.reserve.soldier = 10; const q = sim.formSquad('soldier', 10, 2); run(sim, 30);
+  sim.army.reserve.soldier = 15; const q = sim.formSquad('soldier', 15, 2); run(sim, 30);
   q.hp = q.n * 140 * 0.5; const h0 = q.hp; run(sim, 5); ok(q.hp > h0 * 1.15, `soins au repos : ${Math.round(h0)} → ${Math.round(q.hp)}`);
   let saved = 0; for (let k = 0; k < 40; k++) { const r0 = sim.army.reserve.soldier; sim.army.reserve.soldier = 0; sim.army.reserve.soldier = r0; const before = sim.army.reserve.soldier; sim.army.hurtSquad(sim, q, 140); saved += sim.army.reserve.soldier - before; if (q.n <= 0) break; }
   ok(saved > 0, `blessés sauvés : ${saved}`);

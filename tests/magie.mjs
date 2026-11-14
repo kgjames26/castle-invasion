@@ -20,7 +20,7 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
 // 2) soin et rempart magique
 {
   const sim = new Simulation(); rich(sim); built(sim, 'wizard', 176, 258, 3); sim.summonMage(); run(sim, 20);
-  sim.army.reserve.soldier = 10; const q = sim.formSquad('soldier', 10, 2); q.hp = q.n * 140 * 0.3; const h0 = q.hp;
+  sim.army.reserve.soldier = 15; const q = sim.formSquad('soldier', 15, 2); q.hp = q.n * 140 * 0.3; const h0 = q.hp;
   sim.wall.hp[12] = 0; sim.onBreach(12); run(sim, 70);
   ok(q.hp > h0, `escouade soignée (${Math.round(h0)} → ${Math.round(q.hp)})`);
   ok(sim.wall.hp[12] > 0, 'brèche refermée par magie');
@@ -30,7 +30,7 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
   const sim = new Simulation(); rich(sim); const b = built(sim, 'barracks', 36, 224, 2);
   ok(sim.train('knight', 1) === 0, 'chevalier refusé au niveau 2'); b.level = 3; sim.build.syncLevels();
   ok(sim.train('knight', 1) === 1, 'chevalier entraîné au niveau 3');
-  sim.army.reserve.knight = 5; const q = sim.formSquad('knight', 5, 2);
+  sim.army.reserve.knight = 15; const q = sim.formSquad('knight', 15, 2);
   for (let i = 0; i < 12; i++) sim.zombies.spawn(2, q.x + (i % 4) - 1.5, q.z - 2 + (i >> 2) * 0.6, 2, sim.rng);
   let hurt = 0; run(sim, 1.5); for (let i = 0; i < sim.zombies.n; i++) if (sim.zombies.hp[i] < 120) hurt++;
   ok(hurt + (12 - sim.zombies.n) >= 3, `frappe multiple : ${hurt} blessés, ${12 - sim.zombies.n} tués`);
@@ -59,7 +59,7 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
 }
 // 7) ordre direct : poster une escouade à un point précis de la cour, puis sortie
 {
-  const sim = new Simulation(); sim.army.reserve.soldier = 10; const q = sim.formSquad('soldier', 10, 2);
+  const sim = new Simulation(); sim.army.reserve.soldier = 15; const q = sim.formSquad('soldier', 15, 2);
   sim.squadMove(q.id, 60, 180); run(sim, 25); ok(q.mode === 'garrison' && Math.hypot(q.x - 60, q.z - 180) < 1, `poste libre atteint (${q.x.toFixed(0)}, ${q.z.toFixed(0)})`);
   sim.squadMove(q.id, 70, 110); ok(q.mode === 'field', 'toucher devant la muraille = sortie');
 }

@@ -59,6 +59,8 @@ export class Simulation {
   assignArchers(s, delta) { this.army.autoArchers = false; return this.army.assignArchers(s, delta); }   // placement manuel : l'IA laisse faire le joueur
   setAutoArchers(on) { this.army.autoArchers = !!on; }
   squadPlace(id, x, z) { const q = this.squad(id); if (q && this.phase !== 'assault') this.army.place(q, x, z); }
+  squadRegroup(id, grade) { const q = this.squad(id); return q ? this.army.regroup(q, grade) : 0; }
+  squadSplit(id) { const q = this.squad(id); return q ? this.army.split(q) : 0; }
   squadAuto(id) { const q = this.squad(id); if (q) q.auto = true; }
   squad(id) { return this.army.squads.find(q => q.id === id) || null; }
   formSquad(type, size, sector) { return this.army.formSquad(type, size, sector); }
@@ -173,7 +175,7 @@ export class Simulation {
         const spec = waveSpec(this.wave);
         for (const r in spec.reward) this.eco.add(r, spec.reward[r]);
         this.events.push({ type: 'waveEnd', wave: this.wave, reward: spec.reward });
-        { const r = this.army.autoForm(this); if (r.formed || r.filled) this.events.push({ type: 'autoFormed', formed: r.formed, filled: r.filled }); }   // les troupes disponibles forment des escouades
+        { const r = this.army.autoForm(this); if (r.formed || r.filled || r.merged) this.events.push({ type: 'autoFormed', formed: r.formed, filled: r.filled, merged: r.merged }); }   // les troupes disponibles forment des escouades
         this.phase = 'calm'; this.timer = TIMING.calm; this.spawn = null;
       }
     } else if (this.phase === 'calm' && this.timer <= 0) { this.wave++; this.phase = 'prep'; this.timer = TIMING.prep; this.targets = []; }

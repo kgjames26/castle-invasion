@@ -457,9 +457,40 @@ export class Renderer {
         else rig.push(d.matrix, tint, [0, 0.35]);
       } else rig.push(d.matrix, tint, [0, sw, -sw, -0.35 - 0.3 * (mv ? 1 : 0) + 0.3 * Math.sin(ph + Math.PI) * (mv ? 1 : 0), 0.2 + 0.3 * (mv ? 1 : 0)]);
     });
-    this.renderBitten(alpha, gold);
+    this.renderBitten(alpha, gold); this.renderDrill(gold);
     R.soldier.end(); R.heavy.end(); R.cavalry.end(); R.knight.end();
     if (hh) for (const k of hh.hg.skins) { const im = hh.meshes[k]; im.count = Math.min(120, hh.cnt[k]); im.instanceMatrix.needsUpdate = true; im.anim.needsUpdate = true; im.instanceColor.needsUpdate = true; }
+  }
+  // ——— production d'unités (v2.8) : bâtiment choisi = recrues à l'exercice devant la porte (épée contre mannequins, tir sur cibles, dressage) ———
+  renderDrill(gold) {
+    const id = this.struct.sel, s = id ? this.sim.build.get(id) : null, ok = s && ['barracks', 'range', 'stable'].includes(s.type) && s.level > 0 && s.state !== 'site';
+    if (!this.drill) {
+      const g = new THREE.Group(), wood = lam(0x8a6a3a), straw = lam(0xd8bf6a), red = lam(0xc0392b), white = lam(0xf2ead8);
+      const dummy = () => { const d = new THREE.Group(); const p = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 1.9, 6), wood); p.position.y = 0.95; const b = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.36, 0.9, 7), straw); b.position.y = 1.5; const a = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.12, 0.12), wood); a.position.y = 1.65; const h = new THREE.Mesh(new THREE.SphereGeometry(0.24, 7, 5), straw); h.position.y = 2.15; d.add(p, b, a, h); return d; };
+      const target = () => { const d = new THREE.Group(); for (const [r, m, z] of [[0.9, white, 0], [0.62, red, 0.03], [0.34, white, 0.06], [0.14, red, 0.09]]) { const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.08, 16), m); c.rotation.x = Math.PI / 2; c.position.set(0, 1.4, z); d.add(c); } for (const x of [-0.5, 0.5]) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.6, 0.1), wood); l.position.set(x, 0.8, -0.2); l.rotation.x = -0.15; d.add(l); } return d; };
+      const dummies = [0, 1, 2, 3].map(dummy), targets = [0, 1, 2].map(target); for (const o of [...dummies, ...targets]) g.add(o); this.scene.add(g); this.drill = { g, dummies, targets }; this.shadowize(g);
+    }
+    const D = this.drill; D.g.visible = !!ok; if (!ok) return;
+    const R = this.rigs, d = this.dummy, t = this.clock, tint = this.tmpColor.setRGB(1, 1, 1), q = this.sim.army.queues[s.type] || [], busy = q.length > 0, [, hd] = this.sim.build.half(s.type, s.rot || 0), fz = s.z + hd + 4.5, sc = HUMAN_H / 1.85, n = busy ? Math.min(4, 1 + q.length) : 2;
+    D.dummies.forEach(o => o.visible = s.type === 'barracks'); D.targets.forEach(o => o.visible = s.type === 'range');
+    if (s.type === 'barracks') {        // recrues face aux mannequins, coups d'épée
+      for (let k = 0; k < 4; k++) { const x = s.x + (k - 1.5) * 3; D.dummies[k].position.set(x, 0, fz - 2.4); D.dummies[k].rotation.z = k < n ? 0.08 * Math.sin(t * 7 + k) : 0; }
+      for (let k = 0; k < n; k++) { const x = s.x + (k - 1.5) * 3, ph = t * (busy ? 7 : 3) + k * 1.3, step = 0.25 * Math.max(0, Math.sin(ph)); d.position.set(x, 0, fz - step); d.rotation.set(0, Math.PI, 0); d.scale.setScalar(sc); d.updateMatrix(); R.soldier.push(d.matrix, tint, [0, 0.3 * Math.sin(ph), -0.3 * Math.sin(ph), -1.1 + Math.sin(ph) * 0.9, 0.2]); }
+    } else if (s.type === 'range') {    // archers en ligne, cibles à l'est, flèches
+      for (let k = 0; k < 3; k++) { D.targets[k].position.set(s.x + 9, 0, fz - 1 + k * 2.2); D.targets[k].rotation.y = -Math.PI / 2; }
+      for (let k = 0; k < n; k++) { const x = s.x - 5, z = fz - 1.5 + k * 1.6, ph = (t * 0.6 + k * 0.37) % 1; d.position.set(x, 0, z); d.rotation.set(0, Math.PI / 2, 0); d.scale.setScalar(sc); d.updateMatrix(); R.soldier.push(d.matrix, tint, [0, 0, 0, -1.45 + (ph > 0.85 ? 0.3 : 0), 0.1]);
+        if (busy && ph > 0.85 && ph < 0.88 && this.fx.enabled) { const tz = fz - 1 + (k % 3) * 2.2; for (let e = 0; e < 3; e++) this.fx.P.emit(x + 1, 1.7, z, 32, 0.6, (tz - z) * 2.3, 0.42, 0.1, 0, [0.35, 0.25, 0.15], 0); } }
+    } else {                            // dressage : un cavalier tourne sur la carrière, un palefrenier au centre
+      const hh = this.hh, cx = s.x, cz = fz + 1, rr = 4.5, sp = busy ? 0.9 : 0.4;
+      for (let k = 0; k < Math.min(2, n); k++) {
+        const a = t * sp + k * Math.PI, x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr, rot = Math.atan2(-Math.sin(a), Math.cos(a)) + Math.PI;
+        d.position.set(x, 0, z); d.rotation.set(0, rot, 0); d.scale.setScalar(1.3); d.updateMatrix();
+        if (hh) { const hg = hh.hg, [c0, cn] = hg.clips.walk, fr = (t * sp * 1.6 + k * 0.5) % 1, an = c0 + fr * cn, skin = hg.skins[(k * 3 + 2) % hg.skins.length], im = hh.meshes[skin], i = hh.cnt[skin]++;
+          if (i < 120) { im.setMatrixAt(i, d.matrix); im.anim.array[i] = an; im.setColorAt(i, tint); } this._hm.multiplyMatrices(d.matrix, hg.seat[Math.floor(an)]).multiply(this._rs); R.cavalry.push(this._hm, tint, [0, 0.35]); }
+        else R.cavalry.push(d.matrix, tint, [0, 0.35]);
+      }
+      d.position.set(cx, 0, cz); d.rotation.set(0, t * sp + Math.PI / 2, 0); d.scale.setScalar(sc); d.updateMatrix(); R.soldier.push(d.matrix, tint, [0, 0, 0, -0.9, 0.1]);
+    }
   }
   // ——— mordus (v2.4) : à terre (couchés, les zombies se ruent dessus), puis relevés, voûtés et verdâtres, qui boitent vers la geôle ; enfermés derrière les barreaux ———
   renderBitten(alpha, gold) {

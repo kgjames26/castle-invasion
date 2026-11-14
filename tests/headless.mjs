@@ -33,7 +33,7 @@ function bot() {
   const A = sim.army;
   if (sim.wave >= 3) { const wl = ['trebuchet', 'catapult', 'ballista']; for (const t of wl) if (sim.siege.canBuild(sim, t, 2)) { sim.buildSiege(t, [2, 1, 3, 0, 4][sim.siege.weapons.length % 5]); break; } }
   for (const t of ['archer', 'soldier', 'siege']) { E.buySmith('atk', t); E.buySmith('def', t); }
-  for (const t of ['soldier', 'heavy']) { const sec = Math.floor(sim.rng() * 5); if (A.reserve[t] >= 6 && A.squads.length < 12) sim.formSquad(t, Math.min(A.reserve[t], 10), sec); }
+  for (const t of ['soldier', 'heavy']) { const sec = Math.floor(sim.rng() * 5); if (A.reserve[t] >= 15 && A.squads.length < 12) sim.formSquad(t, 15, sec); }
   for (const q of A.squads) if (q.n < 10) sim.squadReinforce(q.id);
   const order = sim.phase === 'assault' || sim.phase === 'alert' ? sim.targets : [0, 1, 2, 3, 4];
   for (const s of order) sim.assignArchers(s, 4);

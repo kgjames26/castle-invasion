@@ -205,3 +205,14 @@ h2,h3,.ptitle,.wave b,.tile b,.dk span { font-family:var(--serif); }
 .aibox { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 10px; border-radius:12px; background:#d8ecf8aa; border:1px solid #7aa8c8; color:#1f3f5a; font-size:13px; margin:6px 0; }
 .aibox.man { background:#f3e2c0aa; border-color:#c8a060; color:#5a3a10; } .aibox .act { flex:none; }
 .orderbar .ok { flex:none; min-height:40px; padding:0 14px; border-radius:12px; background:linear-gradient(180deg,#8fd18a,#3f7f45); color:#fff; font-weight:900; border:1px solid #2a5a2e; }
+.cnt { color:var(--ink2); font-size:12px; font-weight:700; margin:0 4px; }
+.fgrid.mini { margin-top:6px; } .fgrid.mini .fbtn { min-height:40px; font-size:11px; padding:2px; }
+/* production d'unités (fiche de caserne, écurie, champ de tir) */
+.prod { margin:6px 0; } .pnow { display:flex; gap:10px; align-items:center; padding:8px; border-radius:14px; background:#fff7; border:1px solid #a8844a66; }
+.pico { font-size:34px; animation:pbob 0.9s ease-in-out infinite; } @keyframes pbob { 0%,100% { transform:translateY(0) rotate(-4deg); } 50% { transform:translateY(-5px) rotate(4deg); } }
+.pbody { flex:1; min-width:0; } .pbody small { color:var(--ink2); font-size:12px; }
+.psteps { display:flex; gap:4px; flex-wrap:wrap; margin:4px 0; } .psteps span { font-size:11px; padding:2px 6px; border-radius:8px; background:#0001; color:#8a7a60; }
+.psteps span.done { background:#d9ecd0; color:#2f5f33; } .psteps span.cur { background:linear-gradient(180deg,#f0d27a,#cf9d38); color:#3a2812; font-weight:800; animation:pglow 1s ease-in-out infinite; }
+@keyframes pglow { 50% { box-shadow:0 0 0 3px #f0d27a88; } }
+.bar.prog i { background:repeating-linear-gradient(-45deg,#3f7f45 0 8px,#5aa060 8px 16px); background-size:22px 22px; animation:pstripe 0.8s linear infinite; } @keyframes pstripe { to { background-position:22px 0; } }
+.rb.on { background:linear-gradient(180deg,#f0d27a,#cf9d38); }
