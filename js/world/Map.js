@@ -38,6 +38,7 @@ export class GameMap {
     this.buildTown();
     this.buildForest();
     this.buildNorth();
+    this.buildTerrain();
     this.buildBounds();
     this.buildCityGate();
   }
@@ -165,6 +166,43 @@ export class GameMap {
       sm.scene.add(m);
       if (rock) this.block(x, z, 1.4);
     }
+  }
+
+  // Terrain tactique : une barrière rocheuse percée de trois passes qui canalisent les zombies,
+  // des bosquets sur les flancs (obstacles, abris) et une plaine dégagée au centre pour les charges de cavalerie.
+  buildTerrain() {
+    const g = this.game, sm = g.sm, R = rng(404), P = MAP.orient === 'portrait';
+    const hw = MAP.HALF - 6;
+    const barZ = MAP.PLAIN_Z - 6;
+    const passW = P ? 9 : 12;
+    const passes = [-0.6 * hw, 0.05 * hw, 0.6 * hw];
+    this.passes = passes.map(x => ({ x, z: barZ, w: passW }));
+    const inPass = x => passes.some(c => Math.abs(x - c) < passW / 2 + 1.5);
+    for (let x = MAP.minX + 2; x <= MAP.maxX - 2; x += 4.2) {
+      if (inPass(x)) continue;
+      const m = new THREE.Mesh(sm.resGeo.cliff, sm.mat.units);
+      const sc = 1.15 + R() * 0.8;
+      m.position.set(x + (R() - 0.5) * 1.5, 0, barZ + (R() - 0.5) * 2.2);
+      m.rotation.y = R() * 6.28; m.scale.setScalar(sc); m.castShadow = true;
+      sm.scene.add(m);
+      this.block(m.position.x, m.position.z, 2.5 * sc);
+    }
+    // bosquets sur les flancs de la plaine
+    const pts = [];
+    for (const sgn of [-1, 1]) {
+      const cx = sgn * hw * (P ? 0.72 : 0.7), cz = MAP.STAGE_Z - 9;
+      for (let i = 0; i < (P ? 10 : 18); i++) {
+        const x = cx + (R() - 0.5) * hw * (P ? 0.55 : 0.5), z = cz + (R() - 0.5) * 12;
+        if (g.resources.nodes.some(n => Math.hypot(n.x - x, n.z - z) < 5)) continue;
+        pts.push([x, z]);
+        this.block(x, z, 1.9);
+      }
+    }
+    const inst = new THREE.InstancedMesh(sm.resGeo.wood, sm.mat.units, pts.length);
+    const o = new THREE.Object3D();
+    pts.forEach(([x, z], i) => { o.position.set(x, 0, z); o.rotation.y = R() * 6.28; o.scale.setScalar(1.5 + R() * 0.9); o.updateMatrix(); inst.setMatrixAt(i, o.matrix); });
+    inst.frustumCulled = false;
+    sm.scene.add(inst);
   }
 
   buildBounds() {
