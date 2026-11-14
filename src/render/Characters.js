@@ -91,9 +91,26 @@ async function loadVillager(url) {
   return { geos, mat, F, clips: hdr.clips, tints: hdr.tints, hand: mats(hdr.hand), head: mats(hdr.head), handPos: hdr.handPos, headPos: hdr.headPos, miny: hdr.miny, height: hdr.height };
 }
 
+// Cheval (modèle GLB low-poly cuit en VAT par tools/bake_horse.py) : 3 allures (pas, galop, repos), 8 robes, matrices de selle par image.
+async function loadHorse(url) {
+  const buf = await (await fetch(url)).arrayBuffer(), { hdr, off: o0 } = header(buf); let off = o0; const V = hdr.V, F = hdr.F;
+  const idx = new Uint16Array(buf.slice(off, off + hdr.I * 2)); off = align(off + hdr.I * 2);
+  const cols = {}; for (const k of hdr.skins) { cols[k] = new Uint8Array(buf, off, V * 3); off = align(off + V * 3); }
+  const q = new Uint16Array(buf, off, F * V * 3), rows = Math.ceil(V / 2048), tex = new Float32Array(2048 * rows * F * 4);
+  for (let f = 0; f < F; f++) { const base = f * rows * 2048; for (let i = 0; i < V; i++) { const s = (f * V + i) * 3, d = (base + i) * 4; tex[d] = q[s] / 65535; tex[d + 1] = q[s + 1] / 65535; tex[d + 2] = q[s + 2] / 65535; } }
+  const t = new THREE.DataTexture(tex, 2048, rows * F, THREE.RGBAFormat, THREE.FloatType); t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true;
+  const pos = new Float32Array(V * 3); for (let i = 0; i < V; i++) for (let k = 0; k < 3; k++) pos[i * 3 + k] = hdr.mn[k] + q[i * 3 + k] / 65535 * (hdr.mx[k] - hdr.mn[k]);
+  const geos = {};
+  for (const k of hdr.skins) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', colorAttr(cols[k], 1.05)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1, 0.5), 3); geos[k] = g; }
+  const v = { tex: t, rows, F, mn: hdr.mn, mx: hdr.mx };
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
+  mat.onBeforeCompile = sh => { patchVat(sh, v); patchNorthFog(sh); }; mat.customProgramCacheKey = () => 'vat-nfog-horse';
+  return { geos, mat, F, clips: hdr.clips, skins: hdr.skins, seat: hdr.seat.map(a => new THREE.Matrix4().fromArray(a)), backY: hdr.backY };
+}
+
 export async function loadCharacters(base = 'assets/characters/') {
-  const [zombies, archer, villager] = await Promise.all([loadZombies(base + 'zombies.bin'), loadArcher(base + 'archer.bin'), loadVillager(base + 'villager.bin').catch(e => { console.warn('villageois GLB indisponible', e); return null; })]);
+  const [zombies, archer, villager, horse] = await Promise.all([loadZombies(base + 'zombies.bin'), loadArcher(base + 'archer.bin'), loadVillager(base + 'villager.bin').catch(e => { console.warn('villageois GLB indisponible', e); return null; }), loadHorse(base + 'horse.bin').catch(e => { console.warn('cheval GLB indisponible', e); return null; })]);
   zombies.mats = zombies.variants.map(vatMaterial);
   const solid = applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
-  return { zombies, archer, villager, archerMat: solid, villagerGeo: villagerGeometry(), villagerMat: solid };
+  return { zombies, archer, villager, horse, archerMat: solid, villagerGeo: villagerGeometry(), villagerMat: solid };
 }

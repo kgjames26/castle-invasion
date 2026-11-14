@@ -247,6 +247,7 @@ export class Renderer {
   renderSquads(alpha) {
     const R = this.rigs, d = this.dummy, t = this.clock, sel = this.selSquad, tint = this.tmpColor, SCALE = { soldier: 2.4, heavy: 2.7, cavalry: 2.0 };
     R.soldier.begin(); R.heavy.begin(); R.cavalry.begin();
+    const hh = this.hh; if (hh) for (const k of hh.hg.skins) hh.cnt[k] = 0;
     const lerpAng = (a, b, k) => { let dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
     for (const q of this.sim.army.squads) {
       const U = UNITS[q.type], rig = R[q.type] || R.soldier, horse = q.type === 'cavalry', L = formationLayout(q.form, Math.max(1, q.n), U.size);
@@ -258,11 +259,18 @@ export class Renderer {
       for (let k = 0; k < q.n; k++) {
         const ph = t * (horse ? 11 : 9) + k * 1.7, ph2 = t * 8 + k * 2.3, sw = Math.sin(ph) * (horse ? 0.8 : 0.75) * mvs;
         d.position.set(cx + L.xs[k], Math.abs(Math.sin(ph)) * (horse ? 0.1 : 0.06) * mvs * sc, cz + L.zs[k]); d.scale.set(sc, sc, sc); d.rotation.set(0, q.rrot, 0); d.updateMatrix();
-        if (horse) { const arm = fight ? 0.5 + (Math.sin(ph2) * 0.5 + 0.5) * 1.8 : 0.35 + 0.12 * Math.sin(ph); rig.push(d.matrix, tint, [0, sw, Math.sin(ph + 1.1) * 0.8 * mvs, arm]); }
+        if (horse && hh) {
+          const hg = hh.hg, spd = Math.hypot(dx, dz), clip = mv ? (spd > 0.22 ? 'gallop' : 'walk') : 'idle', [c0, cn] = hg.clips[clip], cps = clip === 'gallop' ? 1.8 : clip === 'walk' ? 1.0 : 0.4;
+          const fr = ((t * cps + q.id * 0.31 + k * 0.173) % 1 + 1) % 1, an = c0 + fr * cn, skin = hg.skins[(q.id * 5 + 3) % hg.skins.length], im = hh.meshes[skin], n = hh.cnt[skin]++;
+          if (n < 120) { im.setMatrixAt(n, d.matrix); im.anim.array[n] = an; im.setColorAt(n, tint); }
+          const arm = fight ? 0.5 + (Math.sin(ph2) * 0.5 + 0.5) * 1.8 : 0.35 + 0.12 * Math.sin(ph); this._hm.multiplyMatrices(d.matrix, hg.seat[Math.floor(an)]).multiply(this._rs); rig.push(this._hm, tint, [0, arm]);
+        }
+        else if (horse) { const arm = fight ? 0.5 + (Math.sin(ph2) * 0.5 + 0.5) * 1.8 : 0.35 + 0.12 * Math.sin(ph); rig.push(d.matrix, tint, [0, arm]); }
         else { const arm = fight ? -1.1 + Math.sin(ph2) * 0.8 : -0.35 - 0.3 * mvs + 0.3 * Math.sin(ph + Math.PI) * mvs; rig.push(d.matrix, tint, [0, sw, -sw, arm]); }
       }
     }
     R.soldier.end(); R.heavy.end(); R.cavalry.end();
+    if (hh) for (const k of hh.hg.skins) { const im = hh.meshes[k]; im.count = Math.min(120, hh.cnt[k]); im.instanceMatrix.needsUpdate = true; im.anim.needsUpdate = true; im.instanceColor.needsUpdate = true; }
   }
   // ——— machines de siège : le bras de lancer suit le cycle de tir (armé → détente → remontée) ———
   renderMachines(S) {
@@ -335,6 +343,17 @@ export class Renderer {
     this.ab = mk(ch.archer.body); this.abow = mk(ch.archer.bow); this.aMesh.visible = false;
     this.vMesh.geometry = ch.villagerGeo; this.vMesh.material = ch.villagerMat;
     if (ch.villager) this.useVillagerGLB(ch.villager);
+    if (ch.horse) this.useHorseGLB(ch.horse);
+  }
+  // ——— chevaux (modèle GLB cuit en VAT) : une maille instanciée par robe, le cavalier (Rig) suit la selle image par image ———
+  useHorseGLB(hg) {
+    const cap = 120, hh = { hg, meshes: {}, cnt: {} };
+    for (const k of hg.skins) {
+      const im = new THREE.InstancedMesh(hg.geos[k], hg.mat, cap); im.frustumCulled = false; im.count = 0;
+      im.anim = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); im.anim.setUsage(THREE.DynamicDrawUsage); hg.geos[k].setAttribute('aAnim', im.anim);
+      im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); this.scene.add(im); hh.meshes[k] = im;
+    }
+    this.hh = hh; this._hm = new THREE.Matrix4(); this._rs = new THREE.Matrix4().makeTranslation(0, hg.backY, 0).multiply(new THREE.Matrix4().makeScale(1.2, 1.2, 1.2)).multiply(new THREE.Matrix4().makeTranslation(0, -hg.backY, 0));   // cavalier un peu plus grand, mis à l'échelle autour de la selle
   }
   // ——— villageois (modèle GLB cuit en VAT) : une variante de couleur par métier + outil et chapeau attachés à la main / la tête ———
   useVillagerGLB(vg) {

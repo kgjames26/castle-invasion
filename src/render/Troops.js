@@ -48,23 +48,21 @@ function footParts(P) {
     part('arm', [0.32, 1.3, 0], sword, 'rot', true),
   ];
 }
-// ——— cavalier : cheval brun caparaçonné, cavalier casqué à l'épée dressée ———
+// ——— cavalier : seul le cavalier est une pièce de boîtes (le cheval est le modèle GLB animé en VAT, voir Renderer.renderSquads) ———
+//  repère : selle en (0, 1.6, 0) — dos du cheval cuit par tools/bake_horse.py ; le cavalier est posé dessus et suit le tangage du cheval.
 function horseParts(P) {
-  const H = P.horse;
+  const dy = 0.15;
   const body = [
-    bx(0.62, 0.62, 1.5, H, 0, 1.1, 0), bx(0.66, 0.1, 0.8, P.cloth, 0, 1.45, 0), bx(0.5, 0.52, 0.4, H, 0, 1.18, 0.72),   // croupe, caparaçon, poitrail
-    bx(0.24, 0.7, 0.3, H, 0, 1.62, 0.92, 0.5), bx(0.22, 0.26, 0.55, H, 0, 1.98, 1.2, 0.2), bx(0.06, 0.3, 0.12, P.mane, 0, 1.74, 0.82, 0.5), bx(0.2, 0.06, 0.1, DARKWOOD, 0, 1.96, 1.5),
-    bx(0.1, 0.3, 0.1, H, 0.07, 2.18, 1.1), bx(0.1, 0.3, 0.1, H, -0.07, 2.18, 1.1),            // oreilles
-    bx(0.1, 0.5, 0.14, P.mane, 0, 1.2, -0.85, -0.5),                                          // queue
-    bx(0.4, 0.55, 0.26, P.cloth, 0, 1.78, 0), bx(0.26, 0.26, 0.26, SKIN, 0, 2.2, 0.01), bx(0.32, 0.14, 0.34, P.helm, 0, 2.34, 0.01), bx(0.06, 0.24, 0.3, P.plume, 0, 2.5, 0),
-    bx(0.1, 0.42, 0.34, P.shield, -0.3, 1.72, 0.1), bx(0.1, 0.1, 0.1, LEATHER, 0.07, 1.46, 0.5),   // bouclier + selle
-    bx(0.11, 0.4, 0.11, P.cloth, -0.26, 1.66, 0.05),
+    bx(0.7, 0.1, 0.9, P.cloth, 0, 1.6, 0), bx(0.1, 0.1, 0.1, LEATHER, 0, 1.68, 0.3),                                   // caparaçon + pommeau de selle
+    bx(0.4, 0.55, 0.26, P.cloth, 0, 1.78 + dy, 0), bx(0.26, 0.26, 0.26, SKIN, 0, 2.2 + dy, 0.01), bx(0.32, 0.14, 0.34, P.helm, 0, 2.34 + dy, 0.01), bx(0.06, 0.24, 0.3, P.plume, 0, 2.5 + dy, 0),
+    bx(0.1, 0.42, 0.34, P.shield, -0.3, 1.72 + dy, 0.1),
+    bx(0.11, 0.4, 0.11, P.cloth, -0.26, 1.66 + dy, 0.05),
+    bx(0.14, 0.5, 0.16, P.legs, 0.38, 1.55, 0.06, 0, 0, -0.12), bx(0.14, 0.5, 0.16, P.legs, -0.38, 1.55, 0.06, 0, 0, 0.12),     // jambes de part et d'autre de la monture
+    bx(0.17, 0.12, 0.22, DARKWOOD, 0.42, 1.27, 0.08), bx(0.17, 0.12, 0.22, DARKWOOD, -0.42, 1.27, 0.08),
   ];
-  const leg = (x, z) => [bx(0.15, 0.9, 0.16, H, x, -0.45, z), bx(0.17, 0.12, 0.19, DARKWOOD, x, -0.86, z)];
   return [
     part('body', [0, 0, 0], body),
-    part('fl', [0, 0.84, 0.56], [...leg(0.2, 0), ...leg(-0.2, 0)], 'rot', true), part('bl', [0, 0.84, -0.56], [...leg(0.2, 0), ...leg(-0.2, 0)], 'rot', true),
-    part('arm', [0.3, 1.92, 0.02], [bx(0.11, 0.38, 0.11, P.cloth, 0.3, 1.74, 0.02), bx(0.07, 1.05, 0.07, STEEL, 0.3, 2.35, 0.02), bx(0.22, 0.06, 0.07, P.trim, 0.3, 1.9, 0.02)], 'rot'),
+    part('arm', [0.3, 1.92 + dy, 0.02], [bx(0.11, 0.38, 0.11, P.cloth, 0.3, 1.74 + dy, 0.02), bx(0.07, 1.05, 0.07, STEEL, 0.3, 2.35 + dy, 0.02), bx(0.22, 0.06, 0.07, P.trim, 0.3, 1.9 + dy, 0.02)], 'rot'),
   ];
 }
 

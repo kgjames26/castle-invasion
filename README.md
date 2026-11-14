@@ -103,3 +103,9 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Outil (hache, pioche, houe, marteau) et chapeau (casquette, casque de chantier, paille…) sont des maillages instanciés collés à la main droite / à la tête image par image.
 - `Renderer.useVillagerGLB` / `updateVillagersVAT` : clip choisi selon l'état (déplacement, charge, travail, repos) ; l'ancien villageois en boîtes reste en repli si le fichier est absent.
 - Usage : `python3 tools/bake_villager.py <glb> assets/characters/villager.bin`.
+
+## Phase 11 — Cheval GLB animé (support des cavaliers)
+- `tools/bake_horse.py` : le GLB `low_poly_horse` n'a ni squelette ni animation ; le script reconstruit un squelette à la main (pattes à deux segments, cou/tête, queue souple, tangage du corps) et cuit 3 allures en VAT : pas (16 images), galop (12), repos (12), plus la matrice de selle de chaque image. Usage : `python3 tools/bake_horse.py <glb> assets/characters/horse.bin`.
+- 8 robes (alezan/bai, noir, blanc, alezan clair, gris, palomino, isabelle, pie) : couleurs de sommets (corps · crinière/queue · balzanes), choisies par escouade ; `Renderer.useHorseGLB` crée une maille instanciée par robe.
+- Le cavalier (`horseParts` dans Troops.js) n'est plus qu'un rig de boîtes posé sur la selle et suit le tangage du cheval. Allure : galop en déplacement rapide, pas sinon, repos à l'arrêt/au combat.
+- Pour ajouter une robe : une entrée dans `SKINS` de `bake_horse.py`, puis relancer le script.
