@@ -379,3 +379,5 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Tutoriel : le bouton à toucher est entouré d'un halo doré qui pulse (dock, catégorie, bâtiment, puis « Poser »).
 - Une cane et ses canetons, et quelques canards, glissent sur les douves ; l'eau des douves est désormais opaque (les pavés ne se voyaient plus au travers).
 - Crépuscule doré : soleil orangé plus présent, horizon orangé et zénith mauve, sol réchauffé.
+- Bords de l'écran rouges et pulsants quand une brèche est ouverte ou que le château passe sous 50 %.
+- Robustesse : index d'animation des villageois borné, charges portées sans modèle ignorées.

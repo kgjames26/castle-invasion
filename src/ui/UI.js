@@ -413,6 +413,7 @@ export class UI {
     { const cr = sim.castleHp / CASTLE.hp, cbx = $('#castle-bar'); cbx.style.width = (100 * cr) + '%'; cbx.style.background = cr > 0.6 ? '' : cr > 0.3 ? '#e0a43a' : '#d2452e';
       if (this.lastCastle != null && sim.castleHp < this.lastCastle - 1) { cbx.parentNode.classList.remove('hit'); void cbx.offsetWidth; cbx.parentNode.classList.add('hit'); if (!this.castleWarn || sim.time - this.castleWarn > 30) { this.castleWarn = sim.time; this.toast(`🏰 Le château est attaqué ! (${Math.round(cr * 100)} %)`, 'danger'); } }
       this.lastCastle = sim.castleHp; }
+    { let br = 0; for (let s2 = 0; s2 < SECTORS; s2++) br += w.breaches(s2); const vg = sim.phase === 'assault' && (br > 0 || sim.castleHp < CASTLE.hp * 0.5); document.body.classList.toggle('danger-vig', vg); if (vg && !$('#vig')) document.getElementById('app').appendChild(el('div')).id = 'vig'; }   /* (v8.0) bords rouges : brèche ouverte ou château à moins de 50 % */
     let alert = false;
     for (let s = 0; s < SECTORS; s++) {
       const c = this.badges[s], hp = w.sectorHp(s) / w.sectorMax(s), dg = sim.danger(s), tgt = sim.phase === 'alert' && sim.targets.includes(s);

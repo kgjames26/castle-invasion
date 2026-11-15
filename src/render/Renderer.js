@@ -786,7 +786,7 @@ export class Renderer {
       const spd = clip === 'work' ? (WORK[key] || 0.9) : SPEED[clip] || 1, ph = (t * spd + i * 0.37) % 1, an = c0 + ph * cn, k = vv.cnt[key]++, im = vv.meshes[key];
       d.position.set(x, 0, z); d.scale.set(SC, SC, SC); d.rotation.set(0, v.rrot, 0); d.updateMatrix();
       im.setMatrixAt(k, d.matrix); im.anim.array[k] = an;
-      const f0 = Math.floor(an), tl = vv.tools[key], ht = vv.hats[key];
+      const f0 = Math.min(vg.head.length - 1, Math.max(0, Math.floor(an) || 0)), tl = vv.tools[key], ht = vv.hats[key];   // (v8.0) index d'image borné
       if (tl) { this._gm.copy(d.matrix).multiply(this._ty); if (carrying) this._gm.multiply(vg.spine[f0]).multiply(this._back); else this._gm.multiply(vg.hand[f0]); tl.setMatrixAt(k, this._gm); }   // en portant : outil rangé dans le dos
       if (v.task === 'fire' && this.sim.night.light() < 0.75) { this.fx.glowNow(x + Math.sin(v.rrot) * 0.4, 2.2, z + Math.cos(v.rrot) * 0.4, 0.55 + 0.08 * Math.sin(t * 9 + i), 1, 0.55, 0.15); }   // torche de l'allumeur
       if (ht) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.head[f0]); ht.setMatrixAt(k, this._gm); }
@@ -796,7 +796,7 @@ export class Renderer {
           const fx = x + Math.sin(v.rrot) * 1.1, fz = z + Math.cos(v.rrot) * 1.1; d.position.set(fx, 1.15, fz); d.scale.set(1, 1, 1); d.rotation.set(0, v.rrot, 0); d.updateMatrix(); cart.mesh.setMatrixAt(nc, d.matrix);
           if (LM) { const lx = cs[0], ly = cs[1], lz = cs[2], s1 = Math.sin(v.rrot), c1 = Math.cos(v.rrot), kk = (LD.axis === 2 ? cs[5] : cs[3]) / (LD.span * SC) * 0.95 * SC;
             d.position.set(fx + lx * c1 + lz * s1, 1.15 + ly + cs[4] * 0.25, fz - lx * s1 + lz * c1); d.scale.setScalar(kk); d.updateMatrix(); LM.setMatrixAt(this.lcnt[v.carryRes]++, d.matrix); }
-        } else if (LM) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.spine[f0]).multiply(this._at[v.carryRes]); LM.setMatrixAt(this.lcnt[v.carryRes]++, this._gm); }
+        } else if (LM && this._at[v.carryRes]) { this._gm.copy(d.matrix).multiply(this._ty).multiply(vg.spine[f0]).multiply(this._at[v.carryRes]); LM.setMatrixAt(this.lcnt[v.carryRes]++, this._gm); }
         nc++;
       }
     }

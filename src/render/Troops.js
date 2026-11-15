@@ -201,7 +201,7 @@ export class Rig {
   begin() { this.n = 0; }
   // base : matrice de l'instance ; r : g, b teinte (>1 = éclaircit) ; ang : valeur par pièce (angle pour 'rot', décalage en z pour 'slide')
   push(base, tint, ang) {
-    if (this.n >= this.cap) return;
+    if (this.n >= this.cap || !base) return;
     if (this.blob !== 0) { const e = base.elements; BLOBS.push(e[12], e[13], e[14], Math.hypot(e[0], e[1], e[2]) * (this.blob || 1)); }
     for (let i = 0; i < this.parts.length; i++) {
       const p = this.parts[i], l = this._l;
