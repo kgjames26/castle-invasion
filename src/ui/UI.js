@@ -530,7 +530,7 @@ export class UI {
       b.style.display = b.dataset.show && onScr ? '' : 'none'; b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
       this.edgeArrow(s, p, onScr, vw, vh);
     }
-    this.bigBars(vw, vh); this.upMarks(vw, vh);
+    this.bigBars(vw, vh); this.upMarks(vw, vh); this.squadTags(vw, vh);
     const c = this.card; if (!c) return;
     let a;
     if (c.kind === 'struct') { const s = this.sim.build.get(c.id); if (!s) return; a = this.rd.project(s.x, 4, s.z); }
@@ -548,6 +548,16 @@ export class UI {
       if (!p.vis || p.x < 20 || p.x > vw - 20 || p.y < 100 || p.y > vh - 100) continue;
       let e = pool[k]; if (!e) { e = pool[k] = el('button', 'upm'); e.textContent = '⬆'; e.addEventListener('click', ev => { ev.stopPropagation(); const t = B.get(+e.dataset.id); if (t) { this.cam.focusOn(t.x, t.z); this.openCard({ kind: 'struct', id: t.id }); } }); document.getElementById('app').appendChild(e); }
       e.dataset.id = id; e.title = `${S.name} : amélioration possible`; e.style.display = ''; e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; k++; }
+    for (let j = k; j < pool.length; j++) pool[j].style.display = 'none';
+  }
+  // (v9.0) fanion au-dessus de chaque escouade : type, effectif, vie ; un clic ouvre sa fiche
+  squadTags(vw, vh) {
+    const sim = this.sim, pool = this.sqPool || (this.sqPool = []); let k = 0;
+    if (!document.body.classList.contains('fpv')) for (const q of sim.army.squads) { if (!q.n || k >= 24) continue; const p = this.rd.project(q.x, 3.6, q.z); if (!p.vis || p.x < 10 || p.x > vw - 10 || p.y < 100 || p.y > vh - 100) continue;
+      let e = pool[k]; if (!e) { e = pool[k] = el('button', 'sqtag'); e.addEventListener('click', ev => { ev.stopPropagation(); const id = +e.dataset.id; if (sim.squad(id)) this.openCard({ kind: 'squad', id }); }); document.getElementById('app').appendChild(e); }
+      const hp = Math.max(0, Math.min(1, q.hp / Math.max(1, q.n * sim.army.unitHp(q.type)))), txt = `${UNITS[q.type].ico} ${q.n}`;
+      e.dataset.id = q.id; if (e.dataset.t !== txt) { e.dataset.t = txt; e.innerHTML = `<span>${txt}</span><i style="width:${Math.round(hp * 100)}%"></i>`; } else e.lastChild.style.width = Math.round(hp * 100) + '%';
+      e.classList.toggle('sel', this.card?.kind === 'squad' && this.card.id === q.id); e.style.display = ''; e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; k++; }
     for (let j = k; j < pool.length; j++) pool[j].style.display = 'none';
   }
   // barres de vie au-dessus des colosses, golems et boss (+ grande barre du boss en haut de l'écran)

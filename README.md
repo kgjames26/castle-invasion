@@ -387,3 +387,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Le printemps parsème les prés de fleurs des champs (jaunes, roses, blanches) en nappes.
 - Zombies plus clairs (types mieux lisibles), et légèrement blafards la nuit pour rester visibles.
 - Meurtrières du château bien sombres le jour.
+- Fanion au-dessus de chaque escouade : type, effectif et barre de vie ; un clic ouvre sa fiche.
