@@ -259,6 +259,11 @@ export class ExtrasView {
     // crachats d'acide
     { let n = 0; for (const sp of X.spits) { if (n >= 40) break; const f = Math.min(1, sp.t / 0.9); d.position.set(sp.x0 + (sp.x1 - sp.x0) * f, 1.4 + Math.sin(Math.PI * f) * 4, sp.z0 + (sp.z1 - sp.z0) * f); d.scale.setScalar(1); d.rotation.set(0, 0, 0); d.updateMatrix(); this.spitM.setMatrixAt(n++, d.matrix); if (f > 0.95 && !sp.hit) { sp.hit = 1; for (let k = 0; k < 6; k++) this.fx.add({ x: sp.x1, y: 2, z: sp.z1, vx: (Math.random() - 0.5) * 3, vy: Math.random() * 3, vz: (Math.random() - 0.5) * 3, g: 6, t: 0, life: 0.8, a: 0.8, r: 0.6, gr: 1, b: 0.2, s: 0.7 }); } }
       this.spitM.count = n; this.spitM.instanceMatrix.needsUpdate = true; }
+    // (v9.0) pendant l'alerte : chevrons rouges au sol qui montrent d'où viendront les hordes (couloirs choisis)
+    { const on = sim.phase === 'alert' && sim.lanes && sim.lanes.length; if (!this.laneM) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute([-2.2, 0, -1.2, 0, 0, 1.2, 0, 0, 0.1, -2.2, 0, -1.2, 0, 0, 0.1, -1.4, 0, -1.6, 2.2, 0, -1.2, 0, 0, 0.1, 0, 0, 1.2, 2.2, 0, -1.2, 1.4, 0, -1.6, 0, 0, 0.1], 3)); g.computeVertexNormals();
+        this.laneM = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ color: 0xff4a2a, transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide }), 6 * 9); this.laneM.frustumCulled = false; this.laneM.renderOrder = 3; this.scene.add(this.laneM); }
+      this.laneM.visible = !!on; if (on) { let k = 0; for (const lx of sim.lanes.slice(0, 6)) for (let j = 0; j < 9; j++) { const z = 30 + ((j * 11 + t * 9) % 99); d.position.set(lx, 0.25, z); d.rotation.set(0, 0, 0); const a = Math.sin(Math.PI * (z - 30) / 99); d.scale.setScalar(0.6 + 1.3 * a); d.updateMatrix(); this.laneM.setMatrixAt(k++, d.matrix); }
+        this.laneM.count = k; this.laneM.instanceMatrix.needsUpdate = true; this.laneM.material.opacity = 0.45 + 0.25 * Math.sin(t * 5); } }
     // météo : particules autour de la cible de caméra
     const wx = X.weather, cam = this.rd.camera.position, cx = this.rd.camCenter ? this.rd.camCenter.x : cam.x, cz = this.rd.camCenter ? this.rd.camCenter.z : cam.z - 40;
     this.rainK += ((wx === 'rain' ? 1 : 0) - this.rainK) * Math.min(1, dt * 0.6); this.rainL.visible = this.rainK > 0.01; this.rainL.material.opacity = 0.42 * this.rainK;

@@ -388,3 +388,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Zombies plus clairs (types mieux lisibles), et légèrement blafards la nuit pour rester visibles.
 - Meurtrières du château bien sombres le jour.
 - Fanion au-dessus de chaque escouade : type, effectif et barre de vie ; un clic ouvre sa fiche.
+- Pendant l'alerte, des chevrons rouges défilent au sol sur les couloirs qu'emprunteront les hordes : on sait où placer ses archers.
