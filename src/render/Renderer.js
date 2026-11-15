@@ -815,7 +815,7 @@ export class Renderer {
         const armR = swing ? up : -0.25 + sw * 0.5 + 0.06 * Math.sin(clock * 1.3 + i), armL = swing ? -0.5 - 0.4 * Math.sin(f * 3.14) : -0.15 - sw * 0.6;
         const lean = swing ? (f < 0.7 ? -0.12 * f : 0.25) : 0.05 * Math.sin(ph * 2);
         d.position.set(x, Math.abs(Math.sin(ph)) * 0.1 * (mv ? 1 : 0), z); d.rotation.set(lean, rot, mv ? 0.05 * Math.sin(ph) : 0); d.scale.setScalar(sc); d.updateMatrix();
-        const hurt = Z.hp[i] / ZOMBIES[Z.type[i]].hp < 0.5 ? 0.75 : 1; if (Z.type[i] === 7) tc.setRGB(1.25 * hurt, 0.62 * hurt, 0.55 * hurt); else tc.setRGB(hurt, hurt * 0.95, hurt * 0.92); if (Z.slow[i] > 0) tc.setRGB(0.7, 0.9, 1.3);
+        const hurt = Z.hp[i] / ZOMBIES[Z.type[i]].hp < 0.5 ? 0.75 : 1; if (Z.type[i] === 7) tc.setRGB(1.25 * hurt, 0.62 * hurt, 0.55 * hurt); else tc.setRGB(hurt, hurt * 0.95, hurt * 0.92); if (Z.slow[i] > 0) tc.setRGB(0.7, 0.9, 1.3); if (Z.flash[i] > 0) tc.lerp(this._flashC || (this._flashC = new THREE.Color(2, 1.8, 1.6)), Z.flash[i] * 0.6);
         G.push(d.matrix, tc, [0, sw, -sw, armL, armR, swing ? (f < 0.7 ? -0.25 : 0.35) : 0.12 + 0.12 * Math.sin(clock * 0.9 + i)]); continue;   // tête : hoche, se rejette en arrière à l'élan
       }
       const t = Z.type[i], Zt = ZOMBIES[t], pool = ZVAR[t], vi = pool[((Z.phase[i] * 1000) | 0) % pool.length], im = this.zv[vi], k = cnt[vi]++;
@@ -838,7 +838,8 @@ export class Renderer {
       const cps = Z.state[i] === 1 ? 1.3 : Math.max(0.25, Zt.speed * pace * (Z.slow[i] > 0 ? 0.4 : 1) / (1.6 * sc));
       im.anim.array[k] = ((clock * cps + Z.phase[i] / 6.2832) % 1) * 16;
       const hurt = Z.hp[i] / Zt.hp < 0.5 ? 0.72 : 1, tt = Z.turned[i] ? this.turnTint || (this.turnTint = new THREE.Color(0x8fa0b8)) : this.zTint[t], ca = im.instanceColor.array;   // ancien soldat : teinte de sa tunique
-      if (Z.slow[i] > 0) { ca[k * 3] = 0.6; ca[k * 3 + 1] = 0.85; ca[k * 3 + 2] = 1.3; } else { ca[k * 3] = tt.r * hurt + (1 - hurt) * 0.5; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt; }   // gelé : bleuté   // blessé : plus sombre, rougeâtre
+      if (Z.slow[i] > 0) { ca[k * 3] = 0.6; ca[k * 3 + 1] = 0.85; ca[k * 3 + 2] = 1.3; } else { ca[k * 3] = tt.r * hurt + (1 - hurt) * 0.5; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt; }
+      { const fl = Z.flash ? Z.flash[i] : 0; if (fl > 0) { const q = fl * 0.85; ca[k * 3] += (2.2 - ca[k * 3]) * q; ca[k * 3 + 1] += (1.9 - ca[k * 3 + 1]) * q; ca[k * 3 + 2] += (1.7 - ca[k * 3 + 2]) * q; } }   /* éclair quand touché */   // gelé : bleuté   // blessé : plus sombre, rougeâtre
     }
     this.zv.forEach((im, v) => { im.count = cnt[v]; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.anim.needsUpdate = true; });
     G.end(); this.renderCorpses();

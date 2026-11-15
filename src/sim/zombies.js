@@ -19,7 +19,7 @@ export class ZombieSwarm {
     // morsures (v2.4) : bite = temps restant de l'animation, biteK = 1 morsure debout, 2 plongeon, 3 déchirement (géant), 4 coup (lourd) ; turned = ancien soldat
     this.bite = new Float32Array(n); this.biteK = new Uint8Array(n); this.rush = new Uint8Array(n); this.rushD = new Float32Array(n); this.rushK = new Float32Array(n); this.farK = new Float32Array(n); this.turned = new Uint8Array(n); this.atkT = new Float32Array(n);
     this.gx = new Float32Array(GROUPS); this.gz = new Float32Array(GROUPS); this.gn = new Int32Array(GROUPS); this.hpMult = 1;
-    this.n = 0; this.kills = 0; this.fallen = []; this.killsBySector = new Float32Array(SECTORS); this.climb = new Float32Array(n);
+    this.n = 0; this.kills = 0; this.fallen = []; this.killsBySector = new Float32Array(SECTORS); this.climb = new Float32Array(n); this.flash = new Float32Array(n);   // (v5.0) éclair blanc quand il est touché (vue seulement)
     this.near = new Int16Array(SECTORS);      // zombies proches (z>95) par secteur ciblé
     this.attacking = new Int16Array(SECTORS);
     this.dead = false;
@@ -41,7 +41,7 @@ export class ZombieSwarm {
   }
   // multiplicateur d'allure selon la distance à la muraille : traîne (< 1) au loin, charge (> 1) une fois sa distance franchie
   pace(i, x, z) { if (!this.grp[i]) return 1; const dw = WALL_Z0 + wallOff(x) - z; return dw > this.rushD[i] ? this.farK[i] : dw > -2 ? this.rushK[i] : 1; }
-  hit(i, dmg) { if (this.hp[i] > 0) { this.hp[i] -= dmg; if (this.hp[i] <= 0) { this.kills++; this.dead = true; this.killsBySector[this.sector[i]]++; if (this.type[i] === 7) this.bossDown = true; if (this.fallen.length < 160) this.fallen.push({ x: this.x[i], z: this.z[i], t: this.type[i], ph: this.phase[i], dx: this.x[i] - this.px[i], dz: this.z[i] - this.pz[i] }); } } }   // fallen : cadavres à afficher (vue)
+  hit(i, dmg) { if (this.hp[i] > 0) { this.hp[i] -= dmg; if (dmg > 0.5) this.flash[i] = 1; if (this.hp[i] <= 0) { this.kills++; this.dead = true; this.killsBySector[this.sector[i]]++; if (this.type[i] === 7) this.bossDown = true; if (this.fallen.length < 160) this.fallen.push({ x: this.x[i], z: this.z[i], t: this.type[i], ph: this.phase[i], dx: this.x[i] - this.px[i], dz: this.z[i] - this.pz[i] }); } } }   // fallen : cadavres à afficher (vue)
   compact() {
     if (!this.dead) return; this.dead = false;
     for (let i = this.n - 1; i >= 0; i--) if (this.hp[i] <= 0) this.removeAt(i);
@@ -49,7 +49,7 @@ export class ZombieSwarm {
   removeAt(i) {
     const l = --this.n; if (i === l) return;
     this.x[i] = this.x[l]; this.z[i] = this.z[l]; this.px[i] = this.px[l]; this.pz[i] = this.pz[l];
-    this.hp[i] = this.hp[l]; this.type[i] = this.type[l]; this.sector[i] = this.sector[l]; this.state[i] = this.state[l]; this.phase[i] = this.phase[l];
+    this.flash[i] = this.flash[l]; this.hp[i] = this.hp[l]; this.type[i] = this.type[l]; this.sector[i] = this.sector[l]; this.state[i] = this.state[l]; this.phase[i] = this.phase[l];
     this.grp[i] = this.grp[l]; this.ox[i] = this.ox[l]; this.oz[i] = this.oz[l]; this.slow[i] = this.slow[l]; this.slam[i] = this.slam[l];
     this.bite[i] = this.bite[l]; this.biteK[i] = this.biteK[l]; this.climb[i] = this.climb[l]; if (this.trapped) this.trapped[i] = this.trapped[l]; this.rush[i] = this.rush[l]; this.rushD[i] = this.rushD[l]; this.rushK[i] = this.rushK[l]; this.farK[i] = this.farK[l]; this.turned[i] = this.turned[l]; this.atkT[i] = this.atkT[l];
   }
@@ -58,6 +58,7 @@ export class ZombieSwarm {
   swing(i, dt, rng) { if (this.bite[i] > 0 || (this.atkT[i] -= dt) > 0) return; this.atkT[i] = 1.0 + rng() * 0.7; const t = this.type[i]; if (INFECTION.killers.includes(t)) { if (t === 6) { this.bite[i] = 1.4; this.biteK[i] = 5; this.atkT[i] = 1.8; } else { this.bite[i] = 0.9; this.biteK[i] = 4; } } else if (!INFECTION.tearers.includes(t)) { this.bite[i] = 0.75; this.biteK[i] = 1; } }
 
   update(dt, sim) {
+    for (let i = 0; i < this.n; i++) if (this.flash[i] > 0) this.flash[i] = Math.max(0, this.flash[i] - dt * 7);
     const { flow, wall, terrain, hash, army } = sim;
     const X = this.x, Z = this.z, n = this.n;
     hash.rebuild(X, Z, n);

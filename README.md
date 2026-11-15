@@ -353,3 +353,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 
 ## Phase 47 — Guide du défenseur
 - Menu ☰ › « 📖 Guide du défenseur » : les bases (calme / alerte / vague), conseils clés, bestiaire complet (PV, vitesse, dégâts à la muraille, rôle) et raccourcis clavier.
+- Les zombies s'éclairent brièvement quand une flèche, un boulet ou un coup les touche : on voit où frappe la défense.
