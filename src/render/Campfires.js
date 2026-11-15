@@ -9,6 +9,7 @@ import { CASTLE, PLAZA } from '../sim/constants.js';
 import { STREAM, STRUCT } from '../content/medieval.js';
 import { applyNorthFog } from './fog.js';
 import { Rig, villagerParts } from './Troops.js';
+import { quality } from './config.js';
 
 const lam = (c, o = {}) => applyNorthFog(new THREE.MeshLambertMaterial({ color: c, flatShading: true, ...o }));
 const strip = g => { g = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(g.attributes)) if (!['position', 'normal'].includes(k)) g.deleteAttribute(k); return g; };
@@ -61,6 +62,7 @@ export class Campfires {
       if (Math.hypot(x - CASTLE.x, z - CASTLE.z) < 36 || near(x, z, 6) || (Math.abs(x - PLAZA.x) < PLAZA.hw + 3 && Math.abs(z - PLAZA.z) < PLAZA.hd + 6) || Math.abs(x - 100) < 4) continue;
       this.sites.push({ x, z, fuel: rn() * 0.8, lit: rn() < 0.35, claim: 0, free: true, ph: rn() * 6 });
     }
+    if (quality.name === 'low') this.sites = this.sites.filter((_, k) => k % 2 === 0);   // réglage « Faible » : deux fois moins de feux de camp
     for (let k = 0; k < 10; k++) { const x = 14 + k * 19 + (rn() - 0.5) * 6, z = 172 + (rn() - 0.5) * 8; if (Math.abs(x - 100) < 9) continue; this.sites.push({ x, z, fuel: rn(), lit: rn() < 0.5, claim: 0, free: true, ph: rn() * 6 }); }
     // tas de bûches où l'équipe se ravitaille
     this.depots = [[56, 214], [146, 214], [72, 262], [128, 262], [84, 180]];   // jamais dans l'axe de la grande porte
@@ -74,7 +76,7 @@ export class Campfires {
     const pile = []; for (let r = 0; r < 3; r++) for (let k = 0; k < 4 - r; k++) pile.push(strip(new THREE.CylinderGeometry(0.16, 0.16, 1.5, 7).rotateZ(Math.PI / 2).translate(0, 0.16 + r * 0.29, (k - (3 - r) / 2) * 0.33)));
     this.pileM = im(mergeGeometries(pile), lam(0x7a5232), this.depots.length);
     // allumeurs (hors quota) : un modèle de villageois en tunique rouge, des bûches portées sur l'épaule, une torche la nuit
-    const N = 14; this.keepers = Array.from({ length: N }, (_, k) => { const [dx, dz] = this.depots[k % this.depots.length]; return { x: dx + (rn() - 0.5) * 4, z: dz + (rn() - 0.5) * 4, ang: 0, st: 'idle', t: rn() * 2, target: -1, carry: false, ph: rn() * 6, sp: 2.6 + rn() * 0.9 }; });
+    const N = quality.name === 'low' ? 8 : 14; this.keepers = Array.from({ length: N }, (_, k) => { const [dx, dz] = this.depots[k % this.depots.length]; return { x: dx + (rn() - 0.5) * 4, z: dz + (rn() - 0.5) * 4, ang: 0, st: 'idle', t: rn() * 2, target: -1, carry: false, ph: rn() * 6, sp: 2.6 + rn() * 0.9 }; });
     this.rig = new Rig(scene, villagerParts(KEEPER), N); this.rig.blob = 0.8;
     this.bundleM = im(strip(mergeGeometries([0, 1, 2].map(k => strip(new THREE.CylinderGeometry(0.07, 0.07, 0.9, 6).rotateZ(Math.PI / 2).translate(0, k * 0.12, (k % 2) * 0.1))))), lam(0x6b4a2c), N);
     this.torchM = im(strip(new THREE.CylinderGeometry(0.03, 0.04, 0.7, 5)), lam(0x3a2a1c), N);

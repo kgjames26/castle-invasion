@@ -331,3 +331,7 @@ body.danger-vig #vig { animation:vigpulse 1.6s ease-in-out infinite; }
 .sqtag i { position:absolute; left:0; bottom:0; height:2px; background:#7ee07e; } .sqtag.sel { background:rgba(200,150,40,.95); border-color:#ffe08a; }
 body:has(.orderbar.on) #tuto, body:has(.orderbar.on) #quest:not(.mini), body:has(#evpanel.on) #quest:not(.mini), body:has(#evpanel.on) #tuto { display:none !important; }
 body.fpv .upm, body.fpv .sqtag, body.fpv .zbar, body.fpv .edgea, body.fpv #advice, body.fpv #quest, body.fpv #tuto { display:none !important; }
+/* v10.5 : pastille pour enflammer une palissade */
+.palm { position:fixed; z-index:4; transform:translate(-50%,-100%); padding:5px 11px; border-radius:16px; font-size:12px; font-weight:800; color:#fff; background:linear-gradient(180deg,#f08a3a,#b8401a); border:1px solid #7a2a10; box-shadow:0 2px 8px rgba(0,0,0,.4); white-space:nowrap; animation:upbob 1.4s ease-in-out infinite; }
+.palm.lit { background:rgba(40,20,10,.8); border-color:#f08a3a; color:#ffcf8a; animation:none; }
+body.fpv .palm, body.isover .palm { display:none !important; }

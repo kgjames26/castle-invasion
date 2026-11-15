@@ -530,7 +530,7 @@ export class UI {
       b.style.display = b.dataset.show && onScr ? '' : 'none'; b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
       this.edgeArrow(s, p, onScr, vw, vh);
     }
-    this.bigBars(vw, vh); this.upMarks(vw, vh); this.squadTags(vw, vh);
+    this.bigBars(vw, vh); this.upMarks(vw, vh); this.squadTags(vw, vh); this.palMarks(vw, vh);
     const c = this.card; if (!c) return;
     let a;
     if (c.kind === 'struct') { const s = this.sim.build.get(c.id); if (!s) return; a = this.rd.project(s.x, 4, s.z); }

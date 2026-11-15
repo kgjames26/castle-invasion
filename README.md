@@ -409,3 +409,5 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Les allumeurs autonomes ne sortent plus dans la plaine pendant une vague.
 - Flammes redessinées : langues vrillées et renflées (plus de « pyramides »), cœur plus doux ; un zombie en feu brûle des pieds à la tête.
 - La flèche de secteur hors champ ne passe plus par-dessus une fiche ouverte.
+- Pastille « 🔥 Enflammer » au-dessus de chaque palissade pendant l'alerte et la vague : un toucher suffit (compte à rebours pendant qu'elle brûle).
+- Réglage « Faible » : deux fois moins de feux de camp et 8 allumeurs de village, pour les téléphones modestes.

@@ -1,6 +1,7 @@
 // Interface des systèmes v4.0 : fiches (défenses du secteur, village, héros, recherches), pièges, événements, bilan de vague,
 // succès, mini-carte, sauvegardes multiples, tutoriel guidé, modes de jeu (survie, défi du jour, campagne), vue d'un archer.
 import * as THREE from 'three';
+import { palZ } from '../sim/extras.js';
 import { EXTRA, ZOMBIES, SIEGE, STRUCT, STREAM, FRONTIER, RES_INFO } from '../content/medieval.js';
 import { SECTORS, SECTOR_W, SECTOR_NAMES, W, D, CASTLE, WALL_STAND_Z, wallOff } from '../sim/constants.js';
 import { archerPos } from '../sim/army.js';
@@ -205,6 +206,16 @@ export function installExtrasUI(UI) {
     const cam = this.rd.camera, v = this._mmv || (this._mmv = new THREE.Vector3()), pts = [];
     for (const [nx, ny] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { v.set(nx, ny, 0.5).unproject(cam).sub(cam.position); const tt = v.y < -1e-3 ? -cam.position.y / v.y : 400; pts.push([cam.position.x + v.x * Math.min(tt, 400), cam.position.z + v.z * Math.min(tt, 400)]); }
     g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 1.6; g.beginPath(); pts.forEach(([x, z], i) => i ? g.lineTo(x, z) : g.moveTo(x, z)); g.closePath(); g.stroke();
+  };
+  // (v10.5) pastille 🔥 au-dessus de chaque palissade debout pendant l'alerte et la vague : un toucher l'enflamme
+  P.palMarks = function (vw, vh) {
+    const sim = this.sim, X = sim.extras, pool = this.palPool || (this.palPool = []); let k = 0;
+    const on = (sim.phase === 'alert' || sim.phase === 'assault') && this.mode === 'idle' && !this.sheet && !this.card && !document.body.classList.contains('fpv');
+    if (on) for (let s = 0; s < SECTORS; s++) { if (!(X.pal[s] > 0) || X.palWork[s] > 0) continue; const x = s * SECTOR_W + SECTOR_W / 2, p = this.rd.project(x, 5.2, palZ(x)); if (!p.vis || p.x < 24 || p.x > vw - 24 || p.y < 100 || p.y > vh - 110) continue;
+      let e = pool[k]; if (!e) { e = pool[k] = document.createElement('button'); e.className = 'palm'; e.addEventListener('click', ev => { ev.stopPropagation(); this.act('x:palfire:' + e.dataset.s); }); document.getElementById('app').appendChild(e); }
+      const burning = X.palFire[s] > 0, txt = burning ? `🔥 ${Math.ceil(X.palFire[s])} s` : '🔥 Enflammer';
+      e.dataset.s = s; if (e.dataset.t !== txt) { e.dataset.t = txt; e.textContent = txt; } e.disabled = burning; e.classList.toggle('lit', burning); e.style.display = ''; e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; k++; }
+    for (let j = k; j < pool.length; j++) pool[j].style.display = 'none';
   };
   // ——— objectifs (v6.0) : une chaîne de buts concrets avec récompense, affichée quand le tutoriel est fini ———
   const QUESTS = [
