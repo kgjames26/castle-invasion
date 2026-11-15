@@ -120,6 +120,9 @@ export class AudioManager {
   bell() { const c = this.ctx, t = c.currentTime; for (let k = 0; k < 3; k++) for (const [r, v] of [[1, 0.16], [2.76, 0.07], [5.4, 0.04]]) { const o = c.createOscillator(), g = c.createGain(), tt = t + k * 0.9; o.type = 'sine'; o.frequency.value = 520 * r; g.gain.setValueAtTime(v, tt); g.gain.exponentialRampToValueAtTime(0.0005, tt + 2.2); o.connect(g); g.connect(this.sfxBus); o.start(tt); o.stop(tt + 2.3); } }
   groan(vol) { const c = this.ctx, t = c.currentTime, o = c.createOscillator(), f1 = c.createBiquadFilter(), g = c.createGain(), d = 0.9 + Math.random() * 0.9, f0 = 70 + Math.random() * 60; o.type = 'sawtooth'; o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f0 * (0.7 + Math.random() * 0.2), t + d); f1.type = 'bandpass'; f1.frequency.setValueAtTime(500 + Math.random() * 300, t); f1.frequency.linearRampToValueAtTime(350, t + d); f1.Q.value = 4; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.2); g.gain.linearRampToValueAtTime(0, t + d); o.connect(f1); f1.connect(g); g.connect(this.sfxBus); o.start(t); o.stop(t + d + 0.05); }
   shout() { const c = this.ctx, t = c.currentTime; for (const [f, q] of [[700, 6], [1150, 8]]) { const src = c.createBufferSource(), bp = c.createBiquadFilter(), g = c.createGain(); src.buffer = this.noise; bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.25, t + 0.04); g.gain.exponentialRampToValueAtTime(0.001, t + 0.45); src.connect(bp); bp.connect(g); g.connect(this.sfxBus); src.start(t, Math.random()); src.stop(t + 0.5); } this.tone('sawtooth', 160, 120, 0.4, 0.05); }
+  // (v8.0) fanfare de victoire : arpège de cuivres montant (do-mi-sol-do) + cloche ; pièces d'or qui tintent
+  fanfare() { const c = this.ctx; if (!c) return; const t = c.currentTime + 0.05, bus = this.sfxBus; [[262, 0], [330, 0.16], [392, 0.32], [523, 0.5]].forEach(([f, d], k) => this.brass(f, t + d, k === 3 ? 0.9 : 0.22, bus)); setTimeout(() => this.bell && this.bell(), 650); }
+  coins() { for (let k = 0; k < 5; k++) setTimeout(() => this.tone('triangle', 1800 + Math.random() * 900, 1500, 0.08, 0.05), k * 70); }
   // corbeau (v6.0) : deux ou trois croassements rauques (bruit filtré, glissando descendant)
   caw() { if (!this.ctx || this.voices > 24) return; const n = 2 + (Math.random() * 2 | 0); for (let k = 0; k < n; k++) setTimeout(() => { this.noiseBurst(0.16, 0.05, 'bandpass', 1500, 6, 900); this.tone('sawtooth', 520, 360, 0.14, 0.018); }, k * 210); }
   oil() { this.noiseBurst(1.2, 0.22, 'lowpass', 1600, 0.8, 400); }
@@ -135,7 +138,9 @@ export class AudioManager {
       case 'built': this.built(); break;
       case 'repair': if (this.t - this.lastHammer > 0.3) { this.lastHammer = this.t; this.repair(); } break;
       case 'breach': this.wall(true); break;
-      case 'waveEnd': case 'recap': break;
+      case 'waveEnd': this.fanfare(); break;
+      case 'recap': break;
+      case 'earlyBonus': this.coins(); break;
       case 'rally': this.shout(); break;
       case 'oil': this.oil(); break;
       case 'kill7': this.horn(); break;
