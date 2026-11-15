@@ -269,3 +269,6 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Portes** : à hauteur de muraille ; seule la herse levée (et ses rails) dépasse. Correction : les herses n'étaient plus affichées (ligne avalée par un commentaire, le garde-fou détecte désormais ce cas).
 - **Interface** : pause ❚❚/▶ séparée de la vitesse (1× · 2× · 3×), « ⚔ Lancer » explicite, bandeau de vague sans compte à rebours précis (barre de répit), ressources compactes (12.4k), deux messages au plus.
 - **Villageois manquants** : petite pastille discrète (silhouette + nombre) au-dessus des ateliers aux places libres et des chantiers en manque d'ouvriers.
+
+## Phase 32 — Géant zombie humain
+- L'ancien « golem » devient un **homme mort-vivant géant** : anatomie humaine en formes arrondies (proportions réalistes, tête ≈ 1/7), dos voûté, tête tendue en avant qui hoche et se rejette à l'élan, peau livide marbrée d'ecchymoses, côtes à nu, plaies, crâne entaillé, mâchoire décrochée, cheveux épars, haillons de chemise et braies, pieds nus. Il garde sa massue de chêne cerclée de fer.

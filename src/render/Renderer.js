@@ -750,14 +750,14 @@ export class Renderer {
       if (Z.type[i] === 6) {     // golem : géant zombie à la masse — lève la masse au-dessus de la tête puis l'abat (muraille ou troupes)
         const x = Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, z = Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, dx = Z.x[i] - Z.px[i], dz = Z.z[i] - Z.pz[i], mv = dx * dx + dz * dz > 4e-6;
         const zr = this.zRot || (this.zRot = new Float32Array(MAX_Z)); if (mv) zr[i] = Math.atan2(dx, dz);
-        const rot = mv || Z.bite[i] > 0 ? zr[i] : 0, sc = ZOMBIES[6].size * HUMAN_H / 3.0, ph = clock * 2.0 + Z.phase[i], sw = mv ? Math.sin(ph) * 0.4 : 0;
+        const rot = mv || Z.bite[i] > 0 ? zr[i] : 0, sc = ZOMBIES[6].size * HUMAN_H / 2.95, ph = clock * 2.0 + Z.phase[i], sw = mv ? Math.sin(ph) * 0.4 : 0;
         const crush = Z.biteK[i] === 5 && Z.bite[i] > 0, wallHit = Z.state[i] === 1 && !crush, f = crush ? 1 - Z.bite[i] / 1.4 : wallHit ? 1 - Math.max(0, Z.slam[i]) / 3.5 : 0;
         const swing = crush || wallHit, up = f < 0.7 ? -3.0 * (f / 0.7) : -3.0 + 3.6 * Math.min(1, (f - 0.7) / 0.15);   // élan lent, frappe brutale
         const armR = swing ? up : -0.25 + sw * 0.5 + 0.06 * Math.sin(clock * 1.3 + i), armL = swing ? -0.5 - 0.4 * Math.sin(f * 3.14) : -0.15 - sw * 0.6;
         const lean = swing ? (f < 0.7 ? -0.12 * f : 0.25) : 0.05 * Math.sin(ph * 2);
         d.position.set(x, Math.abs(Math.sin(ph)) * 0.1 * (mv ? 1 : 0), z); d.rotation.set(lean, rot, mv ? 0.05 * Math.sin(ph) : 0); d.scale.setScalar(sc); d.updateMatrix();
         const hurt = Z.hp[i] / ZOMBIES[6].hp < 0.5 ? 0.75 : 1; tc.setRGB(hurt, hurt * 0.95, hurt * 0.92); if (Z.slow[i] > 0) tc.setRGB(0.7, 0.9, 1.3);
-        G.push(d.matrix, tc, [0, sw, -sw, armL, armR]); continue;
+        G.push(d.matrix, tc, [0, sw, -sw, armL, armR, swing ? (f < 0.7 ? -0.25 : 0.35) : 0.12 + 0.12 * Math.sin(clock * 0.9 + i)]); continue;   // tête : hoche, se rejette en arrière à l'élan
       }
       const t = Z.type[i], Zt = ZOMBIES[t], pool = ZVAR[t], vi = pool[((Z.phase[i] * 1000) | 0) % pool.length], im = this.zv[vi], k = cnt[vi]++;
       const x = Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, z = Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, dx = Z.x[i] - Z.px[i], dz = Z.z[i] - Z.pz[i];

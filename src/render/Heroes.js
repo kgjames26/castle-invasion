@@ -242,51 +242,106 @@ export function wizardModel() {
   return { g, top: 20 };
 }
 
-// ——— GOLEM ZOMBIE : corps de blocs de pierre liés par de la chair verdâtre, yeux braisés, poings énormes ———
-//  regarde vers +z, ≈ 2,6 m à l'échelle 1 ; pièces : corps, jambes, bras gauche et droit (coup de poing sismique à deux mains)
-// GOLEM (v2.8) : géant zombie fait de chairs recousues, dans le style des zombies du jeu — voûté, peau gris-vert marbrée, plaies,
-// côtes à nu, coutures, haillons de chemise et de pantalon, ceinture et chaînes de forçat, petite tête enfoncée, mâchoire pendante.
-// Bras gauche ballant, griffu ; main droite serrée sur une ÉNORME MASSE (fût de chêne cerclé de fer, clous) qui frappe la muraille et écrase les troupes.
+// ——— GÉANT ZOMBIE (v3.2, ex-« golem ») : un HOMME mort-vivant démesuré, anatomie humaine et non plus blocs de pierre.
+//  Formes arrondies (sphères, troncs de cône), proportions humaines (tête ≈ 1/7 de la taille), posture voûtée, tête en avant,
+//  peau livide gris-vert marbrée d'ecchymoses, plaies ouvertes, côtes à nu, haillons de chemise et de braies, pieds nus, cheveux épars,
+//  mâchoire décrochée. Il traîne une massue de chêne cerclée de fer dans la main droite. ≈ 3 unités de haut à l'échelle 1, regarde vers +z.
+const _gc = new THREE.Color(), _gq = new THREE.Quaternion(), _ge = new THREE.Euler(), _gv = new THREE.Vector3(), _gs = new THREE.Vector3(), _gm = new THREE.Matrix4();
+function sh(geo, color, x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {   // forme quelconque, colorée, placée
+  const g = geo.toNonIndexed(); g.deleteAttribute('uv'); g.deleteAttribute('normal');
+  g.applyMatrix4(_gm.compose(_gv.set(x, y, z), _gq.setFromEuler(_ge.set(rx, ry, rz)), _gs.set(sx, sy, sz)));
+  _gc.set(color); const n = g.attributes.position.count, col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i += 3) { const f = 0.94 + ((i * 7919) % 100) / 100 * 0.12; for (let k = 0; k < 3; k++) { col[(i + k) * 3] = _gc.r * f; col[(i + k) * 3 + 1] = _gc.g * f; col[(i + k) * 3 + 2] = _gc.b * f; } }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g;
+}
+const ball = (r, c, x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0) => sh(new THREE.SphereGeometry(r, 9, 7), c, x, y, z, rx, ry, rz, sx, sy, sz);
+// segment de membre entre deux points (tronc de cône r0 → r1), légèrement aplati
+function limb(r0, r1, c, a, b, flat = 1) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], L = Math.hypot(dx, dy, dz), g = new THREE.CylinderGeometry(r1, r0, L, 8).toNonIndexed();
+  g.deleteAttribute('uv'); g.deleteAttribute('normal'); g.scale(1, 1, flat);
+  _gq.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx / L, dy / L, dz / L)); g.applyMatrix4(_gm.compose(_gv.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2), _gq, _gs.set(1, 1, 1)));
+  _gc.set(c); const n = g.attributes.position.count, col = new Float32Array(n * 3); for (let i = 0; i < n; i++) { col[i * 3] = _gc.r; col[i * 3 + 1] = _gc.g; col[i * 3 + 2] = _gc.b; }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g;
+}
 export function golemParts() {
-  const SK = 0x7f8c6c, SKD = 0x65705a, SKL = 0x98a383, ROT = 0x5d6650, WOUND = 0x6e1c18, BLOOD = 0x8a1e1a, BONE = 0xd9d1b8, CLOTH = 0x4d4034, CLOTHD = 0x3a3027, BELT = 0x2a2018, IRONC = 0x4e5258, SEAM = 0x24201c, EYE = 0xd7f08c, HAIR = 0x2d2a24;
+  const SK = 0x8d977c, SKD = 0x6f7a63, SKL = 0xa3ab92, BRU = 0x6a6577, VEIN = 0x4f5a4c, WOUND = 0x6a1712, BLOOD = 0x86201a, BONE = 0xddd4ba, TEETH = 0xcfc39c,
+    SHIRT = 0x8a7c62, SHIRTD = 0x6b5f4a, PANTS = 0x4a4038, PANTSD = 0x3a322b, ROPE = 0x7a6646, HAIR = 0x2c2924, EYE = 0xe3f59a, NAIL = 0x3a352c, IRONC = 0x4e5258;
+  // ——— tronc (fixe) : bassin, ventre, cage thoracique, épaules, cou ; voûté vers l'avant ———
   const body = [
-    // bassin, ventre, poitrail énorme penché en avant, bosse de muscles sur les épaules
-    bx(1.15, 0.5, 0.8, CLOTH, 0, 1.12, 0), bx(1.2, 0.18, 0.84, BELT, 0, 1.32, 0), bx(0.2, 0.2, 0.06, IRONC, 0.1, 1.32, 0.43),
-    bx(1.25, 0.75, 0.95, SK, 0, 1.72, 0.12, 0.22), bx(1.0, 0.45, 0.3, SKL, 0, 1.6, 0.55, 0.3),                               // ventre
-    bx(1.7, 0.85, 1.1, SK, 0, 2.3, 0.28, 0.38), bx(1.95, 0.5, 1.0, SKD, 0, 2.7, 0.22, 0.35), bx(0.9, 0.45, 0.6, ROT, 0, 2.95, -0.05, 0.45),   // poitrail, épaules, bosse
-    // côtes à nu (flanc gauche), plaies, coutures
-    ...[0, 1, 2, 3].map(k => bx(0.42, 0.06, 0.08, BONE, -0.55, 2.0 + k * 0.14, 0.72 + k * 0.05, 0.4, 0, -0.15)), bx(0.5, 0.6, 0.06, WOUND, -0.55, 2.2, 0.68, 0.4),
-    bx(0.32, 0.22, 0.05, WOUND, 0.45, 1.75, 0.62, 0.3), bx(0.2, 0.3, 0.05, BLOOD, 0.4, 2.45, 0.78, 0.38),
-    bx(0.05, 0.9, 0.05, SEAM, 0.12, 2.15, 0.82, 0.38), ...[0, 1, 2, 3, 4].map(k => bx(0.18, 0.03, 0.05, SEAM, 0.12, 1.8 + k * 0.17, 0.72 + k * 0.06, 0.38)),
-    bx(0.03, 0.03, 0.9, SEAM, 0.6, 2.6, 0.25, 0, 0.6),
-    // haillons de chemise
-    bx(0.55, 0.5, 0.06, CLOTHD, 0.55, 2.2, 0.8, 0.38, 0, 0.1), bx(0.3, 0.35, 0.06, CLOTH, 0.68, 1.85, 0.68, 0.3, 0, -0.2), bx(1.6, 0.6, 0.06, CLOTHD, 0, 2.3, -0.32, 0.25),
-    // tête petite, enfoncée et en avant : crâne, cheveux épars, yeux pâles, mâchoire pendante, dents
-    bx(0.52, 0.5, 0.5, SK, 0, 2.95, 0.72, 0.25), bx(0.54, 0.12, 0.4, HAIR, 0.05, 3.2, 0.62, 0.2), bx(0.2, 0.08, 0.2, HAIR, -0.18, 3.22, 0.78),
-    bx(0.12, 0.07, 0.05, EYE, -0.12, 3.0, 0.98), bx(0.12, 0.07, 0.05, EYE, 0.12, 3.0, 0.98), bx(0.4, 0.06, 0.06, SKD, 0, 3.07, 0.98),
-    bx(0.42, 0.16, 0.36, SKD, 0, 2.7, 0.82, 0.45), bx(0.34, 0.05, 0.05, BONE, 0, 2.78, 0.98), bx(0.3, 0.04, 0.04, BONE, 0, 2.66, 0.98), bx(0.18, 0.12, 0.04, BLOOD, 0.05, 2.6, 0.98),
-    bx(0.07, 0.07, 0.07, SEAM, 0.24, 3.05, 0.8), bx(0.3, 0.04, 0.04, SEAM, 0.18, 3.12, 0.92, 0, 0, 0.5),
+    ball(0.33, PANTS, 0, 1.52, 0, 1.15, 0.75, 0.85),                                                     // bassin dans les braies
+    sh(new THREE.CylinderGeometry(0.36, 0.34, 0.12, 10), ROPE, 0, 1.68, 0.01),                            // corde en guise de ceinture
+    sh(new THREE.BoxGeometry(0.06, 0.28, 0.04), ROPE, 0.16, 1.55, 0.3, 0.1, 0, 0.15),
+    limb(0.31, 0.29, SK, [0, 1.62, 0.02], [0, 1.98, 0.08]),                                              // ventre
+    ball(0.25, SKL, 0, 1.82, 0.13, 1.05, 0.9, 0.6),                                                      // ventre flasque
+    ball(0.44, SK, 0, 2.22, 0.12, 1.1, 0.95, 0.75, 0.28),                                                // cage thoracique, penchée
+    ball(0.2, SKD, -0.17, 2.3, 0.36, 1, 0.75, 0.5, 0.3), ball(0.2, SKD, 0.17, 2.3, 0.36, 1, 0.75, 0.5, 0.3),   // pectoraux
+    ball(0.3, SKD, 0, 2.5, -0.06, 1.75, 0.6, 0.85, 0.35),                                                // trapèzes et dos rond
+    ball(0.2, SK, -0.44, 2.43, 0.04), ball(0.2, SK, 0.44, 2.43, 0.04),                                 // deltoïdes
+    limb(0.12, 0.1, SKD, [0, 2.52, 0.12], [0, 2.7, 0.3]),                                                 // cou tendu vers l'avant
+    // côtes à nu dans une plaie du flanc gauche, plaie au ventre, ecchymoses, coutures
+    ball(0.17, WOUND, -0.27, 2.12, 0.38, 1, 1.15, 0.35, 0.3),
+    ...[0, 1, 2, 3].map(k => sh(new THREE.CylinderGeometry(0.018, 0.018, 0.24, 5), BONE, -0.27, 2.0 + k * 0.075, 0.43 + k * 0.012, 0, 0, Math.PI / 2 - 0.15)),
+    ball(0.09, WOUND, 0.12, 1.78, 0.27, 1.4, 0.8, 0.4), ball(0.05, BLOOD, 0.14, 1.7, 0.28, 1, 2.2, 0.5),
+    ball(0.12, BRU, 0.3, 2.28, 0.35, 1, 1.2, 0.4, 0.3), ball(0.1, BRU, -0.1, 1.9, 0.27, 1.2, 1, 0.4),
+    ...[0, 1, 2, 3, 4].map(k => sh(new THREE.BoxGeometry(0.11, 0.015, 0.02), VEIN, 0.05, 1.95 + k * 0.07, 0.4 + k * 0.012, 0.3)),
+    sh(new THREE.BoxGeometry(0.015, 0.36, 0.02), VEIN, 0.05, 2.09, 0.42, 0.3),
+    // haillons de chemise : pans déchirés qui pendent dans le dos et sur une épaule
+    sh(new THREE.BoxGeometry(0.75, 0.62, 0.03), SHIRT, 0, 2.18, -0.33, 0.32), sh(new THREE.BoxGeometry(0.28, 0.42, 0.03), SHIRTD, 0.38, 2.24, 0.3, 0.3, 0, -0.25),
+    sh(new THREE.BoxGeometry(0.22, 0.3, 0.03), SHIRT, -0.4, 2.0, -0.18, 0.2, 0.6, 0.15), sh(new THREE.BoxGeometry(0.5, 0.12, 0.42), SHIRTD, 0.33, 2.52, 0.03, 0, 0, -0.35),
   ];
-  // jambes : pantalon en lambeaux, tibias nus, pieds énormes ; chaîne de forçat à la cheville gauche
-  const leg = left => [bx(0.6, 0.55, 0.62, CLOTH, 0, -0.25, 0), bx(0.62, 0.12, 0.64, CLOTHD, 0, -0.55, 0.02, 0.1), bx(0.48, 0.4, 0.5, SK, 0, -0.75, 0.04), bx(0.66, 0.2, 0.9, SKD, 0, -0.98, 0.16), bx(0.6, 0.06, 0.1, BONE, 0, -0.98, 0.62),
-    ...(left ? [bx(0.56, 0.1, 0.56, IRONC, 0, -0.85, 0.04), bx(0.1, 0.1, 0.4, IRONC, 0.32, -0.9, -0.1, 0.5)] : [bx(0.2, 0.25, 0.05, WOUND, 0.1, -0.7, 0.3)])];
-  // bras gauche ballant, très long, main griffue ; menottes et bout de chaîne
-  const armL = [bx(0.7, 0.62, 0.7, SKD, 0, -0.1, 0), bx(0.5, 0.8, 0.5, SK, 0, -0.7, 0.05), bx(0.46, 0.75, 0.46, ROT, 0, -1.4, 0.12), bx(0.5, 0.12, 0.5, IRONC, 0, -1.65, 0.12), bx(0.62, 0.45, 0.55, SK, 0, -2.0, 0.18),
-    ...[-0.2, 0, 0.2].map(x => bx(0.1, 0.32, 0.1, BONE, x, -2.32, 0.38, 0.4)), ...[0, 1, 2, 3].map(k => bx(0.12, 0.12, 0.12, IRONC, 0.12, -1.75 - k * 0.15, 0.2 + k * 0.03)), bx(0.3, 0.3, 0.05, WOUND, 0, -0.8, 0.31)];
-  // bras droit : la MASSE — manche de chêne serré dans le poing, tête en fût cerclé de fer hérissée de clous (pointe vers l'avant, bras baissé)
-  const MW = 0x5a3c22, MWD = 0x46301c, mace = [], A = -1.05, dy = -0.5, dz = 0.866, e2y = 0.866, e2z = 0.5;   // axe du manche : vers l'avant et vers le bas
-  mace.push(bx(0.17, 1.6, 0.17, MW, 0, -2.35, 0.89, A));                                                         // manche, du poing vers l'avant
-  const hx = 0, hy = -2.92, hz = 1.88;                                                                           // tête de la masse
-  mace.push(bx(0.74, 1.0, 0.74, MWD, hx, hy, hz, A));
-  for (const t of [-0.36, 0.36]) mace.push(bx(0.82, 0.12, 0.82, IRONC, hx, hy + dy * t, hz + dz * t, A));        // cercles de fer
-  for (let k = 0; k < 12; k++) { const a = k * 2.0944 + (k >> 2) * 0.5, t = ((k >> 2) - 1) * 0.3, r = 0.42;          // clous en couronnes
-    mace.push(bx(0.15, 0.15, 0.15, 0xa8acb2, hx + Math.cos(a) * r, hy + dy * t + Math.sin(a) * r * e2y, hz + dz * t + Math.sin(a) * r * e2z, 0.78, 0.78, 0)); }
-  mace.push(bx(0.25, 0.25, 0.25, BLOOD, hx + 0.22, hy + dy * 0.45 + 0.1, hz + dz * 0.45, A));                    // sang séché
-  const armR = [bx(0.75, 0.66, 0.75, SKD, 0, -0.1, 0), bx(0.55, 0.85, 0.55, SK, 0, -0.72, 0.05), bx(0.52, 0.8, 0.52, SK, 0, -1.4, 0.12), bx(0.05, 0.6, 0.05, SEAM, 0.28, -1.0, 0.1), bx(0.66, 0.5, 0.62, SKD, 0, -1.95, 0.2), ...mace];
+  // ——— tête (pivot à la nuque, hoche) : crâne humain, arcades, nez, oreilles, cheveux épars, crâne entaillé, mâchoire décrochée ———
+  const head = [
+    ball(0.2, SK, 0, 0.17, 0.08, 0.95, 1.12, 1.05),                                                      // crâne
+    ball(0.14, SKD, 0, 0.06, 0.16, 1.0, 0.75, 0.9),                                                      // pommettes creuses
+    sh(new THREE.BoxGeometry(0.3, 0.05, 0.08), SKD, 0, 0.2, 0.26),                                       // arcades
+    ball(0.05, EYE, -0.075, 0.15, 0.255, 1, 0.7, 0.5), ball(0.05, EYE, 0.075, 0.15, 0.255, 1, 0.7, 0.5),     // yeux voilés
+    ball(0.028, 0x1c1a14, -0.075, 0.15, 0.28), ball(0.028, 0x1c1a14, 0.075, 0.15, 0.28),
+    sh(new THREE.ConeGeometry(0.035, 0.11, 4), SKD, 0, 0.09, 0.29, -1.2),                                // nez
+    ball(0.05, SKD, -0.19, 0.13, 0.06, 0.4, 1, 0.8), ball(0.05, SKD, 0.19, 0.13, 0.06, 0.4, 1, 0.8),        // oreilles
+    ball(0.1, WOUND, 0.08, 0.31, 0.08, 1.2, 0.4, 1), ball(0.05, BONE, 0.08, 0.335, 0.1, 1, 0.4, 1),         // crâne entaillé
+    ...[[-0.1, 0.3, -0.04], [-0.14, 0.24, -0.1], [0.12, 0.27, -0.08], [-0.04, 0.33, -0.06], [0.02, 0.2, -0.16]].map(([x, y, z]) => ball(0.07, HAIR, x, y, z, 1, 0.5, 1)),   // cheveux par touffes
+    sh(new THREE.BoxGeometry(0.02, 0.22, 0.02), HAIR, -0.15, 0.08, -0.06, 0.2), sh(new THREE.BoxGeometry(0.02, 0.18, 0.02), HAIR, 0.14, 0.06, -0.08, -0.2),
+    // bouche béante : mâchoire inférieure pendante, dents, sang
+    ball(0.1, 0x2a0d0a, 0, -0.01, 0.2, 1.1, 0.9, 0.7),
+    sh(new THREE.BoxGeometry(0.16, 0.025, 0.04), TEETH, 0, 0.035, 0.27),
+    ball(0.12, SKD, 0, -0.1, 0.17, 1.0, 0.55, 0.85, 0.35), sh(new THREE.BoxGeometry(0.13, 0.025, 0.04), TEETH, 0, -0.05, 0.26, 0.35),
+    ball(0.04, BLOOD, 0.04, -0.15, 0.24, 1, 1.8, 0.6),
+  ];
+  // ——— jambes (pivot à la hanche) : cuisse dans les braies, genou, tibia nu, pied nu, orteils ; corde à la cheville gauche ———
+  const leg = left => [
+    limb(0.23, 0.176, PANTS, [0, 0, 0], [0, -0.66, 0.05]), ball(0.13, PANTSD, 0, -0.66, 0.06, 1, 0.9, 1),
+    sh(new THREE.CylinderGeometry(0.14, 0.12, 0.16, 8), PANTSD, 0, -0.78, 0.06, 0, 0, left ? 0.15 : -0.1),   // jambe de braie effilochée
+    limb(0.149, 0.101, SK, [0, -0.7, 0.06], [0, -1.32, 0.0]), ball(0.075, SKD, 0, -0.95, 0.12, 0.8, 1.6, 0.6),    // tibia, mollet
+    sh(new THREE.BoxGeometry(0.16, 0.09, 0.34), SKD, 0, -1.38, 0.1), ...[-0.05, 0, 0.05].map(x => ball(0.035, SK, x, -1.4, 0.28)),
+    ...(left ? [sh(new THREE.TorusGeometry(0.08, 0.02, 4, 10), ROPE, 0, -1.24, 0.01, Math.PI / 2)] : [ball(0.06, WOUND, 0.06, -1.0, 0.13, 0.6, 1.4, 0.5)]),
+  ];
+  // ——— bras gauche (pivot à l'épaule) : long, ballant, coude légèrement plié, main ouverte aux doigts crochus ———
+  const armL = [
+    limb(0.149, 0.115, SK, [0, 0, 0], [0, -0.6, 0.06]), ball(0.085, SKD, 0, -0.6, 0.06),
+    limb(0.115, 0.081, SK, [0, -0.6, 0.06], [0, -1.12, 0.22]), ball(0.07, BRU, 0.02, -0.82, 0.15, 0.8, 1.5, 0.7),
+    ball(0.075, SKD, 0, -1.2, 0.25, 0.9, 1.2, 0.55),
+    ...[-0.045, -0.015, 0.015, 0.045].map(x => limb(0.018, 0.013, SK, [x, -1.26, 0.27], [x, -1.4, 0.34])),
+    ...[-0.045, -0.015, 0.015, 0.045].map(x => ball(0.015, NAIL, x, -1.41, 0.35)),
+    limb(0.02, 0.015, SK, [0.06, -1.2, 0.26], [0.08, -1.3, 0.33]), sh(new THREE.BoxGeometry(0.05, 0.25, 0.03), SHIRTD, 0.05, -0.2, 0.1),
+  ];
+  // ——— bras droit : poing serré sur une massue de chêne cerclée de fer, pointe vers l'avant et vers le bas ———
+  const club = [], A = -1.05, hx = 0, hy = -1.64, hz = 1.22, dy = -0.5, dz = 0.866;   // axe du manche : (0, −0,5, 0,866) depuis le poing
+  club.push(sh(new THREE.CylinderGeometry(0.07, 0.06, 1.15, 7), 0x5a3c22, 0, -1.36, 0.75, A));            // manche
+  club.push(sh(new THREE.CylinderGeometry(0.3, 0.22, 0.8, 9), 0x4a311c, hx, hy, hz, A));                  // tête de la massue, évasée
+  for (const t of [-0.25, 0.25]) club.push(sh(new THREE.CylinderGeometry(0.31, 0.29, 0.07, 9), IRONC, hx, hy + dy * t, hz + dz * t, A));
+  for (let k = 0; k < 9; k++) { const a = k * 2.094 + (k / 3 | 0) * 0.7, t = ((k / 3 | 0) - 1) * 0.22; club.push(ball(0.05, 0xa8acb2, hx + Math.cos(a) * 0.3, hy + dy * t + Math.sin(a) * 0.3 * 0.866, hz + dz * t + Math.sin(a) * 0.3 * 0.5, 1, 1, 1)); }   // clous
+  club.push(ball(0.09, BLOOD, hx + 0.18, hy + 0.12, hz + 0.25, 1, 0.6, 1));
+  const armR = [
+    limb(0.155, 0.121, SK, [0, 0, 0], [0, -0.6, 0.06]), ball(0.09, SKD, 0, -0.6, 0.06),
+    limb(0.121, 0.088, SK, [0, -0.6, 0.06], [0, -1.08, 0.3]), ball(0.04, WOUND, 0.06, -0.75, 0.14, 0.6, 2, 0.5),
+    ball(0.095, SKD, 0, -1.16, 0.4, 1, 1, 0.9),                                                            // poing serré
+    ...[-0.04, 0, 0.04].map(x => ball(0.028, SK, x, -1.2, 0.48)), ...club,
+  ];
   return [
     part('body', [0, 0, 0], body),
-    part('legL', [-0.38, 1.05, 0], leg(true), 'rot', true), part('legR', [0.38, 1.05, 0], leg(false), 'rot', true),
-    part('armL', [-1.08, 2.62, 0.28], armL, 'rot', true), part('armR', [1.08, 2.62, 0.28], armR, 'rot', true),
+    part('legL', [-0.19, 1.45, 0], leg(true), 'rot', true), part('legR', [0.19, 1.45, 0], leg(false), 'rot', true),
+    part('armL', [-0.47, 2.4, 0.05], armL, 'rot', true), part('armR', [0.47, 2.4, 0.05], armR, 'rot', true),
+    part('head', [0, 2.68, 0.3], head, 'rot', true),
   ];
 }
 export function golemRig(scene) { return new Rig(scene, golemParts(), 32); }
