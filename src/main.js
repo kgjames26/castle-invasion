@@ -32,6 +32,7 @@ function applyFormat() { if (!/[?&]q=/.test(location.search)) rd.setQuality(FORM
 applyFormat();
 const cam = new CameraController(rd.camera, rd.renderer.domElement, (x, z) => ui.onMapTap(x, z));
 const audio = new AudioManager();   // sons synthétisés (Web Audio) : lit l'état, ne le modifie pas
+if (rd.xv && rd.xv.field) rd.xv.field.onCaw = () => audio.caw();   // corbeaux qui s'envolent (v6.0)
 addEventListener('pointerdown', () => audio.unlock()); addEventListener('keydown', () => audio.unlock());
 const hooks = {
   rd, cam, audio, resumed,

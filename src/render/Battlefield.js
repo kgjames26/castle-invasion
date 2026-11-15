@@ -53,7 +53,7 @@ export class Battlefield {
     this.t += dt; const Z = this.sim.zombies, d = this.d; this.acc += dt;
     const check = this.acc > 0.25; if (check) this.acc = 0;
     this.crows.forEach((c, i) => {
-      if (check && c.fly <= 0) { for (let k = 0; k < Z.n; k += 3) if (Math.abs(Z.x[k] - c.x) < 9 && Math.abs(Z.z[k] - c.z) < 9) { c.fly = 6 + (i % 4); break; } }
+      if (check && c.fly <= 0) { for (let k = 0; k < Z.n; k += 3) if (Math.abs(Z.x[k] - c.x) < 9 && Math.abs(Z.z[k] - c.z) < 9) { c.fly = 6 + (i % 4); if (this.onCaw && (!this.lastCaw || this.t - this.lastCaw > 4)) { this.lastCaw = this.t; this.onCaw(); } break; } }
       if (c.fly > 0) { c.fly -= dt; c.a += dt * 1.2; const r = 6 + (i % 3) * 2; c.x = c.hx + Math.cos(c.a) * r; c.z = c.hz + Math.sin(c.a) * r; c.y += (9 + (i % 5) - c.y) * Math.min(1, dt * 1.5); }
       else { c.x += (c.hx - c.x) * Math.min(1, dt * 0.8); c.z += (c.hz - c.z) * Math.min(1, dt * 0.8); c.y += (0.15 - c.y) * Math.min(1, dt * 1.2); }
       const flap = c.y > 0.4 ? Math.sin(this.t * 14 + c.ph) * 0.6 : 0.05 * Math.sin(this.t * 2 + c.ph);

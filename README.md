@@ -366,3 +366,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Vague repoussée : gerbes d'étincelles dorées au-dessus du château.
 - Robustesse : la boucle de jeu est replanifiée avant chaque image (une erreur ponctuelle ne fige plus la partie) ; correctif d'un index de monture des cavaliers qui pouvait déborder après une vague.
 - Forge redessinée : murs de pierre claire, colombages, toit d'ardoise à deux pans, fenêtre rougeoyante.
+- Les corbeaux croassent en s'envolant (son synthétisé).
