@@ -150,10 +150,10 @@ export class ExtrasView {
     const put = (list, m) => { if (!list.length) return; const mm = new THREE.Mesh(mergeGeometries(list), m); mm.castShadow = true; mm.receiveShadow = true; scene.add(mm); };
     put(stones, lam(0x7d7a72)); put(reeds, applyWindFog(new THREE.MeshLambertMaterial({ color: 0x6f8a3a, flatShading: true }), 0.5)); put(pads, lam(0x4f7f3a));
     // pont-levis au sud (là où la douve est traversée), chaînes vers la porte
-    const S = ring[Math.round(N * 0.25)], bw = S.ro - S.ri + 2.6, bz = z0 + (S.ri + S.ro) / 2;
+    const S = ring[Math.round(N * 0.75)], bw = S.ro - S.ri + 2.6, bz = z0 - (S.ri + S.ro) / 2;   // (v9.9) château retourné : pont-levis au nord, face au village
     const bridge = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.32, bw), lam(0x6b4a2c)); bridge.position.set(x0, 0.36, bz); bridge.castShadow = bridge.receiveShadow = true; scene.add(bridge);
     for (let k = -4; k <= 4; k++) { const pl = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, bw), lam(0x4a3220)); pl.position.set(x0 + k * 0.5, 0.53, bz); scene.add(pl); }
-    for (const sx of [-1, 1]) { const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 6, 4), lam(0x3a3c42)); ch.position.set(x0 + sx * 2, 3, z0 + S.ri + 0.8); ch.rotation.x = 0.55; scene.add(ch); for (const e of [-1, 1]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 1.2, 6), lam(0x5a3a24)); post.position.set(x0 + sx * 2.4, 0.4, bz + e * bw / 2); scene.add(post); } }
+    for (const sx of [-1, 1]) { const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 6, 4), lam(0x3a3c42)); ch.position.set(x0 + sx * 2, 3, z0 - S.ri - 0.8); ch.rotation.x = -0.55; scene.add(ch); for (const e of [-1, 1]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 1.2, 6), lam(0x5a3a24)); post.position.set(x0 + sx * 2.4, 0.4, bz + e * bw / 2); scene.add(post); } }
     // (v8.0) canards qui glissent sur les douves : corps + tête + bec, petit sillage
     this.moatPath = (u, f) => { const i = ((Math.floor(u * N) % N) + N) % N, R = ring[i], R2 = ring[i + 1], k = u * N - Math.floor(u * N), ri = R.ri + (R2.ri - R.ri) * k, ro = R.ro + (R2.ro - R.ro) * k, th = R.th + (R2.th - R.th) * k; return at(th, ri + (ro - ri) * f); };
     { const body = new THREE.SphereGeometry(0.28, 8, 6).scale(1, 0.6, 1.5).translate(0, 0.12, 0), head = new THREE.SphereGeometry(0.15, 7, 5).translate(0, 0.38, 0.32), beak = new THREE.ConeGeometry(0.06, 0.16, 5).rotateX(Math.PI / 2).translate(0, 0.36, 0.5), tail = new THREE.ConeGeometry(0.1, 0.2, 4).rotateX(-Math.PI / 2 - 0.5).translate(0, 0.2, -0.42);
@@ -247,7 +247,7 @@ export class ExtrasView {
     if (this.smokeT > 0.25) { this.smokeT = 0;
       for (const s of sim.build.items) { if (s.state !== 'built') continue; const h = s.type === 'house' ? (s.level >= 2 ? [8, 10, 11.5][s.level - 2] : 0) : s.type === 'forge' ? 7 : s.type === 'publicworks' ? 7.2 : 0; if (!h || Math.random() > 0.5) continue;
         this.smoke.add({ x: s.x + (s.type === 'house' ? -1.8 : 2), y: h, z: s.z - 0.8, vx: 0.3 + Math.random() * 0.2, vy: 0.9 + Math.random() * 0.4, vz: -0.1, t: 0, life: 5, a: 0.28, r: 0.78, gr: 0.78, b: 0.8, s: 1.2, grow: 3 }); }
-      if (Math.random() < 0.6) this.smoke.add({ x: CASTLE.x + 13.5, y: 13, z: CASTLE.z + 1, vx: 0.3, vy: 1, vz: 0, t: 0, life: 6, a: 0.25, r: 0.75, gr: 0.75, b: 0.78, s: 1.6, grow: 3 }); }
+      if (Math.random() < 0.6) this.smoke.add({ x: CASTLE.x - 13.5, y: 13, z: CASTLE.z - 1, vx: 0.3, vy: 1, vz: 0, t: 0, life: 6, a: 0.25, r: 0.75, gr: 0.75, b: 0.78, s: 1.6, grow: 3 }); }
     // sang sous les zombies tombés, poussière d'explosion
     for (const b of sim.blasts) { if (b.seenX) continue; b.seenX = 1; if (b.kind === 'boom') for (let k = 0; k < 14; k++) this.dust.add({ x: b.x, y: 1, z: b.z, vx: (Math.random() - 0.5) * 8, vy: 2 + Math.random() * 4, vz: (Math.random() - 0.5) * 8, g: 6, t: 0, life: 1.4, a: 0.5, r: 0.55, gr: 0.6, b: 0.25, s: 2, grow: 2 }); }
     for (const cp of this.rd.corpses || []) if (!cp.bl) { cp.bl = 1; this.decals.add(cp.x, cp.z, 'blood', 1.4 + Math.random() * 1.2, 26); }

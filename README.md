@@ -398,3 +398,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Zombies en feu : ils continuent de brûler quelques secondes (flammes sur le corps, fumée, braises), aussi après l'huile, les boules de feu ou les feux au sol.
 - Douves : jonction de l'anneau d'eau corrigée, sortie du ruisseau fondue dans la douve ; eau réaliste (trois couches de vaguelettes qui dérivent, reflet du ciel selon l'angle, éclats du soleil, écume aux berges, courant sur le ruisseau).
 - Unités : 4 fois plus de polygones (subdivision de Loop sur chevaliers et chevaux, appliquée à chaque image de l'animation ; pièces des autres unités subdivisées et chanfreinées) ; textures de surface (tissu tissé, cuir grainé, acier martelé, salissures, ombre vers les pieds, liseré de lumière) ; armure des chevaliers nettoyée et capes visibles des deux côtés.
+- Château retourné (demi-tour) : la grande porte et le pont-levis regardent désormais le village et la muraille, au bout du chemin.

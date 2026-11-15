@@ -362,7 +362,7 @@ export class Renderer {
   }
   buildCastle() {
     // château fort procédural (v3.0), dans le style de la muraille ; le château du kit n'est plus utilisé
-    const g = buildCastleFort(CASTLE.x, CASTLE.z); this.scene.add(g); this.keepBoxes = g; this.castleFort = g; this.castleSlit = g.children.map(m => m.material).find(m => m.isMeshBasicMaterial && m.color.getHex() === 0x18120e);
+    const g = buildCastleFort(CASTLE.x, CASTLE.z); g.rotation.y = Math.PI; g.position.set(2 * CASTLE.x, 0, 2 * CASTLE.z); this.scene.add(g);   // (v9.9) demi-tour : la porte regarde le village this.keepBoxes = g; this.castleFort = g; this.castleSlit = g.children.map(m => m.material).find(m => m.isMeshBasicMaterial && m.color.getHex() === 0x18120e);
   }
   buildEconomy() {
     this.struct = new StructureView(this.scene, this.sim, this.camera);   // toutes les structures (chantiers, bâtiments, fantôme)
