@@ -579,6 +579,7 @@ export class UI {
     if (E.famine) out.push(['🌾', 'Famine : la nourriture est épuisée — envoie des fermiers', 'sheet:folk']);
     if (sim.phase === 'alert' || sim.phase === 'assault') for (const s of sim.targets || []) if (sim.army.archers[s].n === 0) { out.push(['🏹', `Aucun archer sur ${SECTOR_NAMES[s]} (visé)`, 'secgo:' + s]); break; }
     for (let s = 0; s < SECTORS; s++) if (w.breaches(s)) { out.push(['💥', `Brèche à ${SECTOR_NAMES[s]} : les réparateurs doivent la refermer`, 'secgo:' + s]); break; }
+    if (sim.army.reserve.archer >= 5 && !sim.army.autoArchers) out.push(['🏹', `${sim.army.reserve.archer} archers en réserve : place-les sur la muraille`, 'secgo:' + (sim.targets?.[0] ?? 2)]);
     if (E.popRoom() <= 0) out.push(['🏠', 'Population au maximum : bâtis ou améliore une maison', 'goto:house']);
     const idle = E.idleCount(); if (idle > 0) out.push(['👥', `${idle} villageois sans travail`, 'sheet:folk']);
     for (const r of ['wood', 'stone', 'iron', 'gold', 'food']) if (E.res[r] >= E.cap(r) - 0.5) { out.push(['📦', `Stock de ${name(r)} plein : la récolte est perdue`, r === 'food' ? 'goto:granary' : 'goto:warehouse']); break; }
