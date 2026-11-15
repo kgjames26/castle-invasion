@@ -19,7 +19,7 @@ export class CameraController {
   // distance par défaut selon le format : portrait ≈ 2,5 secteurs (≈105 m) visibles, paysage ≈ le front entier (≈205 m)
   fit(w, h) {
     this.aspect = w / h; const portrait = innerHeight > innerWidth, widthM = portrait ? 105 : 205;
-    this.baseDist = widthM / (2 * Math.tan(THREE.MathUtils.degToRad(this.cam.fov / 2)) * this.aspect);
+    const tf = 2 * Math.tan(THREE.MathUtils.degToRad(this.cam.fov / 2)); this.baseDist = Math.max(widthM / (tf * this.aspect), 120 / tf);   // (v8.0) écrans très larges (téléphone couché) : profondeur visible minimale
     this.update(0);
   }
   // pivoter la vue de 180° (vers le sud / vers le nord)
