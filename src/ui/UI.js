@@ -384,7 +384,8 @@ export class UI {
     else if (e.type === 'mage') this.toast(e.what === 'summoned' ? '🔮 Le magicien est arrivé ! Il agit seul : soins, réparations, sorts.' : '💀 Le magicien est tombé — il reviendra dans 30 s', e.what === 'summoned' ? 'ok' : 'danger');
     else if (e.type === 'autoFormed') { const p = []; if (e.formed) p.push(`${e.formed} nouvelle${e.formed > 1 ? 's' : ''} troupe${e.formed > 1 ? 's' : ''}`); if (e.merged) p.push(`${e.merged} fusion${e.merged > 1 ? 's' : ''} en peloton ou escadron`); if (e.filled) p.push(`+${e.filled} renforts`); this.toast(`⚜ Après la vague : ${p.join(' · ')}`, 'ok'); }
     else if (e.type === 'earlyBonus') this.toast(`⚡ Vague lancée en avance : +${e.gold} ${RES_INFO.gold.ico}`, 'ok');
-    else if (e.type === 'waveEnd') { if (sim.army.squads.length) { this.invite = true; setTimeout(() => this.renderOrder(), 50); } const r = e.reward || {}; this.toast(`🏆 Vague ${e.wave} repoussée · ${Object.keys(r).map(k => `+${r[k]} ${RES_INFO[k].ico}`).join(' ')}`, 'ok'); this.buzz([30, 30, 30]); }
+    else if (e.type === 'waveEnd' && this.rd.fx && !this.celebrated?.[e.wave]) { (this.celebrated ||= {})[e.wave] = 1; const fx = this.rd.fx; for (let k = 0; k < 5; k++) setTimeout(() => { fx.burst(CASTLE.x + (Math.random() - 0.5) * 30, 22 + Math.random() * 6, CASTLE.z + (Math.random() - 0.5) * 16, 26, 6, 5, 1.6, 0.35, 3, [1, 0.82, 0.35], true); fx.ring && fx.ring(CASTLE.x, CASTLE.z, 30, 0.8, [1, 0.85, 0.4]); }, k * 260); }
+    if (e.type === 'waveEnd') { if (sim.army.squads.length) { this.invite = true; setTimeout(() => this.renderOrder(), 50); } const r = e.reward || {}; this.toast(`🏆 Vague ${e.wave} repoussée · ${Object.keys(r).map(k => `+${r[k]} ${RES_INFO[k].ico}`).join(' ')}`, 'ok'); this.buzz([30, 30, 30]); }
   }
   // ——— mise à jour de l'affichage ———
   refresh(force) {
