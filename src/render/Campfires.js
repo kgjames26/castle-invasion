@@ -63,7 +63,7 @@ export class Campfires {
     }
     for (let k = 0; k < 10; k++) { const x = 14 + k * 19 + (rn() - 0.5) * 6, z = 172 + (rn() - 0.5) * 8; if (Math.abs(x - 100) < 9) continue; this.sites.push({ x, z, fuel: rn(), lit: rn() < 0.5, claim: 0, free: true, ph: rn() * 6 }); }
     // tas de bûches où l'équipe se ravitaille
-    this.depots = [[56, 214], [146, 214], [72, 262], [128, 262], [100, 176]];
+    this.depots = [[56, 214], [146, 214], [72, 262], [128, 262], [84, 180]];   // jamais dans l'axe de la grande porte
     // modèles : foyer (cercle de pierres + bûches en tipi) et tas de bûches
     const stones = [], logs = [];
     for (let k = 0; k < 9; k++) { const a = k / 9 * Math.PI * 2; stones.push(strip(new THREE.DodecahedronGeometry(0.22, 0).scale(1, 0.6, 1).translate(Math.cos(a) * 0.75, 0.1, Math.sin(a) * 0.75))); }

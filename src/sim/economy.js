@@ -21,7 +21,7 @@ export class Economy {
     this.deposit = {}; for (const t of GATHER) if (TASKS[t].deposit) this.deposit[t] = TASKS[t].deposit;
     this.extra = {}; for (const r in START_DEPOSITS) this.extra[r] = START_DEPOSITS[r].map(d => ({ ...d, max: d.amount, start: true }));
     for (const r of ['stone', 'iron', 'gold']) this.extra[r] ||= []; this.prospect = null;
-    this.villagers = []; this.nextId = 1;
+    this.villagers = []; this.crew = []; this.nextId = 1;
     for (let i = 0; i < START.villagers; i++) this.addVillager();
     this.rate = {}; this.acc = {}; for (const t of GATHER) { this.rate[t] = 0; this.acc[t] = 0; }
     this.rateTimer = 0; this.famine = false; this.lost = 0; this.claims = new Int8Array(SEGS);
@@ -31,6 +31,7 @@ export class Economy {
   cap(r) { return ECON.baseStore + ECON.storePerLevel * this.level[r === 'food' ? 'granary' : 'warehouse']; }
   // Population PARTAGÉE : villageois + toutes les unités militaires (réserve, escouades, garnisons, file d'entraînement)
   popCap() { return ECON.popBase + Math.floor(ECON.popPerHouse * this.houses) + (this.level.church ? PRIEST.pop * this.level.church : 0); }   // église : des familles s'installent
+  get drawn() { return this.crew.length ? this.villagers.concat(this.crew) : this.villagers; }   // villageois + allumeurs autonomes (pour l'affichage)
   population() { return this.villagers.length + this.sim.army.popUsed() + this.sim.siege.popUsed() + (this.sim.mages ? this.sim.mages.popUsed() : 0); }
   popRoom() { return this.popCap() - this.population(); }
   speed() { return ECON.villagerSpeed * (1 + UPGRADES.boots.per * this.up.boots); }
@@ -84,7 +85,7 @@ export class Economy {
   builderCount() { let n = 0; for (const v of this.villagers) if (v.job) n++; return n; }
   // urgence d'une tâche : 0 = rien ne manque ; une ressource rare (stock faible) ou une muraille blessée rend la tâche urgente
   urgency(t) {
-    if (t === 'fire') { const N = this.sim.night; if (!N) return 0.05; if (N.nightSoon()) return 0.85; const P = N.piles(); return N.building(this.sim) && P.ready + P.lit < P.n ? 0.6 : 0.05; }
+    if (t === 'fire') { const N = this.sim.night; if (!N) return 0.05; return 0.05; }   /* (v10.1) les allumeurs autonomes s'en chargent : plus besoin d'y envoyer des villageois */
     if (t === 'clear') { const F = this.sim.frontier; return F && F.active().length ? 0.5 : 0.02; }
     if (t === 'repair') { const W = this.sim.wall; for (let i = 0; i < W.hp.length; i++) if (W.hp[i] < W.segMax(i)) return 0.9; return 0.1; }
     const r = TASKS[t].res; return 1 - Math.min(1, this.res[r] / this.cap(r));
@@ -209,6 +210,9 @@ export class Economy {
     this.updateProspect(dt); this.updateLoans(dt);
     this.claims.fill(0); for (const v of this.villagers) if (v.task === 'repair' && v.seg >= 0) this.claims[v.seg]++;
     for (let i = 0; i < this.villagers.length; i++) this.updateVillager(this.villagers[i], i, dt);
+    // (v10.1) allumeurs autonomes : une équipe HORS QUOTA, qu'on ne commande pas, entretient braseros et bûchers sans puiser dans le stock de bois
+    if (this.sim.night) { while (this.crew.length < FIRE_KEEP.crew) { const k = this.crew.length; this.crew.push({ id: -1 - k, free: true, task: 'fire', state: 'fireIdle', fire: -1, x: 80 + k * 6, z: 190 + (k % 3) * 2, px: 80 + k * 6, pz: 190 + (k % 3) * 2, carry: 0, carryRes: null, timer: 0, seg: -1, leaving: false, jx: 0, jz: 0, job: 0, bx: 0, bz: 0, sx: null, sz: 0, si: -1 }); }
+      for (let i = 0; i < this.crew.length; i++) { const v = this.crew[i]; v.px = v.x; v.pz = v.z; this.updateKeeper(v, 40 + i * 3, dt); } }
     this.rateTimer += dt;
     if (this.rateTimer >= 1) { for (const t of GATHER) { this.rate[t] = this.rate[t] * 0.92 + 0.08 * this.acc[t] / this.rateTimer; this.acc[t] = 0; } this.rateTimer = 0; }
   }
@@ -274,7 +278,7 @@ export class Economy {
   // ——— équipe des feux : braseros (ravitaillement), bûchers de la plaine (bois apporté entre deux vagues, allumés avant la nuit) ———
   updateKeeper(v, i, dt) {
     const N = this.sim.night, sim = this.sim, K = 1 + UPGRADES.firecraft.per * (this.up.firecraft || 0), home = () => N.route(v.x, v.z, 100 + ((i * 13) % 40 - 20), 172);
-    const giveBack = () => { if (v.carry > 0) { this.add('wood', v.carry); v.carry = 0; v.carryRes = null; } };
+    const giveBack = () => { if (v.carry > 0) { if (!v.free) this.add('wood', v.carry); v.carry = 0; v.carryRes = null; } };
     const walk = () => { const p = v.path && v.path[0]; if (!p) return true; if (this.moveTo(v, p[0], p[1], dt)) v.path.shift(); return false; };
     if (v.leaving) { if (v.fire >= 0) { const F0 = N.fires[v.fire]; if (F0 && F0.claim > 0) F0.claim--; v.fire = -1; } giveBack(); this.release(v); return; }
     if (v.state === 'returning') { if (walk()) { giveBack(); v.state = 'fireIdle'; } return; }
@@ -292,8 +296,8 @@ export class Economy {
     if (v.state === 'toWood') {                                      // au tas de bois des feux (cour, près des portes) : on charge un fagot (rondins sur l'épaule)
       if (!walk()) return;
       const need = FIRE_KEEP.pile * Math.pow(0.85, this.up.firecraft || 0), amt = Math.min(Math.max(FIRE_KEEP.trip, Math.round(this.carryCap() * 0.6)), Math.max(1, Math.ceil(need * (1 - F.pile))));
-      if (this.res.wood < amt) { drop(); v.state = 'fireIdle'; return; }
-      this.res.wood -= amt; v.carry = amt; v.carryRes = 'wood'; v.path = N.route(v.x, v.z, F.x + ((i % 3) - 1) * 1.1, F.z + 1.4); v.state = 'toFire'; return;
+      if (!v.free && this.res.wood < amt) { drop(); v.state = 'fireIdle'; return; }
+      if (!v.free) this.res.wood -= amt; v.carry = amt; v.carryRes = 'wood'; v.path = N.route(v.x, v.z, F.x + ((i % 3) - 1) * 1.1, F.z + 1.4); v.state = 'toFire'; return;
     }
     if (v.state === 'toFire') { if (walk()) { v.state = v.fireMode === 'stack' ? 'stacking' : v.fireMode === 'light' ? 'lighting' : 'stoking'; v.timer = 0; } return; }
     if (v.state === 'stacking') {
@@ -307,9 +311,9 @@ export class Economy {
       drop(); return;
     }
     if (v.state === 'stoking') {
-      if (this.res.wood < FIRE_KEEP.wood) { drop(); return; }     // plus de bois : on attendra
+      if (!v.free && this.res.wood < FIRE_KEEP.wood) { drop(); return; }     // plus de bois : on attendra
       v.timer += dt * K; if (v.timer < FIRE_KEEP.stoke) return;
-      this.res.wood -= FIRE_KEEP.wood; F.fuel = 1; if (!F.lit) { F.lit = true; sim.events.push({ type: 'fireLit', zone: F.zone }); sim.blast('fireLit', F.x, F.z, 1.5); }
+      if (!v.free) this.res.wood -= FIRE_KEEP.wood; F.fuel = 1; if (!F.lit) { F.lit = true; sim.events.push({ type: 'fireLit', zone: F.zone }); sim.blast('fireLit', F.x, F.z, 1.5); }
       drop(); return;
     }
     drop();
@@ -352,7 +356,7 @@ export class Economy {
       this.smith.atk.archer += this.up.archery || 0; this.smith.atk.knight += this.up.blades || 0; this.up.weapons = this.up.armor = this.up.archery = this.up.blades = 0;
     }
     Object.assign(this.deposit, st.deposit); if (st.extra) this.extra = { stone: [], iron: [], gold: [], ...st.extra }; this.loans = (st.loans || []).map(l => ({ ...l })); this.prospect = st.prospect || null; this.repairPriority = st.repairPriority ?? -1; this.lost = st.lost || 0; this.famine = !!st.famine;
-    this.villagers = []; this.nextId = 1;
+    this.villagers = []; this.crew = []; this.nextId = 1;
     for (const o of st.villagers) { const v = this.addVillager(o.x, o.z); Object.assign(v, { task: o.task, state: o.state, carry: o.carry, carryRes: o.carryRes, timer: o.timer, seg: o.seg, leaving: o.leaving, job: o.job || 0, bx: o.bx || 0, bz: o.bz || 0, home: o.home || null }); }
     this.syncTasks();
   }

@@ -49,8 +49,9 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
   for (const f of N.fires) if (f.zone === 'plain') f.pile = 1;
   N.t = 0.79; run(sim, 70); const lit = N.fires.filter(f => f.zone === 'plain' && f.lit).length; ok(lit >= 4, `la nuit approche : bûchers allumés (${lit}/8)`);
   ok(N.rangeMult(2) > 0.85 || N.light() > 0.9, 'la plaine éclairée aide les tireurs');
-  const fast = camp(3); run(fast, 100); const sumB = fast.night.fires.reduce((a, f) => a + (f.pile || 0), 0); ok(sumB > sumA * 1.3, `savoir-faire niv. 3 : bûchers plus vite (${sumB.toFixed(2)} contre ${sumA.toFixed(2)})`);
-  const st = JSON.parse(JSON.stringify(serialize(fast))), s2 = new Simulation(); restore(s2, st); ok(Math.abs(s2.night.fires.reduce((a, f) => a + f.pile, 0) - sumB) < 0.05, 'sauvegarde : bûchers');
+  // (v10.1) avec les allumeurs autonomes, tout est empilé en 100 s : on compare plus tôt
+  const pile = s2 => s2.night.fires.reduce((a, f) => a + (f.pile || 0), 0), slow = camp(0), fast = camp(3); run(slow, 45); run(fast, 45); ok(pile(fast) > pile(slow) * 1.1, `savoir-faire niv. 3 : bûchers plus vite (${pile(fast).toFixed(2)} contre ${pile(slow).toFixed(2)})`);
+  const st = JSON.parse(JSON.stringify(serialize(fast))), s2 = new Simulation(); restore(s2, st); ok(Math.abs(s2.night.fires.reduce((a, f) => a + f.pile, 0) - pile(fast)) < 0.05, 'sauvegarde : bûchers');
 }
 { // flèches enflammées
   const sim = new Simulation(); rich(sim); built(sim, 'forge', 66, 236, 1); ok(!sim.buyUpgrade('fireArrows'), 'flèches enflammées : forge niveau 2 requise');
@@ -61,5 +62,12 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
 { // la partie sauvegarde la forêt
   const sim = new Simulation(); const p = sim.frontier.patches.find(q => sim.frontier.canClear(q)); sim.clearPatch(p.id); p.wood = 42;
   const s2 = new Simulation(); restore(s2, JSON.parse(JSON.stringify(serialize(sim)))); ok(s2.frontier.patches[p.id].state === 'clearing' && s2.frontier.patches[p.id].wood === 42, 'sauvegarde : parcelles');
+}
+// v10.1 : allumeurs autonomes — hors quota, sans bois, ils préparent et allument les feux tout seuls
+{ const sim = new Simulation(), E = sim.eco, pop0 = E.population(); E.res.wood = 0;
+  for (let i = 0; i < 20 * 120; i++) sim.tick();
+  ok(E.crew.length === 10 && E.population() === pop0 && E.assign.fire === 0, `10 allumeurs hors quota (population ${E.population()})`);
+  ok(sim.night.piles().ready >= 4, `bûchers préparés sans bois du stock (${sim.night.piles().ready} prêts)`);
+  sim.night.t = 0.8; for (let i = 0; i < 20 * 70; i++) sim.tick(); const lit = sim.night.fires.filter(f => f.lit).length; ok(lit >= 12, `à la nuit, les feux sont allumés tout seuls (${lit}/${sim.night.fires.length})`);
 }
 process.exit(fails ? 1 : 0);

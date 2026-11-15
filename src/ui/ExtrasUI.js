@@ -247,7 +247,7 @@ export function installExtrasUI(UI) {
   ];
   P.tutoPoint = function () {
     document.querySelectorAll('.tutohi').forEach(e => e.classList.remove('tutohi'));
-    if (this.tuto == null) return; const list = TUTO_HI[this.tuto]; if (!list) return;
+    if (this.tuto == null || !$('#tuto')?.classList.contains('on')) return; const list = TUTO_HI[this.tuto]; if (!list) return;   // rien à montrer quand le tutoriel est caché (vague)
     for (const sel of list) { const e = [...document.querySelectorAll(sel)].find(x => x.offsetParent !== null && !x.disabled); if (e) { e.classList.add('tutohi'); return; } }
   };
   P.startTuto = function () {

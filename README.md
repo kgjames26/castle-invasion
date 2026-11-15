@@ -399,3 +399,7 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Douves : jonction de l'anneau d'eau corrigée, sortie du ruisseau fondue dans la douve ; eau réaliste (trois couches de vaguelettes qui dérivent, reflet du ciel selon l'angle, éclats du soleil, écume aux berges, courant sur le ruisseau).
 - Unités : 4 fois plus de polygones (subdivision de Loop sur chevaliers et chevaux, appliquée à chaque image de l'animation ; pièces des autres unités subdivisées et chanfreinées) ; textures de surface (tissu tissé, cuir grainé, acier martelé, salissures, ombre vers les pieds, liseré de lumière) ; armure des chevaliers nettoyée et capes visibles des deux côtés.
 - Château retourné (demi-tour) : la grande porte et le pont-levis regardent désormais le village et la muraille, au bout du chemin.
+
+## Phase 51 — Allumeurs autonomes
+- L'équipe des feux devient automatique : 10 allumeurs hors quota, qu'on ne commande pas, empilent les bûchers de la plaine le jour, les allument à l'approche de la nuit et ravitaillent les braseros de la muraille, de la cour et du village — sans puiser dans le stock de bois. Affecter des villageois à l'équipe des feux reste possible, en renfort.
+- Tutoriel : le halo du bouton disparaît quand le tutoriel est masqué (vague) ; le tas de bûches n'est plus dans l'axe de la grande porte.

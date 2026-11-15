@@ -140,7 +140,7 @@ export class Renderer {
     const put = (x, z, s, sz = s) => { if (n >= cap) return; const o = n * 16; m[o] = s; m[o + 1] = 0; m[o + 2] = 0; m[o + 3] = 0; m[o + 4] = 0; m[o + 5] = 1; m[o + 6] = 0; m[o + 7] = 0; m[o + 8] = 0; m[o + 9] = 0; m[o + 10] = sz; m[o + 11] = 0; m[o + 12] = x; m[o + 13] = 0.07; m[o + 14] = z; m[o + 15] = 1; n++; };
     const putY = (x, y, z, s) => { if (n >= cap) return; put(x, z, s); m[(n - 1) * 16 + 13] = y; };
     const Z = this.sim.zombies; for (let i = 0; i < Z.n; i++) put(Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, 1.5 * ZOMBIES[Z.type[i]].size);
-    for (const v of this.sim.eco.villagers) put(v.px + (v.x - v.px) * alpha, v.pz + (v.z - v.pz) * alpha, 1.3);
+    for (const v of this.sim.eco.drawn) put(v.px + (v.x - v.px) * alpha, v.pz + (v.z - v.pz) * alpha, 1.3);
     for (const w of this.sim.army.walkers) put(w.px + (w.x - w.px) * alpha, w.pz + (w.z - w.pz) * alpha, 1.4);
     // (v3.6) une ombre de contact par combattant (positions laissées par les Rigs), par archer et par cadavre
     for (let i = 0; i < BLOBS.length; i += 4) { const sc = Math.min(5, Math.max(0.9, BLOBS[i + 3] * 0.75)); putY(BLOBS[i], BLOBS[i + 1] + 0.06, BLOBS[i + 2], sc); } BLOBS.length = 0;
@@ -415,7 +415,7 @@ export class Renderer {
     }
     if (this.vv) return this.updateVillagersVAT(alpha);
     // ——— villageois (repli) : un modèle par métier, animé selon l'état (marche, outil qui frappe, charge portée) ———
-    const R = this.vrigs, vs = E.villagers, t = this.clock, SC = 1.4, FREQ = { wood: 7, stone: 6, iron: 6, gold: 6, food: 3.6, build: 8, repair: 8 }; let nc = 0; for (const r in this.loads) this.lcnt[r] = 0;
+    const R = this.vrigs, vs = E.drawn, t = this.clock, SC = 1.4, FREQ = { wood: 7, stone: 6, iron: 6, gold: 6, food: 3.6, build: 8, repair: 8 }; let nc = 0; for (const r in this.loads) this.lcnt[r] = 0;
     for (const k in R) R[k].begin();
     const lerpAng = (a, b, k) => { const dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
     for (let i = 0; i < vs.length; i++) {
@@ -768,7 +768,7 @@ export class Renderer {
   }
   updateVillagersVAT(alpha) {
     this.syncVillageUpgrades();
-    const E = this.sim.eco, d = this.dummy, vv = this.vv, vg = vv.vg, t = this.clock, vs = E.villagers, SC = 0.0105 * HUMAN_H / 1.99;
+    const E = this.sim.eco, d = this.dummy, vv = this.vv, vg = vv.vg, t = this.clock, vs = E.drawn, SC = 0.0105 * HUMAN_H / 1.99;
     const SPEED = { walk: 1.3, carry: 1.2, shoulder: 1.2, idle: 0.35 }, WORK = { wood: 0.9, stone: 0.8, iron: 0.8, gold: 0.8, food: 0.55, build: 1.0, repair: 1.0 };
     for (const k in vv.meshes) { vv.cnt[k] = 0; } for (const r in this.loads) this.lcnt[r] = 0;
     const lerpAng = (a, b, k) => { const dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
