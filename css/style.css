@@ -329,3 +329,4 @@ body.danger-vig #vig { animation:vigpulse 1.6s ease-in-out infinite; }
 @media (max-height:500px) { #minimap canvas { width:54px; height:86px; } #quest:not(.mini), #tuto { width:min(60vw, 420px); } #advice { bottom:calc(env(safe-area-inset-bottom) + 76px); } }
 .sqtag { position:fixed; z-index:3; transform:translate(-50%,-100%); padding:1px 6px 3px; border-radius:7px; font-size:11px; font-weight:800; color:#fff; background:rgba(40,80,160,.88); border:1px solid #9ec0ff; box-shadow:0 1px 4px rgba(0,0,0,.35); overflow:hidden; white-space:nowrap; }
 .sqtag i { position:absolute; left:0; bottom:0; height:2px; background:#7ee07e; } .sqtag.sel { background:rgba(200,150,40,.95); border-color:#ffe08a; }
+body:has(.orderbar.on) #tuto, body:has(.orderbar.on) #quest:not(.mini), body:has(#evpanel.on) #quest:not(.mini), body:has(#evpanel.on) #tuto { display:none !important; }
