@@ -2,12 +2,12 @@
 // succès, mini-carte, sauvegardes multiples, tutoriel guidé, modes de jeu (survie, défi du jour, campagne), vue d'un archer.
 import * as THREE from 'three';
 import { EXTRA, ZOMBIES, SIEGE, STRUCT, STREAM, FRONTIER } from '../content/medieval.js';
-import { SECTORS, SECTOR_W, W, D, CASTLE, WALL_STAND_Z, wallOff } from '../sim/constants.js';
+import { SECTORS, SECTOR_W, SECTOR_NAMES, W, D, CASTLE, WALL_STAND_Z, wallOff } from '../sim/constants.js';
 import { archerPos } from '../sim/army.js';
 import { serialize, restore } from '../sim/save.js';
 
 const $ = s => document.querySelector(s);
-const SECT = ['Ouest', 'Centre-ouest', 'Centre', 'Centre-est', 'Est'];
+const SECT = SECTOR_NAMES;   // mêmes noms que partout ailleurs (Porte gauche… Porte droite)
 const WEATHER = { clear: ['☀', 'Temps clair'], rain: ['🌧', 'Pluie : portée des tireurs −15 %'], fog: ['🌫', 'Brouillard : hordes invisibles plus longtemps, portée −10 %'], snow: ['❄', 'Neige : tout le monde ralentit'] };
 export const ACH = [
   ['w1', '🛡', 'Première nuit', 'Repousser la première vague', s => s.wave >= 2],
@@ -128,7 +128,7 @@ export function installExtrasUI(UI) {
     let el = $('#recap'); if (!el) { el = document.createElement('div'); el.id = 'recap'; document.getElementById('app').appendChild(el); el.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) this.act(b.dataset.a); }); }
     const g = Object.entries(r.gain).filter(([, n]) => n).map(([k, n]) => `${this.cost({ [k]: 0 }).replace(/0/, '')} ${n > 0 ? '+' : ''}${n}`).join(' · ');
     el.innerHTML = `<div class="rc"><b>🏆 Vague ${r.wave} repoussée</b><div class="rg"><div><big>${r.kills}</big><small>zombies abattus</small></div><div><big>${r.lost}</big><small>combattants perdus</small></div><div><big>${r.breaches}</big><small>brèches</small></div><div><big>${Math.floor(r.time / 60)}:${String(r.time % 60).padStart(2, '0')}</big><small>durée</small></div></div>
-      ${r.best >= 0 ? `<div class="hint small">⭐ Secteur le plus meurtrier : <b>${SECT[r.best]}</b></div>` : ''}<div class="hint small">Bilan des stocks : ${g || '—'}</div><button class="btn" data-a="x:recapx">Continuer</button></div>`;
+      ${r.best >= 0 && r.kills > 0 ? `<div class="hint small">⭐ Secteur le plus meurtrier : <b>${SECT[r.best]}</b></div>` : ''}<div class="hint small">Bilan des stocks : ${g || '—'}</div><button class="btn" data-a="x:recapx">Continuer</button></div>`;
     el.classList.add('on'); clearTimeout(this.recapT); this.recapT = setTimeout(() => el.classList.remove('on'), 9000);
     if (r.breaches === 0 && r.wave >= 5) this.unlock('nobreach');
   };
