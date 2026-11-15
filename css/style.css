@@ -296,3 +296,10 @@ body.fpv #fpvx { display:block; } body.fpv #top, body.fpv #dock, body.fpv #badge
 .launch small { font-size:10px; font-weight:800; opacity:.95; margin-left:2px; } .launch small .ri { width:1.2em; height:1.2em; vertical-align:-0.25em; }
 @media (max-width:480px) { .launch .lt { display:none; } }
 .wave .wt { overflow:hidden; } .phase { overflow:hidden; text-overflow:ellipsis; } .cbar { min-width:36px; }
+/* v5.0 : conseiller */
+#advice { position:fixed; right:10px; bottom:calc(env(safe-area-inset-bottom) + 96px); z-index:6; width:44px; height:44px; border-radius:50%; background:var(--paper); border:1px solid var(--line); box-shadow:var(--sh); font-size:20px; display:flex; align-items:center; justify-content:center; }
+#advice em { position:absolute; top:-4px; right:-4px; font-style:normal; font-size:10px; font-weight:800; background:#d9a63a; color:#2a1e0a; border-radius:9px; padding:1px 5px; }
+#advice-pop { position:fixed; right:10px; bottom:calc(env(safe-area-inset-bottom) + 148px); z-index:8; width:min(88vw, 340px); padding:10px; border-radius:12px; background:var(--paper); border:1px solid var(--line); box-shadow:var(--sh); color:var(--ink); display:none; }
+#advice-pop.on { display:block; } #advice-pop .adv { display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:8px 6px; border:0; border-top:1px dashed var(--line); background:none; color:var(--ink); font-size:13px; }
+#advice-pop .adv span { font-size:18px; } #advice-pop .adv b { margin-left:auto; color:var(--ink2); }
+@media (max-width:700px) { body:has(#tuto.on) #advice { bottom:calc(env(safe-area-inset-bottom) + 170px); } }

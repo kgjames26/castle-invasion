@@ -330,6 +330,7 @@ export class UI {
         if (x === 'fmt') H.setGfx(y); else H.setGfx(null, x === 'shadows' ? { shadows: !q.shadows } : x === 'glow' ? { glow: !q.glow } : x === 'grass' ? { grass: q.grass >= 0.7 ? 0.35 : 1 } : x === 'post' ? { post: !q.post } : { pixelRatio: q.pixelRatio >= 1.5 ? 1 : 2 });
         this.html.sheet = ''; break; }
       case 'pref': { const p = this.prefs; if (x === 'difficulty') p.difficulty = y; else p[x] = !p[x]; this.applyPrefs(); this.html.sheet = ''; break; }
+      case 'secgo': this.cam.focusOn(+x * 40 + 20, 150); this.openCard({ kind: 'sector', id: +x }); break;
       case 'goto': { const t = sim.build.of(x); if (t) { this.cam.focusOn(t.x, t.z); this.openCard({ kind: 'struct', id: t.id }); } else this.startPlace(x); break; }
     }
   }
@@ -500,7 +501,7 @@ export class UI {
   }
   tick(dt) {
     this.watchSquads();
-    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.watchRepairs(); this.refresh(false); this.drawMinimap(); this.renderEvent(false); this.tickTuto(); if ((this.achT = (this.achT || 0) + 1) % 10 === 0) this.checkAch(); }
+    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.watchRepairs(); this.refresh(false); this.drawMinimap(); this.renderEvent(false); this.tickTuto(); this.renderAdvice(); if ((this.achT = (this.achT || 0) + 1) % 10 === 0) this.checkAch(); }
     const vw = innerWidth, vh = innerHeight;
     for (let s = 0; s < SECTORS; s++) {
       const p = this.rd.project(s * 40 + 20, 8, 143 + wallOff(s * 40 + 20)), b = this.badges[s];
@@ -540,6 +541,32 @@ export class UI {
   resInfo(r) {
     const E = this.sim.eco, task = Object.keys(TASKS).find(k => TASKS[k].res === r), n = task ? E.assign[task] : 0, g = Math.round(this.incomeOf(r));
     this.toast(`${RES_INFO[r].ico} ${RES_INFO[r].name} : ${fmt(E.res[r])} / ${fmt(E.cap(r))} · ≈ +${g}/min${task ? ` · ${n} ${TASKS[task].name.toLowerCase()}` : ''}${r === 'food' ? ` · consommation ≈ −${Math.round((E.villagers.length * ECON.upkeep.villager + E.military() * ECON.upkeep.unit) * 60)}/min` : ''}${E.res[r] >= E.cap(r) - 0.5 ? ' · entrepôt PLEIN' : ''}`, 'info');
+  }
+  // ——— conseiller (v5.0) : les 3 actions les plus utiles du moment, sous une ampoule au-dessus du dock ———
+  advice() {
+    const sim = this.sim, E = sim.eco, w = sim.wall, out = [], name = r => RES_INFO[r].name.toLowerCase();
+    if (E.famine) out.push(['🌾', 'Famine : la nourriture est épuisée — envoie des fermiers', 'sheet:folk']);
+    if (sim.phase === 'alert' || sim.phase === 'assault') for (const s of sim.targets || []) if (sim.army.archers[s].n === 0) { out.push(['🏹', `Aucun archer sur ${SECTOR_NAMES[s]} (visé)`, 'secgo:' + s]); break; }
+    for (let s = 0; s < SECTORS; s++) if (w.breaches(s)) { out.push(['💥', `Brèche à ${SECTOR_NAMES[s]} : les réparateurs doivent la refermer`, 'secgo:' + s]); break; }
+    if (E.popRoom() <= 0) out.push(['🏠', 'Population au maximum : bâtis ou améliore une maison', 'goto:house']);
+    const idle = E.idleCount(); if (idle > 0) out.push(['👥', `${idle} villageois sans travail`, 'sheet:folk']);
+    for (const r of ['wood', 'stone', 'iron', 'gold', 'food']) if (E.res[r] >= E.cap(r) - 0.5) { out.push(['📦', `Stock de ${name(r)} plein : la récolte est perdue`, r === 'food' ? 'goto:granary' : 'goto:warehouse']); break; }
+    { let worst = -1, wr = 1; for (let s = 0; s < SECTORS; s++) { const r = w.sectorHp(s) / w.sectorMax(s); if (r < wr) { wr = r; worst = s; } } if (worst >= 0 && wr < 0.7 && !E.assign.repair) out.push(['🔧', `${SECTOR_NAMES[worst]} à ${Math.round(wr * 100)} % : affecte des réparateurs`, 'sheet:folk']); }
+    if (sim.wave >= 2 && !sim.build.items.some(b => b.type === 'range')) out.push(['🎯', 'Pas encore de champ de tir : les archers défendent la muraille', 'goto:range']);
+    return out.slice(0, 3);
+  }
+  renderAdvice() {
+    let b = $('#advice'); const list = this.advice();
+    if (!b) { b = el('button'); b.id = 'advice'; b.title = 'Conseils'; document.getElementById('app').appendChild(b); b.addEventListener('click', () => this.toggleAdvice()); }
+    b.style.display = list.length && !this.sheet && this.mode === 'idle' ? '' : 'none'; const k = list.length + ':' + list.map(x => x[0]).join(''); if (b.dataset.k !== k) { b.dataset.k = k; b.innerHTML = `💡<em>${list.length}</em>`; }
+    const p = $('#advice-pop'); if (p && p.classList.contains('on')) this.toggleAdvice(true);
+  }
+  toggleAdvice(force) {
+    let p = $('#advice-pop'); const on = force ?? !(p && p.classList.contains('on'));
+    if (!p) { p = el('div'); p.id = 'advice-pop'; document.getElementById('app').appendChild(p); p.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { this.toggleAdvice(false); this.act(b.dataset.a); this.refresh(true); } }); }
+    const list = this.advice(); p.classList.toggle('on', on && list.length > 0); if (!on) return;
+    const h = `<div class="ptitle">💡 Conseils</div>` + list.map(([i, t, a]) => `<button class="adv" data-a="${a}"><span>${i}</span>${t}<b>›</b></button>`).join('');
+    if (p.dataset.h !== h) { p.dataset.h = h; p.innerHTML = h; }
   }
   // flèche au bord de l'écran vers un secteur attaqué / percé / visé qu'on ne voit pas (clic → la caméra y va)
   edgeArrow(s, p, onScr, vw, vh) {

@@ -145,7 +145,7 @@ export class Simulation {
     for (let i = this.fallers.length - 1; i >= 0; i--) if ((this.fallers[i].t += dt) > 3.5) this.fallers.splice(i, 1);
   }
   // (v5.0) lancer la vague en avance rapporte de l'or, proportionnel au temps de préparation sacrifié (jamais à la première vague)
-  earlyBonus() { if (this.phase !== 'prep' || this.wave < 2) return 0; return Math.round(Math.max(0, this.timer) / TIMING.prep * (8 + 4 * this.wave)); }
+  earlyBonus() { if (this.phase !== 'prep' || this.wave < 2) return 0; return Math.round(Math.min(1, Math.max(0, this.timer) / TIMING.prep) * (8 + 4 * this.wave)); }
   skipPrep() { if (this.phase !== 'prep') return; const b = this.earlyBonus(); if (b > 0) { this.eco.add('gold', b); this.events.push({ type: 'earlyBonus', gold: b }); } this.timer = 0; }
 
   // ——— événements internes ———

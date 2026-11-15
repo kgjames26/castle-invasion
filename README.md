@@ -347,3 +347,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Fantôme de placement éclairé (on voit la forme du bâtiment) ; sur téléphone le tutoriel ne passe plus sous la barre de placement.
 - Lancer la vague en avance rapporte de l'or (dès la vague 2), proportionnel au temps de préparation sacrifié ; le bonus s'affiche sur le bouton « Lancer ».
 - Bandeau de vague plus robuste sur téléphone (texte tronqué proprement, barres jamais écrasées).
+- Conseiller 💡 au-dessus du dock : les 3 actions les plus utiles du moment (famine, secteur visé sans archer, brèche, population pleine, villageois sans travail, stock plein, muraille abîmée sans réparateurs, pas de champ de tir), chacune avec un raccourci direct.
