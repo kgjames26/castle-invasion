@@ -1033,7 +1033,14 @@ export class UI {
   }
   showOver(on) {
     $('#over').classList.toggle('on', on);
-    if (on) $('#over-stats').textContent = `Vague ${this.sim.wave} · ${this.sim.zombies.kills} zombies abattus · ${this.sim.stats.breaches} brèche(s)`;
+    document.body.classList.toggle('isover', !!on);
+    if (!on) return;
+    const sim = this.sim; let best = 0; try { best = +localStorage.getItem('castle-best') || 0; if (sim.wave > best) localStorage.setItem('castle-best', sim.wave); } catch { /* stockage indisponible */ }
+    $('#over-stats').innerHTML = `Vague <b>${sim.wave}</b> · ${sim.zombies.kills} zombies abattus · ${sim.stats.breaches} brèche(s)<br><small>${sim.wave > best ? '🏅 Nouveau record !' : `Record : vague ${best}`}</small>`;
+    let cp = null; try { cp = JSON.parse(localStorage.getItem('castle-checkpoint')); } catch { /* aucun */ }
+    let rb = $('#over-retry'); if (!rb) { rb = el('button', 'btn sec'); rb.id = 'over-retry'; $('#over .box').appendChild(rb); rb.addEventListener('click', () => this.act('x:retry')); }
+    rb.style.display = cp ? '' : 'none'; if (cp) rb.textContent = `↺ Reprendre au début de la vague ${cp.wave}`;
+    $('#over-btn').textContent = 'Nouvelle partie';
   }
 }
 

@@ -375,3 +375,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Bannières et torches du rempart tombent avec leur tronçon quand une brèche s'ouvre (plus d'objets flottant dans le vide) et reviennent à la réparation.
 - Lucioles les nuits douces au-dessus des prés du village (ni en hiver ni sous la pluie).
 - Conseiller : signale les archers en réserve à placer quand le placement automatique est coupé.
+- Écran de défaite : record de vague (🏅 nouveau record), bouton « Reprendre au début de la vague » directement sur l'écran, aides masquées.
