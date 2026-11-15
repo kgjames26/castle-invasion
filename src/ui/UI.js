@@ -46,6 +46,7 @@ export class UI {
     // temps : un bouton pause/lecture, un bouton vitesse (1× → 2× → 4× → 8×) qui ne met jamais en pause
     this.pace = 1;
     $('.wave .wt').addEventListener('click', () => this.toggleWavePop());
+    for (const r of RES) $('#r-' + r).addEventListener('click', () => this.resInfo(r));
     $('#b-pause').addEventListener('click', () => { if (this.deploy) return; sim.speed = sim.speed ? 0 : this.pace; this.syncTime(); });
     $('#b-speed').addEventListener('click', () => { this.pace = this.pace >= 8 ? 1 : this.pace * 2; if (sim.speed) sim.speed = this.pace; this.syncTime(); });
     $('#b-menu').addEventListener('click', () => this.toggleSheet('menu'));
@@ -385,7 +386,8 @@ export class UI {
   // ——— mise à jour de l'affichage ———
   refresh(force) {
     const sim = this.sim, w = sim.wall, army = sim.army, E = sim.eco;
-    for (const r of RES) { const e = $('#r-' + r); e.querySelector('b').textContent = fmt(E.res[r]); e.classList.toggle('full', E.res[r] >= E.cap(r) - 0.5); e.classList.toggle('low', r === 'food' && E.famine); }
+    this.trackIncome();
+    for (const r of RES) { const e = $('#r-' + r); e.querySelector('b').textContent = fmt(E.res[r]); { const g = Math.round(this.incomeOf(r)), sm = e.querySelector('small') || e.appendChild(el('small')); sm.textContent = g > 0 ? '+' + g : ''; } e.classList.toggle('full', E.res[r] >= E.cap(r) - 0.5); e.classList.toggle('low', r === 'food' && E.famine); }
     if (this.plainLitShown && this.sim.night.light() > 0.97) this.plainLitShown = false;
     const pop = $('#r-pop'); pop.querySelector('b').textContent = `${E.population()}/${E.popCap()}`; pop.classList.toggle('max', E.popRoom() <= 0);
     $('#wave-title').textContent = `Vague ${sim.wave}`;
@@ -501,6 +503,7 @@ export class UI {
       b.style.display = b.dataset.show && onScr ? '' : 'none'; b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
       this.edgeArrow(s, p, onScr, vw, vh);
     }
+    this.bigBars(vw, vh);
     const c = this.card; if (!c) return;
     let a;
     if (c.kind === 'struct') { const s = this.sim.build.get(c.id); if (!s) return; a = this.rd.project(s.x, 4, s.z); }
@@ -508,6 +511,30 @@ export class UI {
     const w = this.cardEl.offsetWidth, h = this.cardEl.offsetHeight, topMin = 96, botMax = vh - 90;
     let top = a.y - h - 26; if (top < topMin) top = Math.min(botMax - h, a.y + 30); if (top + h > botMax) top = Math.max(topMin, botMax - h);
     this.cardEl.style.left = Math.min(vw - w - 8, Math.max(8, a.x - w / 2)) + 'px'; this.cardEl.style.top = top + 'px';
+  }
+  // barres de vie au-dessus des colosses, golems et boss (+ grande barre du boss en haut de l'écran)
+  bigBars(vw, vh) {
+    const Z = this.sim.zombies, pool = this.bbPool || (this.bbPool = []); let k = 0, boss = -1;
+    for (let i = 0; i < Z.n && k < 10; i++) { const t = Z.type[i]; if (t < 5 || t > 7) continue; if (t === 7) boss = i;
+      const sz = ZOMBIES[t].size, p = this.rd.project(Z.x[i], sz * 2.1 + 1.2, Z.z[i]); if (!p.vis || p.x < 0 || p.x > vw || p.y < 80 || p.y > vh - 80) continue;
+      let e = pool[k]; if (!e) { e = pool[k] = el('div', 'zbar'); e.innerHTML = '<span></span><div class="bar"><i></i></div>'; document.getElementById('app').appendChild(e); }
+      const mx = ZOMBIES[t].hp * Z.hpMult, r = Math.max(0, Math.min(1, Z.hp[i] / mx));
+      e.style.display = ''; e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; e.firstChild.textContent = ZOMBIES[t].name; e.lastChild.firstChild.style.width = (r * 100) + '%'; e.classList.toggle('boss', t === 7); k++; }
+    for (let j = k; j < pool.length; j++) pool[j].style.display = 'none';
+    let B = $('#bossbar'); if (boss < 0) { if (B) B.classList.remove('on'); this.bossMax = 0; return; }
+    if (!B) { B = el('div'); B.id = 'bossbar'; B.innerHTML = '<b>👑 Seigneur pourri</b><div class="bar"><i></i></div>'; document.getElementById('app').appendChild(B); }
+    this.bossMax = Math.max(this.bossMax || 0, Z.hp[boss]); B.classList.add('on'); B.querySelector('i').style.width = (100 * Z.hp[boss] / this.bossMax) + '%';
+  }
+  // revenu brut par minute (gains seulement, fenêtre glissante d'une minute de jeu)
+  trackIncome() {
+    const E = this.sim.eco, G = E.gross || {}, t = this.sim.time, I = this.inc || (this.inc = { last: { ...G }, acc: {}, win: [], t0: t });
+    for (const r of RES) { const d = (G[r] || 0) - (I.last[r] || 0); if (d > 0) I.acc[r] = (I.acc[r] || 0) + d; I.last[r] = G[r] || 0; }   /* livraisons des villageois seulement */
+    if (t - I.t0 >= 10) { I.win.push({ dt: t - I.t0, g: I.acc }); if (I.win.length > 6) I.win.shift(); I.acc = {}; I.t0 = t; }
+  }
+  incomeOf(r) { const W = this.inc?.win; if (!W || !W.length) return 0; let g = 0, d = 0; for (const w of W) { g += w.g[r] || 0; d += w.dt; } return d > 0 ? g * 60 / d : 0; }
+  resInfo(r) {
+    const E = this.sim.eco, task = Object.keys(TASKS).find(k => TASKS[k].res === r), n = task ? E.assign[task] : 0, g = Math.round(this.incomeOf(r));
+    this.toast(`${RES_INFO[r].ico} ${RES_INFO[r].name} : ${fmt(E.res[r])} / ${fmt(E.cap(r))} · ≈ +${g}/min${task ? ` · ${n} ${TASKS[task].name.toLowerCase()}` : ''}${r === 'food' ? ` · consommation ≈ −${Math.round((E.villagers.length * ECON.upkeep.villager + E.military() * ECON.upkeep.unit) * 60)}/min` : ''}${E.res[r] >= E.cap(r) - 0.5 ? ' · entrepôt PLEIN' : ''}`, 'info');
   }
   // flèche au bord de l'écran vers un secteur attaqué / percé / visé qu'on ne voit pas (clic → la caméra y va)
   edgeArrow(s, p, onScr, vw, vh) {

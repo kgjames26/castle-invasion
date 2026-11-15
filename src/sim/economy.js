@@ -247,7 +247,7 @@ export class Economy {
         if (v.dropX == null) { const d = this.dropFor(v.carryRes, v.x, v.z, v); v.dropX = d.x; v.dropZ = d.z; }
         if (this.moveTo(v, v.dropX, v.dropZ, dt)) {
           v.dropX = null;
-          const got = this.add(v.carryRes, v.carry); if (v.task) this.acc[v.task] += got;
+          const got = this.add(v.carryRes, v.carry); if (v.task) this.acc[v.task] += got; this.gross = this.gross || {}; this.gross[v.carryRes] = (this.gross[v.carryRes] || 0) + got;
           v.carry = 0; v.carryRes = null;
           if (v.leaving) this.release(v); else { v.sx = null; v.state = 'toSite'; }
         }

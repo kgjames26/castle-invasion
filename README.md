@@ -332,3 +332,7 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Grandes bannières bleues et or sur la face intérieure du mur.
 - Braseros de part et d'autre des portes : flamme qui vacille et halo doux au sol la nuit.
 - Nuit au clair de lune : lumière bleutée plus présente, le champ de bataille reste lisible.
+
+## Phase 45 — Barres de vie des géants et revenus
+- Barres de vie au-dessus des colosses, golems et du boss ; grande barre du Seigneur pourri en haut de l'écran.
+- Revenu par minute affiché sous chaque ressource (écrans larges) ; toucher une ressource donne stock / capacité, revenu, nombre de travailleurs et, pour la nourriture, la consommation.
