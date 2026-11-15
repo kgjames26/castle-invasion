@@ -392,11 +392,12 @@ export class UI {
     const pop = $('#r-pop'); pop.querySelector('b').textContent = `${E.population()}/${E.popCap()}`; pop.classList.toggle('max', E.popRoom() <= 0);
     $('#wave-title').textContent = `Vague ${sim.wave}`;
     const zl = sim.zombies.n + (sim.spawn ? sim.spawn.left : 0);
-    $('#wave-phase').textContent = `${sim.extras.season().ico}${{ clear: '', rain: '🌧', fog: '🌫', snow: '❄' }[sim.extras.weather]} ` + (sim.phase === 'assault' ? `⚔ ${zl} zombies` : sim.phase === 'alert' ? '🔔 Ils arrivent' : sim.phase === 'calm' ? '🕊 Répit' : '🌿 Calme');
-    if (this.lastPhase !== sim.phase) { if (this.lastPhase) this.phaseBanner(sim.phase); this.lastPhase = sim.phase; if (sim.phase === 'prep') this.newFoes(); }
+    $('#wave-phase').textContent = `${sim.extras.season().ico}${{ clear: '', rain: '🌧', fog: '🌫', snow: '❄' }[sim.extras.weather]} ` + (sim.phase === 'assault' ? `⚔ ${zl} zombies${sim.zombies.kills - (this.killsAt ?? sim.zombies.kills) > 0 ? ` · 💀${sim.zombies.kills - this.killsAt}` : ''}` : sim.phase === 'alert' ? '🔔 Ils arrivent' : sim.phase === 'calm' ? '🕊 Répit' : '🌿 Calme');
+    if (this.lastPhase !== sim.phase) { if (this.lastPhase) this.phaseBanner(sim.phase); this.lastPhase = sim.phase; if (sim.phase === 'prep') this.newFoes(); if (sim.phase === 'assault') this.killsAt = sim.zombies.kills; }
     $('#wave-phase').dataset.p = sim.phase; $('#b-skip').style.display = sim.phase === 'prep' ? '' : 'none';
     { const tot = sim.phase === 'prep' ? (sim.wave === 1 ? TIMING.firstPrep : TIMING.prep) : sim.phase === 'alert' ? TIMING.alert : sim.phase === 'calm' ? TIMING.calm : 0, cb = $('#calm-bar');
-      cb.parentNode.style.display = tot ? '' : 'none'; if (tot) cb.style.width = (100 * Math.max(0, sim.timer) / tot) + '%'; cb.parentNode.dataset.p = sim.phase; }
+      const asl = sim.phase === 'assault' && sim.spawn && sim.spawn.total > 0;   /* pendant la vague : part de la horde encore debout */
+      cb.parentNode.style.display = tot || asl ? '' : 'none'; if (tot) cb.style.width = (100 * Math.max(0, sim.timer) / tot) + '%'; else if (asl) cb.style.width = Math.min(100, 100 * zl / sim.spawn.total) + '%'; cb.parentNode.dataset.p = sim.phase; cb.parentNode.title = asl ? 'Horde restante' : 'Avant la vague'; }
     if (!!sim.speed === document.body.classList.contains('paused') || (this.deploy && document.body.classList.contains('paused'))) this.syncTime();
     $('#castle-bar').style.width = (100 * sim.castleHp / CASTLE.hp) + '%';
     let alert = false;

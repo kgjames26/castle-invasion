@@ -235,7 +235,7 @@ h2,h3,.ptitle,.wave b,.tile b,.dk span { font-family:var(--serif); }
 .wave .wt b { font-size:14px; }
 .cbar { display:flex; flex-direction:column; gap:3px; justify-content:center; }
 .cbar .bar.thin { height:4px; opacity:.9; } .cbar .bar.thin i { background:linear-gradient(90deg,#8fc46a,#cfe39a); }
-.cbar .bar.thin[data-p=alert] i { background:#e0a43a; } .cbar .bar.thin[data-p=calm] i { background:#8fb6d8; }
+.cbar .bar.thin[data-p=alert] i { background:#e0a43a; } .cbar .bar.thin[data-p=assault] i { background:#c8452e; } .cbar .bar.thin[data-p=calm] i { background:#8fb6d8; }
 .launch { flex:none; border-radius:999px; padding:5px 10px; font-weight:800; font-size:12px; background:linear-gradient(180deg,#d8553e,#a8321f); color:#fff; border:1px solid #6e1d10; white-space:nowrap; }
 .tgroup { display:flex; gap:0; flex:none; border-radius:999px; box-shadow:var(--sh); }
 .tgroup .rb { box-shadow:none; border-radius:0; width:38px; }
