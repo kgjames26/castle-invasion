@@ -368,3 +368,6 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Forge redessinée : murs de pierre claire, colombages, toit d'ardoise à deux pans, fenêtre rougeoyante.
 - Les corbeaux croassent en s'envolant (son synthétisé).
 - Pluie enfin visible : 1 400 gouttes en traits inclinés qui tombent autour de la vue, petites éclaboussures au sol, arrivée et départ en fondu.
+
+## Phase 49 — Saisons visibles
+- L'hiver blanchit le paysage : neige en nappes irrégulières sur le sol, les toits, les remparts et tout ce qui regarde le ciel, arrivée et fonte progressives ; une chute de neige pose aussi un léger voile blanc en toute saison.
