@@ -6,22 +6,25 @@ export const fogUniforms = {
   uNFogRange: { value: new THREE.Vector2(ATMOS.fogNear, ATMOS.fogFar) },   // z monde : clair à fogNear, opaque à fogFar (animé par le Renderer)
   // brume de distance (v3.6) : le lointain s'éclaircit vers la couleur de l'horizon (perspective aérienne)
   uHazeColor: { value: new THREE.Color(ATMOS.hazeColor) }, uHazeRange: { value: new THREE.Vector3(ATMOS.hazeNear, ATMOS.hazeFar, ATMOS.hazeMax) },
-  uWindTime: { value: 0 },                                                  // vent : arbres et feuillages (animé par le Renderer)
+  uWindTime: { value: 0 },
+  uCloud: { value: 0 },                                                     // (v5.0) ombres de nuages qui glissent sur le sol (0 la nuit)                                                  // vent : arbres et feuillages (animé par le Renderer)
 };
 export function patchNorthFog(shader) {
     Object.assign(shader.uniforms, fogUniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vNZ;\nvarying float vHzD;')
+      .replace('#include <common>', '#include <common>\nvarying float vNZ;\nvarying float vNX;\nvarying float vHzD;')
       .replace('#include <project_vertex>', `#include <project_vertex>
         vHzD = -mvPosition.z;
         { vec4 nwp = vec4( transformed, 1.0 );
           #ifdef USE_INSTANCING
           nwp = instanceMatrix * nwp;
           #endif
-          vNZ = ( modelMatrix * nwp ).z; }`);
+          vec4 nww = modelMatrix * nwp; vNZ = nww.z; vNX = nww.x; }`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vNZ;\nvarying float vHzD;\nuniform vec3 uNFogColor;\nuniform vec2 uNFogRange;\nuniform vec3 uHazeColor;\nuniform vec3 uHazeRange;')
+      .replace('#include <common>', '#include <common>\nvarying float vNZ;\nvarying float vNX;\nvarying float vHzD;\nuniform float uCloud;\nuniform float uWindTime;\nuniform vec3 uNFogColor;\nuniform vec2 uNFogRange;\nuniform vec3 uHazeColor;\nuniform vec3 uHazeRange;')
       .replace('#include <tonemapping_fragment>', `
+        { float t = uWindTime, c = sin( vNX * 0.019 + t * 0.045 ) * sin( vNZ * 0.016 - t * 0.03 ) + 0.55 * sin( ( vNX + vNZ ) * 0.041 + t * 0.06 ) + 0.3 * sin( vNX * 0.07 - vNZ * 0.05 - t * 0.08 );
+          gl_FragColor.rgb *= 1.0 - smoothstep( 0.45, 1.1, c ) * 0.25 * uCloud; }
         { float hz = smoothstep( uHazeRange.x, uHazeRange.y, vHzD ) * uHazeRange.z; gl_FragColor.rgb = mix( gl_FragColor.rgb, uHazeColor, hz ); }
         { float nf = clamp( ( vNZ - uNFogRange.x ) / ( uNFogRange.y - uNFogRange.x ), 0.0, 1.0 );
           nf = nf * nf * ( 3.0 - 2.0 * nf ) * 0.92;

@@ -339,7 +339,7 @@ export class Renderer {
     this.post = null;
   }
   updateAtmosphere(dt) {
-    fogUniforms.uWindTime.value = this.clock;
+    fogUniforms.uWindTime.value = this.clock; fogUniforms.uCloud.value = Math.max(0, this.sim.night.light() - 0.35) / 0.65;
     if (this.sky) { this.sky.position.copy(this.camera.position); const L0 = this.sim.night.light(); this.skyU.uZen.value.setHex(ATMOS.nightZenith).lerp(this._z || (this._z = new THREE.Color(ATMOS.skyZenith)), L0); this.skyU.uHor.value.setHex(ATMOS.nightHorizon).lerp(this._h || (this._h = new THREE.Color(ATMOS.skyHorizon)), L0);
       fogUniforms.uHazeColor.value.copy(this.skyU.uHor.value); fogUniforms.uNFogColor.value.setHex(0x080c14).lerp(this._fc || (this._fc = new THREE.Color(ATMOS.fogColor)), L0); }   // brume du nord et lointain : teinte du ciel, sombres la nuit
     if (this.grassTime) this.grassTime.value = this.clock;
