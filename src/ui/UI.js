@@ -85,6 +85,12 @@ export class UI {
     for (const k in sp.extra) { const x = Math.round(sp.extra[k] * n); if (x) { c[+k] = x; c[0] -= x; } }
     c[6] = golemsFor(v); c[7] = sp.boss || 0; return { n, c };
   }
+  // changement de saison : bandeau d'information avec l'effet sur les récoltes
+  seasonNews() {
+    const S = this.sim.extras.season(); if (this.lastSeason === S.name) return; const first = this.lastSeason == null; this.lastSeason = S.name; if (first) return;
+    const txt = { Printemps: 'les champs reverdissent', 'Été': 'récoltes abondantes', Automne: 'l\'herbe roussit, les jours raccourcissent', Hiver: 'la neige tombe, les récoltes s\'effondrent' }[S.name] || '';
+    setTimeout(() => this.toast(`${S.ico} ${S.name} : ${txt} · nourriture ×${String(S.food).replace('.', ',')}`, S.food < 0.8 ? 'warn' : 'info'), 1200);
+  }
   newFoes() {
     const v = this.sim.wave; if (v < 2 || this.foesWarned === v) return; this.foesWarned = v;
     const a = this.waveMix(v).c, b = this.waveMix(v - 1).c, nw = a.map((x, t) => x > 0 && !(b[t] > 0) && t ? ZOMBIES[t].name : null).filter(Boolean);
@@ -397,7 +403,7 @@ export class UI {
     $('#wave-title').textContent = `Vague ${sim.wave}`;
     const zl = sim.zombies.n + (sim.spawn ? sim.spawn.left : 0);
     $('#wave-phase').textContent = `${sim.extras.season().ico}${{ clear: '', rain: '🌧', fog: '🌫', snow: '❄' }[sim.extras.weather]} ` + (sim.phase === 'assault' ? `⚔ ${zl} zombies${sim.zombies.kills - (this.killsAt ?? sim.zombies.kills) > 0 ? ` · 💀${sim.zombies.kills - this.killsAt}` : ''}` : sim.phase === 'alert' ? `🔔 Ils arrivent ${Math.ceil(Math.max(0, sim.timer))}s` : sim.phase === 'calm' ? '🕊 Répit' : `🌿 ${Math.floor(Math.max(0, sim.timer) / 60)}:${String(Math.floor(Math.max(0, sim.timer) % 60)).padStart(2, '0')}`);
-    if (this.lastPhase !== sim.phase) { if (this.lastPhase) this.phaseBanner(sim.phase); this.lastPhase = sim.phase; if (sim.phase === 'prep') this.newFoes(); if (sim.phase === 'assault') this.killsAt = sim.zombies.kills; }
+    if (this.lastPhase !== sim.phase) { if (this.lastPhase) this.phaseBanner(sim.phase); this.lastPhase = sim.phase; if (sim.phase === 'prep') { this.newFoes(); this.seasonNews(); } if (sim.phase === 'assault') this.killsAt = sim.zombies.kills; }
     $('#wave-phase').dataset.p = sim.phase; $('#b-skip').style.display = sim.phase === 'prep' ? '' : 'none';
     { const eb = sim.earlyBonus(), bs = $('#b-skip'), lab = eb > 0 ? `⚔<span class="lt"> Lancer</span> <small>+${eb}${RES_INFO.gold.ico}</small>` : '⚔ Lancer'; if (bs.dataset.l !== lab) { bs.dataset.l = lab; bs.innerHTML = lab; bs.title = eb > 0 ? `Lancer la vague maintenant : +${eb} or pour le temps gagné` : 'Lancer la vague maintenant'; } }
     { const tot = sim.phase === 'prep' ? (sim.wave === 1 ? TIMING.firstPrep : TIMING.prep) : sim.phase === 'alert' ? TIMING.alert : sim.phase === 'calm' ? TIMING.calm : 0, cb = $('#calm-bar');
