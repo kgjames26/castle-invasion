@@ -204,6 +204,12 @@ export class Renderer {
     const wallPoly = (c, f) => { c.beginPath(); for (let x = 0; x <= W; x += 5) c.lineTo(f(x), f(WALL_Z0 + wallOff(x))); for (let x = W; x >= 0; x -= 5) c.lineTo(f(x), f(WALL_Z1 + wallOff(x))); c.closePath(); };
     pave(true, (c, f) => { c.beginPath(); for (let x = 0; x <= W; x += 5) c.lineTo(f(x), f(WALL_Z0 + wallOff(x))); c.lineTo(f(W), f(190)); c.lineTo(f(0), f(190)); c.closePath(); }, '#8f8a80');      // cour militaire + emprise de la muraille
     g.fillStyle = 'rgba(70,66,60,.55)'; wallPoly(g, X); g.fill();
+    // (v4.6) usure de la cour : passages plus sombres et polis devant chaque porte, flaques de boue, mousse au pied du mur, taches sous les escaliers
+    for (const [a, b] of GATE_SEGS) { const gx = (a + b + 1) * SEG_W / 2, z0 = WALL_Z1 + wallOff(gx);
+      for (let z = z0; z < 190; z += 1.5) { const wdt = 4 + (z - z0) * 0.12; blob(gx + Math.sin(z * 0.3) * 0.8, z, wdt, 'rgba(70,62,52,A)', 0.07 * (1 - (z - z0) / (190 - z0)) + 0.025); }
+      for (let i = 0; i < 4; i++) blob(gx + rr(-5, 5), z0 + rr(2, 9), rr(0.8, 1.8), 'rgba(58,50,40,A)', rr(0.35, 0.55)); }
+    for (let x = 2; x < W; x += rr(1.5, 4)) { const z = WALL_Z1 + wallOff(x) + rr(0.3, 1.4); blob(x, z, rr(0.6, 1.6), 'rgba(78,96,52,A)', rr(0.15, 0.4)); }
+    for (let i = 0; i < 90; i++) { const x = r() * W, z = rr(WALL_Z1 + 3, 188); blob(x + wallOff(x) * 0, z + wallOff(x), rr(0.4, 1.4), 'rgba(52,48,42,A)', rr(0.06, 0.18)); }
     pave(true, (c, f) => { c.beginPath(); c.ellipse(f(CASTLE.x), f(CASTLE.z), f(36), f(26), 0, 0, 7); }, '#a29a8c');
     pave(true, (c, f) => { c.beginPath(); c.rect(f(PLAZA.x - PLAZA.hw - 1), f(PLAZA.z - PLAZA.hd - 1), f(PLAZA.hw * 2 + 2), f(PLAZA.hd * 2 + 2)); }, '#b8af9c');
     g.strokeStyle = 'rgba(96,86,70,.8)'; g.lineWidth = 0.5 * k; g.beginPath(); g.arc(X(PLAZA.x), X(PLAZA.z), X(7), 0, 7); g.stroke(); g.beginPath(); g.arc(X(PLAZA.x), X(PLAZA.z), X(4), 0, 7); g.stroke();

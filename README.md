@@ -342,3 +342,5 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Mini-carte refaite : fond tiré du vrai sol (routes, terre battue), douves et ruisseau en bleu, château et tours, muraille colorée par état, bâtiments à l'échelle (chantiers en transparence), escouades, hordes et géants qui pulsent, champ de vision réel de la caméra.
 - Téléphone : le tutoriel passe en bas de l'écran (la mini-carte reste visible) et remonte quand un panneau est ouvert ; la barre du boss évite la mini-carte.
 - Pendant la vague : barre rouge de la horde restante et compteur de zombies abattus (💀) dans le bandeau.
+- Usure de la cour : passages polis devant les portes, flaques, mousse au pied du mur.
+- Barre du château qui change de couleur (vert → orange → rouge), flash et alerte quand il est frappé.
