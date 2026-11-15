@@ -314,3 +314,5 @@ body.fpv #fpvx { display:block; } body.fpv #top, body.fpv #dock, body.fpv #badge
 #quest .x { position:absolute; right:8px; top:8px; background:none; border:0; color:#f4e4bc; font-size:11px; text-decoration:underline; }
 #quest.mini { width:auto; padding:0; left:auto; right:10px; transform:none; background:none; box-shadow:none; } #quest.mini button { border-radius:14px; padding:4px 10px; background:rgba(28,22,12,.82); color:#f4e4bc; border:0; font-weight:700; font-size:12px; }
 @media (max-width:700px) { #quest:not(.mini) { top:auto; bottom:calc(env(safe-area-inset-bottom) + 96px); } #quest.mini { top:calc(env(safe-area-inset-top) + 128px); } }
+/* v7.1 : lignes « étape » (archers, villageois…) sur petit écran : libellé en pleine largeur au-dessus des boutons */
+@media (max-width:480px) { #card .row.step { flex-wrap:wrap; row-gap:4px; } #card .row.step .lab { flex:1 0 100%; display:flex; align-items:baseline; gap:6px; } #card .row.step .lab .sub { display:inline; } }
