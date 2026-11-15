@@ -11,6 +11,7 @@ import { applyNorthFog, applyFlutterFog } from './fog.js';
 const lam = (c, o = {}) => applyNorthFog(new THREE.MeshLambertMaterial({ color: c, flatShading: true, ...o }));
 const _p = {};
 // halo doux (dégradé radial) pour la lueur des braseros au sol
+function flameTex() { const c = document.createElement('canvas'); c.width = 8; c.height = 64; const g = c.getContext('2d'), r = g.createLinearGradient(0, 64, 0, 0); r.addColorStop(0, 'rgba(255,240,200,1)'); r.addColorStop(0.35, 'rgba(255,170,70,.9)'); r.addColorStop(0.75, 'rgba(220,70,20,.5)'); r.addColorStop(1, 'rgba(120,20,0,0)'); g.fillStyle = r; g.fillRect(0, 0, 8, 64); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
 function glowTex() { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), r = g.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.35, 'rgba(255,255,255,.45)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
 
 export class Bailey {
@@ -54,16 +55,19 @@ export class Bailey {
     mesh(wood, lam(0x8a5a32)); mesh(dark, lam(0x4a3220)); mesh(hay, lam(0xd8b45a)); mesh(metal, lam(0x4a4c52)); mesh(stone, lam(0x7d7a72)); mesh(gold, lam(0xf2c94a));
     mesh(cloth, applyFlutterFog(new THREE.MeshLambertMaterial({ color: 0x2f5fb0, side: THREE.DoubleSide }), 0.05), false);
     // flammes des braseros : petites pyramides lumineuses qui vacillent
-    this.flameMat = new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.9, depthWrite: false });
-    this.flameM = new THREE.InstancedMesh(new THREE.ConeGeometry(0.32, 0.8, 6).translate(0, 0.4, 0), this.flameMat, this.flames.length); this.flameM.castShadow = false; scene.add(this.flameM);
+    // flamme : trois langues croisées (dégradé vertical, mélange additif) + un cœur jaune vif
+    const tongue = (r, h, a) => new THREE.ConeGeometry(r, h, 5, 1, true).translate(0, h / 2, 0).rotateY(a), fl = mergeGeometries([tongue(0.34, 0.95, 0), tongue(0.26, 1.15, 1.1).translate(0.06, 0, 0.04), tongue(0.22, 0.8, 2.2).translate(-0.07, 0, -0.03)]);
+    this.flameMat = new THREE.MeshBasicMaterial({ color: 0xff8a30, map: flameTex(), transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    this.flameM = new THREE.InstancedMesh(fl, this.flameMat, this.flames.length); this.flameM.castShadow = false; scene.add(this.flameM);
+    this.coreM = new THREE.InstancedMesh(new THREE.ConeGeometry(0.16, 0.5, 6).translate(0, 0.25, 0), new THREE.MeshBasicMaterial({ color: 0xffe38a, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }), this.flames.length); scene.add(this.coreM);
     this.glow = new THREE.InstancedMesh(new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff9a40, map: glowTex(), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }), this.flames.length); scene.add(this.glow);
     this.d = new THREE.Object3D(); this.t = 0;
   }
   update(dt, light = 1) {
     this.t += dt; const d = this.d, night = Math.max(0, Math.min(1, (0.8 - light) / 0.5));
     this.flames.forEach((f, i) => { const k = 0.85 + 0.25 * Math.sin(this.t * 9 + f.ph) + 0.1 * Math.sin(this.t * 23 + f.ph * 2);
-      d.position.set(f.x, 1.25, f.z); d.rotation.set(0, this.t * 2 + f.ph, 0); d.scale.set(1, k, 1); d.updateMatrix(); this.flameM.setMatrixAt(i, d.matrix);
+      d.position.set(f.x, 1.2, f.z); d.rotation.set(0.06 * Math.sin(this.t * 5 + f.ph), this.t * 1.5 + f.ph, 0.06 * Math.cos(this.t * 6 + f.ph)); d.scale.set(1, k, 1); d.updateMatrix(); this.flameM.setMatrixAt(i, d.matrix); d.scale.set(1, 0.8 + 0.3 * k, 1); d.updateMatrix(); this.coreM.setMatrixAt(i, d.matrix);
       d.position.set(f.x, 0.04, f.z); d.rotation.set(0, 0, 0); d.scale.setScalar(0.9 + 0.1 * k); d.updateMatrix(); this.glow.setMatrixAt(i, d.matrix); });
-    this.flameM.instanceMatrix.needsUpdate = true; this.glow.instanceMatrix.needsUpdate = true; this.glow.material.opacity = 0.03 + 0.55 * night;
+    this.flameM.instanceMatrix.needsUpdate = true; this.coreM.instanceMatrix.needsUpdate = true; this.glow.instanceMatrix.needsUpdate = true; this.glow.material.opacity = 0.03 + 0.55 * night;
   }
 }
