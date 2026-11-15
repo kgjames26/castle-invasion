@@ -58,6 +58,7 @@ function adapt(dt) {
 }
 if (/[?&]fps=1\b/.test(location.search)) { const f = document.createElement('div'); f.style.cssText = 'position:fixed;left:4px;bottom:22px;z-index:99;font:11px monospace;color:#fff;background:#0008;padding:2px 4px'; document.body.appendChild(f); let c = 0, t0 = performance.now(); (function tick() { c++; const n = performance.now(); if (n - t0 > 1000) { f.textContent = `${Math.round(c * 1000 / (n - t0))} img/s · ${rd.renderer.info.render.calls} appels · ${(rd.renderer.info.render.triangles / 1000).toFixed(0)}k tri`; c = 0; t0 = n; } requestAnimationFrame(tick); })(); }
 function frame(now) {
+  requestAnimationFrame(frame);   // (v6.0) planifié d'abord : une erreur ponctuelle ne fige plus le jeu
   const dt = Math.min(0.25, (now - last) / 1000); last = now;
   if (!document.hidden) {
     acc += dt * sim.speed;
@@ -71,7 +72,6 @@ function frame(now) {
     audio.frame(sim, dt);
     rd.render(sim.speed ? acc / TICK : 1, dt);
   }
-  requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 window.__castle = { sim, cam, rd, ui, resumed, audio };   // pour le débogage et les tests

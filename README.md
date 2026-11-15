@@ -364,3 +364,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Après le tutoriel, une chaîne de 8 objectifs concrets avec récompense (tour, maison niv. 2, 15 archers, muraille renforcée, escouade, vague 5, université, vague 10). Affichés pendant le temps calme, réductibles en une pastille 🎯 ; progression enregistrée avec la partie.
 - Réglage « Aides à l'écran » (menu ☰) pour masquer conseils, objectifs et pastilles ⬆ ; les objectifs continuent de compter en arrière-plan.
 - Vague repoussée : gerbes d'étincelles dorées au-dessus du château.
+- Robustesse : la boucle de jeu est replanifiée avant chaque image (une erreur ponctuelle ne fige plus la partie) ; correctif d'un index de monture des cavaliers qui pouvait déborder après une vague.
