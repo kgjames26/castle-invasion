@@ -494,7 +494,7 @@ export class Renderer {
           const hg = hh.hg, spd = Math.hypot(dx, dz), clip = mv ? (spd > 0.22 ? 'gallop' : 'walk') : 'idle', [c0, cn] = hg.clips[clip], cps = clip === 'gallop' ? 1.8 : clip === 'walk' ? 1.0 : 0.4;
           const fr = ((t * cps + q.id * 0.31 + k * 0.173) % 1 + 1) % 1, an = c0 + fr * cn, skin = hg.skins[(q.id * 5 + 3) % hg.skins.length], im = hh.meshes[skin], n = hh.cnt[skin]++;
           if (n < 120) { im.setMatrixAt(n, d.matrix); im.anim.array[n] = an; im.setColorAt(n, tint); }
-          const arm = fight ? 0.5 + (Math.sin(ph2) * 0.5 + 0.5) * 1.8 : 0.35 + 0.12 * Math.sin(ph); this._hm.multiplyMatrices(d.matrix, hg.seat[Math.floor(an)]).multiply(this._rs); rig.push(this._hm, tint, [0, arm]);
+          const arm = fight ? 0.5 + (Math.sin(ph2) * 0.5 + 0.5) * 1.8 : 0.35 + 0.12 * Math.sin(ph); this._hm.multiplyMatrices(d.matrix, hg.seat[Math.min(hg.seat.length - 1, Math.max(0, Math.floor(an) || 0))]).multiply(this._rs); rig.push(this._hm, tint, [0, arm]);
         }
         else if (horse) { const arm = fight ? 0.5 + (Math.sin(ph2) * 0.5 + 0.5) * 1.8 : 0.35 + 0.12 * Math.sin(ph); rig.push(d.matrix, tint, [0, arm]); }
         else if (knight) {   // grande épée : moulinets amples au-dessus de la tête ; cape qui flotte
@@ -510,7 +510,7 @@ export class Renderer {
       d.position.set(x, mv ? Math.abs(Math.sin(ph)) * 0.06 : 0, z); d.scale.set(sc, sc, sc); d.rotation.set(0, rot, 0); d.updateMatrix();
       if (type === 'cavalry') {
         if (hh) { const hg = hh.hg, clip = mv ? 'walk' : 'idle', [c0, cn] = hg.clips[clip], fr = ((t * (mv ? 1 : 0.4) + i * 0.173) % 1 + 1) % 1, an = c0 + fr * cn, skin = hg.skins[(i * 3 + 1) % hg.skins.length], im = hh.meshes[skin], n = hh.cnt[skin]++;
-          if (n < 120) { im.setMatrixAt(n, d.matrix); im.anim.array[n] = an; im.setColorAt(n, tint); } this._hm.multiplyMatrices(d.matrix, hg.seat[Math.floor(an)]).multiply(this._rs); rig.push(this._hm, tint, [0, 0.35]); }
+          if (n < 120) { im.setMatrixAt(n, d.matrix); im.anim.array[n] = an; im.setColorAt(n, tint); } this._hm.multiplyMatrices(d.matrix, hg.seat[Math.min(hg.seat.length - 1, Math.max(0, Math.floor(an) || 0))]).multiply(this._rs); rig.push(this._hm, tint, [0, 0.35]); }
         else rig.push(d.matrix, tint, [0, 0.35]);
       } else rig.push(d.matrix, tint, [0, sw, -sw, -0.35 - 0.3 * (mv ? 1 : 0) + 0.3 * Math.sin(ph + Math.PI) * (mv ? 1 : 0), 0.2 + 0.3 * (mv ? 1 : 0)]);
     });
@@ -543,7 +543,7 @@ export class Renderer {
         const a = t * sp + k * Math.PI, x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr, rot = Math.atan2(-Math.sin(a), Math.cos(a)) + Math.PI;
         d.position.set(x, 0, z); d.rotation.set(0, rot, 0); d.scale.setScalar(1.3); d.updateMatrix();
         if (hh) { const hg = hh.hg, [c0, cn] = hg.clips.walk, fr = (t * sp * 1.6 + k * 0.5) % 1, an = c0 + fr * cn, skin = hg.skins[(k * 3 + 2) % hg.skins.length], im = hh.meshes[skin], i = hh.cnt[skin]++;
-          if (i < 120) { im.setMatrixAt(i, d.matrix); im.anim.array[i] = an; im.setColorAt(i, tint); } this._hm.multiplyMatrices(d.matrix, hg.seat[Math.floor(an)]).multiply(this._rs); R.cavalry.push(this._hm, tint, [0, 0.35]); }
+          if (i < 120) { im.setMatrixAt(i, d.matrix); im.anim.array[i] = an; im.setColorAt(i, tint); } this._hm.multiplyMatrices(d.matrix, hg.seat[Math.min(hg.seat.length - 1, Math.max(0, Math.floor(an) || 0))]).multiply(this._rs); R.cavalry.push(this._hm, tint, [0, 0.35]); }
         else R.cavalry.push(d.matrix, tint, [0, 0.35]);
       }
       d.position.set(cx, 0, cz); d.rotation.set(0, t * sp + Math.PI / 2, 0); d.scale.setScalar(sc); d.updateMatrix(); R.soldier.push(d.matrix, tint, [0, 0, 0, -0.9, 0.1]);
