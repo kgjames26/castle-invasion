@@ -841,6 +841,7 @@ export class Renderer {
       im.anim.array[k] = ((clock * cps + Z.phase[i] / 6.2832) % 1) * 16;
       const hurt = Z.hp[i] / Zt.hp < 0.5 ? 0.72 : 1, tt = Z.turned[i] ? this.turnTint || (this.turnTint = new THREE.Color(0x8fa0b8)) : this.zTint[t], ca = im.instanceColor.array;   // ancien soldat : teinte de sa tunique
       if (Z.slow[i] > 0) { ca[k * 3] = 0.6; ca[k * 3 + 1] = 0.85; ca[k * 3 + 2] = 1.3; } else { ca[k * 3] = tt.r * hurt + (1 - hurt) * 0.5; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt; }
+      { const nb = 1 + 1.1 * Math.max(0, (this.dark || 0) - 0.3); if (nb > 1.001) { ca[k * 3] *= nb; ca[k * 3 + 1] *= nb * 1.08; ca[k * 3 + 2] *= nb; } }   /* (v9.0) la nuit, les zombies restent lisibles (teinte blafarde) */
       { const fl = Z.flash ? Z.flash[i] : 0; if (fl > 0) { const q = fl * 0.85; ca[k * 3] += (2.2 - ca[k * 3]) * q; ca[k * 3 + 1] += (1.9 - ca[k * 3 + 1]) * q; ca[k * 3 + 2] += (1.7 - ca[k * 3 + 2]) * q; } }   /* éclair quand touché */   // gelé : bleuté   // blessé : plus sombre, rougeâtre
     }
     this.zv.forEach((im, v) => { im.count = cnt[v]; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.anim.needsUpdate = true; });

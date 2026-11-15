@@ -385,3 +385,5 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Savoir : nouvelles cartes « Guide du défenseur » et « Prochaine vague » (accès direct à l'aperçu).
 - Téléphone couché : mini-carte réduite, panneaux moins larges, caméra un peu plus haute.
 - Le printemps parsème les prés de fleurs des champs (jaunes, roses, blanches) en nappes.
+- Zombies plus clairs (types mieux lisibles), et légèrement blafards la nuit pour rester visibles.
+- Meurtrières du château bien sombres le jour.
