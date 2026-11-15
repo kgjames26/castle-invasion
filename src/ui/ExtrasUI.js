@@ -47,6 +47,8 @@ export function installExtrasUI(UI) {
     h += this.btn(cd > 0 ? `🫕 Huile (${Math.ceil(cd)} s)` : '🫕 Huile bouillante', cd > 0 ? 'en chauffe' : this.cost(EXTRA.oil.cost) + ' · brûle les assaillants', `x:oil:${s}`, cd > 0 || !this.sim.eco.afford(EXTRA.oil.cost), 'act slim');
     h += this.btn(mw ? `🌊 ${M.names[mv + 1]}… ${Math.ceil(X.moatWork[s])} s` : mv >= 3 ? `🌊 ${M.names[3]}` : `🌊 ${M.names[mv + 1]}`, mv >= 3 ? 'au maximum' : mw ? 'chantier' : this.cost(M.cost[mv + 1]) + ` · ralentit (×${M.slow[mv + 1]})`, `x:moat:${s}`, mv >= 3 || mw || !this.sim.eco.afford(M.cost[mv + 1] || {}), 'act slim sec');
     h += this.btn(pw ? `🪵 Palissade… ${Math.ceil(X.palWork[s])} s` : pal > 0 ? `🪵 Palissade ${Math.round(100 * pal / EXTRA.palisade.hp)} %` : '🪵 Palissade', pal > 0 && pal < EXTRA.palisade.hp ? 'réparer · ' + this.cost(EXTRA.palisade.repair) : pal > 0 ? 'première ligne, plus au nord' : this.cost(EXTRA.palisade.cost) + ' · arrête la horde plus loin', `x:pal:${s}`, pw || pal >= EXTRA.palisade.hp, 'act slim sec');
+    if (pal > 0 || X.palFire[s] > 0) h += this.btn(X.palFire[s] > 0 ? `🔥 Palissade en feu… ${Math.ceil(X.palFire[s])} s` : '🔥 Enflammer la palissade', X.palFire[s] > 0 ? 'elle brûle les assaillants' : 'bloque et brûle les zombies, puis se consume', `x:palfire:${s}`, X.palFire[s] > 0, 'act slim warnb');
+    if (X.pal.filter(v => v > 0).length > 1 && X.palFire.every(v => v <= 0)) h += this.btn('🔥 Toutes les palissades', 'les enflammer d\'un coup', 'x:palfireall', false, 'act slim warnb');
     h += this.btn('👁 Vue d\'un archer', 'sur ce rempart', `x:fpv:${s}`, !this.sim.army.archers[s].n, 'act slim sec');
     return h + '</div></div>';
   };
@@ -86,6 +88,8 @@ export function installExtrasUI(UI) {
       case 'oil': if (X.oil(s)) { this.toast('🫕 Huile bouillante sur le secteur ' + SECT[s], 'warn'); this.hooks.audio?.oil?.(); } break;
       case 'moat': if (X.digMoat(s)) this.toast('🌊 Les villageois creusent', 'ok'); break;
       case 'pal': if (X.buildPalisade(s)) this.toast('🪵 Palissade en chantier', 'ok'); break;
+      case 'palfire': if (X.ignitePalisade(s)) { this.toast('🔥 La palissade s\'embrase !', 'warn'); this.hooks.audio?.oil?.(); } break;
+      case 'palfireall': { const n = X.igniteAll(); if (n) { this.toast(`🔥 ${n} palissades s'embrasent !`, 'warn'); this.hooks.audio?.oil?.(); } break; }
       case 'fpv': { const a = sim.army.archers[s]; if (!a.n) break; this.closeCard(); const k = Math.min(a.n - 1, 2); this.cam.fpvYaw = 0; this.cam.fpv = () => sim.army.archers[s].n ? { ...archerPos(s, Math.min(k, sim.army.archers[s].n - 1)), y: 6.4 } : null; document.body.classList.add('fpv'); this.toast('👁 Glisse pour regarder autour · ✕ pour quitter', 'info'); break; }
       case 'fpvx': this.cam.fpv = null; document.body.classList.remove('fpv'); break;
       case 'fest': if (X.festival()) { this.toast('🎉 Fête au village : moral +25', 'ok'); this.unlock('fest'); } break;
@@ -266,6 +270,7 @@ export function installExtrasUI(UI) {
       case 'victory': this.showVictory(e.mode); break;
       case 'waveStart': this.checkpoint(); { const w = WEATHER[sim.extras.weather]; if (sim.extras.weather !== 'clear') this.toast(`${w[0]} ${w[1]}`, 'info'); } if (waveSpecBoss(sim.wave)) this.toast('💀 Le Seigneur pourri mène la horde !', 'danger'); break;
       case 'palisadeDown': this.toast(`🪵 La palissade ${SECT[e.s]} est tombée`, 'danger'); break;
+      case 'palisadeBurnt': this.toast(`🔥 La palissade ${SECT[e.s]} s'est consumée`, 'info'); break;
       case 'moat': this.toast(`🌊 ${EXTRA.moat.names[e.lv]} terminé (${SECT[e.s]})`, 'ok'); break;
       case 'palisade': this.toast(`🪵 Palissade dressée (${SECT[e.s]})`, 'ok'); break;
       case 'heroJoin': break;

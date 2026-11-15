@@ -4,19 +4,25 @@
 import * as THREE from 'three';
 import { patchNorthFog as patchNorthFogT } from './fog.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { applyNorthFog } from './fog.js';
+import { applyNorthFog, patchNorthFog, unitDetail } from './fog.js';
 
 const _c = new THREE.Color();
 // boîte colorée (couleurs de sommets, léger bruit par face pour casser les aplats) placée en coordonnées « modèle »
 export function bx(w, h, d, color, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
-  const g = new THREE.BoxGeometry(w, h, d).toNonIndexed(); g.deleteAttribute('uv'); g.deleteAttribute('normal');
+  // (v9.8) 2×2 subdivisions par face (4 fois plus de triangles) et arêtes adoucies : faces légèrement bombées, coins chanfreinés
+  const g = new THREE.BoxGeometry(w, h, d, 2, 2, 2).toNonIndexed(); g.deleteAttribute('uv'); g.deleteAttribute('normal');
+  { const P = g.attributes.position, hx = w / 2, hy = h / 2, hz = d / 2, m = Math.min(w, h, d), bulge = m * 0.07, ch = m * 0.16;
+    for (let i = 0; i < P.count; i++) { let x = P.getX(i), y = P.getY(i), z = P.getZ(i); const ex = Math.abs(Math.abs(x) - hx) < 1e-6, ey = Math.abs(Math.abs(y) - hy) < 1e-6, ez = Math.abs(Math.abs(z) - hz) < 1e-6, k = ex + ey + ez;
+      if (k === 1) { if (ex) x += Math.sign(x) * bulge; else if (ey) y += Math.sign(y) * bulge; else z += Math.sign(z) * bulge; }
+      else if (k >= 2) { const f = k === 3 ? 0.75 : 0.5; if (ex) x -= Math.sign(x) * ch * f; if (ey) y -= Math.sign(y) * ch * f; if (ez) z -= Math.sign(z) * ch * f; }
+      P.setXYZ(i, x, y, z); } }
   g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz)), new THREE.Vector3(1, 1, 1)));
   _c.set(color); const n = g.attributes.position.count, col = new Float32Array(n * 3);
   for (let i = 0; i < n; i += 3) { const f = 0.93 + ((i * 7919) % 100) / 100 * 0.14; for (let k = 0; k < 3; k++) { col[(i + k) * 3] = _c.r * f; col[(i + k) * 3 + 1] = _c.g * f; col[(i + k) * 3 + 2] = _c.b * f; } }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g;
 }
 export function cyl(r, h, color, x, y, z, rx = 0, rz = 0, seg = 8) {   // cylindre coloré
-  const g = new THREE.CylinderGeometry(r, r, h, seg).toNonIndexed(); g.deleteAttribute('uv'); g.deleteAttribute('normal');
+  const g = new THREE.CylinderGeometry(r, r, h, seg * 2, 3).toNonIndexed(); g.deleteAttribute('uv'); g.deleteAttribute('normal');   // (v9.8) 4 fois plus de facettes
   g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, rz)), new THREE.Vector3(1, 1, 1)));
   _c.set(color); const n = g.attributes.position.count, col = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) { col[i * 3] = _c.r; col[i * 3 + 1] = _c.g; col[i * 3 + 2] = _c.b; }
@@ -187,7 +193,7 @@ export const PALETTES = {
   heavy: { cloth: 0x6f7f9c, legs: 0x4a5266, helm: DARKSTEEL, plume: 0x2a2f3a, shield: 0x8e98a4, trim: 0xc0392b, heavy: true },
   cavalry: { cloth: 0x8c3fb0, legs: 0x4a3426, helm: STEEL, plume: 0xf2d65e, shield: 0x6b2d8a, trim: 0xf2d65e, horse: 0x8b5a2b, mane: 0x3a2a1c },
 };
-export const MAT = applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+export const MAT = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }); MAT.onBeforeCompile = sh => { patchNorthFog(sh); unitDetail(sh); }; MAT.customProgramCacheKey = () => 'unit-detail';   // (v9.8) grain de surface
 
 // Jeu de pièces instanciées pour un modèle.
 // ombres de contact (v3.6) : chaque personnage dessiné par un Rig laisse sa position ici ; le Renderer en fait des taches au sol

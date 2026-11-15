@@ -28,3 +28,12 @@ const rich = sim => { for (const r in sim.eco.res) sim.eco.res[r] = 9999; sim.ec
   sim.wave = 3; sim.extras.event = null; let any = false; for (let k = 0; k < 30 && !any; k++) { sim.extras.event = null; sim.extras.prepStart(); any = !!sim.extras.event; } ok(any, 'un événement survient entre les vagues');
   sim.wave = 10; ok(sim.extras.season().name === 'Hiver', 'saisons : hiver à la vague 10');
 }
+// v9.8 : palissade enflammée — elle bloque, brûle les zombies au contact, puis se consume
+{ const sim = new Simulation(); rich(sim); const X = sim.extras; X.buildPalisade(2); run(sim, 21);
+  const { palZ } = await import('../src/sim/extras.js'); const z0 = palZ(100) - 1.5;
+  sim.zombies.spawn(0, 100, z0, 2, sim.rng, 7); const i = sim.zombies.n - 1; sim.zombies.hp[i] = 5000; const hp0 = 5000;
+  ok(X.ignitePalisade(2) && X.palFire[2] > 0, 'palissade enflammée'); ok(!X.ignitePalisade(2), 'on ne rallume pas une palissade qui brûle');
+  run(sim, 4); ok(sim.zombies.hp[i] < hp0 - 60 && sim.zombies.burnT[i] > 0, `les zombies au contact brûlent (${Math.round(hp0 - sim.zombies.hp[i])} PV)`);
+  ok(sim.zombies.z[i] < palZ(sim.zombies.x[i]) + 1, 'la palissade en feu bloque toujours');
+  run(sim, 24); ok(X.pal[2] === 0 && X.palFire[2] === 0, 'la palissade se consume');
+}

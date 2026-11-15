@@ -3,7 +3,8 @@
 // Décodeurs adaptés de assets/archive/code-reference/AnimModels.js et Models.js ; aucun squelette n'existe dans les .bin.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { patchNorthFog, applyNorthFog } from './fog.js';
+import { patchNorthFog, applyNorthFog, unitDetail } from './fog.js';
+import { loopOps, applyOps } from './subdiv.js';
 
 const LIN = new Float32Array(256); for (let i = 0; i < 256; i++) LIN[i] = Math.pow(i / 255, 2.2);
 const align = o => (o + 3) & ~3;
@@ -96,31 +97,35 @@ async function loadVillager(url) {
   for (const k of hdr.tints) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', colorAttr(cols[k], 1)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 95, 0), 200); geos[k] = g; }
   const v = { tex: t, rows, F, mn: hdr.mn, mx: hdr.mx };
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
-  mat.onBeforeCompile = sh => { patchVat(sh, v); patchNorthFog(sh); }; mat.customProgramCacheKey = () => 'vat-nfog-dbl';
+  mat.onBeforeCompile = sh => { patchVat(sh, v); patchNorthFog(sh); unitDetail(sh, 0.0095); }; mat.customProgramCacheKey = () => 'vat-nfog-dbl';
   const mats = (arr) => arr.map(a => new THREE.Matrix4().fromArray(a));
   return { geos, mat, F, clips: hdr.clips, tints: hdr.tints, hand: mats(hdr.hand), head: mats(hdr.head), spine: mats(hdr.spine || hdr.head.map(() => new THREE.Matrix4().toArray())), handPos: hdr.handPos, headPos: hdr.headPos, miny: hdr.miny, height: hdr.height };
 }
 
 // Cheval (modèle GLB low-poly cuit en VAT par tools/bake_horse.py) : 3 allures (pas, galop, repos), 8 robes, matrices de selle par image.
 async function loadHorse(url) {
-  const buf = await (await fetch(url)).arrayBuffer(), { hdr, off: o0 } = header(buf); let off = o0; const V = hdr.V, F = hdr.F;
-  const idx = new Uint16Array(buf.slice(off, off + hdr.I * 2)); off = align(off + hdr.I * 2);
-  const cols = {}; for (const k of hdr.skins) { cols[k] = new Uint8Array(buf, off, V * 3); off = align(off + V * 3); }
-  const q = new Uint16Array(buf, off, F * V * 3), rows = Math.ceil(V / 2048), tex = new Float32Array(2048 * rows * F * 4);
-  for (let f = 0; f < F; f++) { const base = f * rows * 2048; for (let i = 0; i < V; i++) { const s = (f * V + i) * 3, d = (base + i) * 4; tex[d] = q[s] / 65535; tex[d + 1] = q[s + 1] / 65535; tex[d + 2] = q[s + 2] / 65535; } }
+  const buf = await (await fetch(url)).arrayBuffer(), { hdr, off: o0 } = header(buf); let off = o0; const V0 = hdr.V, F = hdr.F;
+  const idx0 = new Uint16Array(buf.slice(off, off + hdr.I * 2)); off = align(off + hdr.I * 2);
+  const cols = {}; for (const k of hdr.skins) { cols[k] = new Uint8Array(buf, off, V0 * 3); off = align(off + V0 * 3); }
+  const q = new Uint16Array(buf, off, F * V0 * 3);
+  // (v9.8) subdivision de Loop : 4 fois plus de triangles, silhouette plus ronde ; appliquée à chaque image de l'animation
+  const f0 = new Float32Array(V0 * 3); for (let i = 0; i < V0 * 3; i++) f0[i] = q[i] / 65535;
+  const SD = loopOps(f0, idx0, 1e-6), V = SD.V, rows = Math.ceil(V / 2048), tex = new Float32Array(2048 * rows * F * 4);
+  for (let f = 0; f < F; f++) { const src = new Float32Array(V0 * 3); for (let i = 0; i < V0 * 3; i++) src[i] = q[f * V0 * 3 + i] / 65535; const o = applyOps(SD.ops, src), base = f * rows * 2048;
+    for (let i = 0; i < V; i++) { const d = (base + i) * 4; tex[d] = o[i * 3]; tex[d + 1] = o[i * 3 + 1]; tex[d + 2] = o[i * 3 + 2]; } }
   const t = new THREE.DataTexture(tex, 2048, rows * F, THREE.RGBAFormat, THREE.FloatType); t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true;
-  const pos = new Float32Array(V * 3); for (let i = 0; i < V; i++) for (let k = 0; k < 3; k++) pos[i * 3 + k] = hdr.mn[k] + q[i * 3 + k] / 65535 * (hdr.mx[k] - hdr.mn[k]);
-  const geos = {};
-  for (const k of hdr.skins) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', colorAttr(cols[k], 1.05)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1, 0.5), 3); geos[k] = g; }
+  const n0 = applyOps(SD.ops, f0), pos = new Float32Array(V * 3); for (let i = 0; i < V; i++) for (let k = 0; k < 3; k++) pos[i * 3 + k] = hdr.mn[k] + n0[i * 3 + k] * (hdr.mx[k] - hdr.mn[k]);
+  const index = V > 65535 ? new Uint32Array(SD.index) : new Uint16Array(SD.index), geos = {};
+  for (const k of hdr.skins) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(applyOps(SD.col, colorAttr(cols[k], 1.05).array), 3)); g.setIndex(new THREE.BufferAttribute(index, 1)); g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 1, 0.5), 3); geos[k] = g; }
   const v = { tex: t, rows, F, mn: hdr.mn, mx: hdr.mx };
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
-  mat.onBeforeCompile = sh => { patchVat(sh, v); patchNorthFog(sh); }; mat.customProgramCacheKey = () => 'vat-nfog-horse';
+  mat.onBeforeCompile = sh => { patchVat(sh, v); patchNorthFog(sh); unitDetail(sh); }; mat.customProgramCacheKey = () => 'vat-nfog-horse';
   return { geos, mat, F, clips: hdr.clips, skins: hdr.skins, seat: hdr.seat.map(a => new THREE.Matrix4().fromArray(a)), backY: hdr.backY };
 }
 
 export async function loadCharacters(base = 'assets/characters/') {
   const [zombies, archer, villager, horse] = await Promise.all([loadZombies(base + 'zombies.bin'), loadArcher(base + 'archer.bin'), loadVillager(base + 'villager.bin').catch(e => { console.warn('villageois GLB indisponible', e); return null; }), loadHorse(base + 'horse.bin').catch(e => { console.warn('cheval GLB indisponible', e); return null; })]);
   zombies.mats = zombies.variants.map(vatMaterial); zombies.fadeMats = zombies.variants.map(vatFadeMaterial);
-  const solid = applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
+  const solid = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }); solid.onBeforeCompile = sh => { patchNorthFog(sh); unitDetail(sh); }; solid.customProgramCacheKey = () => 'unit-detail-s';
   return { zombies, archer, villager, horse, archerMat: solid, villagerGeo: villagerGeometry(), villagerMat: solid };
 }

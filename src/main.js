@@ -42,7 +42,7 @@ const hooks = {
 };
 ui = new UI(sim, hooks);
 { const v = document.createElement('div'); v.className = 'vtag'; v.textContent = 'v' + VERSION; document.getElementById('app').appendChild(v); const sp = document.getElementById('splash'); document.getElementById('sp-v').textContent = 'v' + VERSION; setTimeout(() => sp.classList.add('off'), 1800); setTimeout(() => sp.remove(), 2700); }
-cam.setView({ tx: 100, tz: innerHeight > innerWidth ? 262 : 278, zoom: innerHeight > innerWidth ? 0.7 : 0.42 });   // vue de départ : la cour du château, pas le champ de bataille
+cam.setView({ tx: 100, tz: innerHeight > innerWidth ? 236 : 272, zoom: innerHeight > innerWidth ? 1.08 : 0.95 });   // vue de départ (v9.8) : large, château + village + muraille
 function onResize() { const r = view.getBoundingClientRect(); rd.resize(Math.max(1, r.width), Math.max(1, r.height)); cam.fit(r.width, r.height); }
 new ResizeObserver(onResize).observe(view); onResize();
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(sim); }); addEventListener('pagehide', () => save(sim));

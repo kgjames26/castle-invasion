@@ -15,7 +15,7 @@ export class Extras {
     this.weather = 'clear'; this.morale = 70; this.event = null; this.eventCd = 0; this.fireB = null;
     this.spec = { carpenter: 0, baker: 0, smith: 0 };
     this.traps = []; this.trapId = 1; this.oilCd = new Float32Array(SECTORS); this.moat = new Uint8Array(SECTORS); this.moatWork = new Float32Array(SECTORS);
-    this.pal = new Float32Array(SECTORS); this.palWork = new Float32Array(SECTORS);
+    this.pal = new Float32Array(SECTORS); this.palWork = new Float32Array(SECTORS); this.palFire = new Float32Array(SECTORS);   // palFire (v9.8) : secondes de feu restantes
     this.hero = null; this.rally = 0; this.rallyCd = 0;
     this.tech = {}; this.research = null;
     this.stats = null; this.recap = null; this.festCd = 0; this.quest = 0;   // (v6.0) objectifs suivis après le tutoriel
@@ -51,9 +51,10 @@ export class Extras {
     return k;
   }
   // la palissade arrête les zombies qui l'atteignent : renvoie vrai s'ils frappent la palissade
-  palisade(x, nz, wallDps, dt) {
+  palisade(x, nz, wallDps, dt, zi = -1) {
     const s = sectorOfX(Math.max(0, Math.min(W - 1, x))); if (this.pal[s] <= 0) return false;
     const pz = palZ(x); if (nz < pz - 0.6 || nz > pz + 0.8) return false;
+    if (this.palFire[s] > 0 && zi >= 0) { const Z = this.sim.zombies; Z.hit(zi, EXTRA.palisade.fireDps * dt); Z.burnT[zi] = Math.max(Z.burnT[zi], 3.5); }   // palissade en feu : elle brûle ceux qui l'attaquent
     this.pal[s] -= wallDps * dt; if (this.pal[s] <= 0) { this.pal[s] = 0; this.sim.events.push({ type: 'palisadeDown', s }); }
     return true;
   }
@@ -74,6 +75,9 @@ export class Extras {
     sim.events.push({ type: 'oil', s }); return true;
   }
   digMoat(s) { const lv = this.moat[s]; if (lv >= 3 || this.moatWork[s] > 0) return false; if (!this.sim.eco.pay(EXTRA.moat.cost[lv + 1])) return false; this.moatWork[s] = EXTRA.moat.time[lv + 1]; return true; }
+  // (v9.8) enflammer une palissade : elle bloque toujours, brûle les zombies au contact et se consume en `fire` secondes
+  ignitePalisade(s) { if (this.pal[s] <= 0 || this.palFire[s] > 0 || this.palWork[s] > 0) return false; this.palFire[s] = EXTRA.palisade.fire; this.sim.events.push({ type: 'palisadeFire', s }); return true; }
+  igniteAll() { let n = 0; for (let s = 0; s < SECTORS; s++) if (this.ignitePalisade(s)) n++; return n; }
   buildPalisade(s) { if (this.palWork[s] > 0 || this.pal[s] >= EXTRA.palisade.hp) return false; const c = this.pal[s] > 0 ? EXTRA.palisade.repair : EXTRA.palisade.cost; if (!this.sim.eco.pay(c)) return false; this.palWork[s] = EXTRA.palisade.time; return true; }
   setSpec(k, d) { const E = this.sim.eco; if (d > 0 && (this.spec[k] >= 1 || E.idleCount() <= 0)) return false; if (d < 0 && this.spec[k] <= 0) return false; this.spec[k] += d; return true; }
   festival() { if (this.festCd > 0 || !this.sim.eco.pay(EXTRA.festival.cost)) return false; this.morale = Math.min(100, this.morale + EXTRA.festival.gain); this.festCd = 1; this.sim.events.push({ type: 'festival' }); return true; }
@@ -144,6 +148,10 @@ export class Extras {
       if (this.oilCd[s] > 0) this.oilCd[s] -= dt;
       if (this.moatWork[s] > 0 && (this.moatWork[s] -= dt) <= 0) { this.moat[s]++; sim.events.push({ type: 'moat', s, lv: this.moat[s] }); }
       if (this.palWork[s] > 0 && (this.palWork[s] -= dt) <= 0) { this.pal[s] = EXTRA.palisade.hp; sim.events.push({ type: 'palisade', s }); }
+      if (this.palFire[s] > 0) { this.palFire[s] -= dt; this.pal[s] = Math.max(0, this.pal[s] - EXTRA.palisade.hp / EXTRA.palisade.fire * dt);
+        // les flammes lèchent aussi les zombies qui passent tout près de la palissade
+        const Z = sim.zombies; for (let i = 0; i < Z.n; i++) { if (Z.hp[i] <= 0 || sectorOfX(Math.max(0, Math.min(W - 1, Z.x[i]))) !== s) continue; const dz = Z.z[i] - palZ(Z.x[i]); if (dz > -2.2 && dz < 1.2) { Z.hit(i, EXTRA.palisade.fireDps * 0.5 * dt); Z.burnT[i] = Math.max(Z.burnT[i], 3); } }
+        if (this.palFire[s] <= 0 || this.pal[s] <= 0) { this.palFire[s] = 0; this.pal[s] = 0; sim.events.push({ type: 'palisadeBurnt', s }); } }
     }
     if (this.rally > 0) this.rally -= dt; if (this.rallyCd > 0) this.rallyCd -= dt;
     if (this.hero && !sim.army.squads.some(q => q.id === this.hero.sq)) {      // son escouade est anéantie : le héros tombe (définitif)
@@ -157,6 +165,6 @@ export class Extras {
     for (let i = this.traps.length - 1; i >= 0; i--) if (this.traps[i].uses <= 0 && (this.traps[i].kind !== 'pitch' || this.traps[i].lit)) { if ((this.traps[i].gone = (this.traps[i].gone || 0) + dt) > 2) this.traps.splice(i, 1); }
     for (let i = this.spits.length - 1; i >= 0; i--) { this.spits[i].t += dt; if (this.spits[i].t > 0.9) this.spits.splice(i, 1); }
   }
-  serialize() { return { quest: this.quest, weather: this.weather, morale: this.morale, spec: { ...this.spec }, traps: this.traps.map(t => ({ ...t })), moat: [...this.moat], pal: [...this.pal], hero: this.hero && { ...this.hero }, tech: { ...this.tech }, research: this.research && { ...this.research }, mode: this.mode, festCd: this.festCd }; }
-  restore(st) { if (!st) return; this.quest = st.quest || 0; this.weather = st.weather || 'clear'; this.morale = st.morale ?? 70; Object.assign(this.spec, st.spec || {}); this.traps = (st.traps || []).map(t => ({ ...t })); this.trapId = 1 + Math.max(0, ...this.traps.map(t => t.id)); (st.moat || []).forEach((v, i) => this.moat[i] = v); (st.pal || []).forEach((v, i) => this.pal[i] = v); this.hero = st.hero || null; this.tech = st.tech || {}; this.research = st.research || null; this.mode = st.mode || { kind: 'classic' }; this.festCd = st.festCd || 0; }
+  serialize() { return { quest: this.quest, weather: this.weather, morale: this.morale, spec: { ...this.spec }, traps: this.traps.map(t => ({ ...t })), moat: [...this.moat], pal: [...this.pal], palFire: [...this.palFire], hero: this.hero && { ...this.hero }, tech: { ...this.tech }, research: this.research && { ...this.research }, mode: this.mode, festCd: this.festCd }; }
+  restore(st) { if (!st) return; this.quest = st.quest || 0; this.weather = st.weather || 'clear'; this.morale = st.morale ?? 70; Object.assign(this.spec, st.spec || {}); this.traps = (st.traps || []).map(t => ({ ...t })); this.trapId = 1 + Math.max(0, ...this.traps.map(t => t.id)); (st.moat || []).forEach((v, i) => this.moat[i] = v); (st.pal || []).forEach((v, i) => this.pal[i] = v); this.palFire.fill(0); (st.palFire || []).forEach((v, i) => this.palFire[i] = v); this.hero = st.hero || null; this.tech = st.tech || {}; this.research = st.research || null; this.mode = st.mode || { kind: 'classic' }; this.festCd = st.festCd || 0; }
 }

@@ -282,7 +282,7 @@ export const EXTRA = {
   trapZ: [92, 140], maxTraps: 40,
   oil: { cost: { wood: 25 }, cd: 40, dmg: 140 },
   moat: { far: 9, near: 3, slow: [1, 0.6, 0.42, 0.42], dps: 8, cost: [null, { wood: 60, stone: 30 }, { stone: 80 }, { wood: 120, iron: 20 }], time: [0, 30, 25, 25], names: ['', 'Fossé', 'Douves en eau', 'Douves à pieux'] },
-  palisade: { dist: 26, hp: 900, cost: { wood: 160 }, repair: { wood: 70 }, time: 20 },
+  palisade: { dist: 26, hp: 900, cost: { wood: 160 }, repair: { wood: 70 }, time: 20, fire: 25, fireDps: 30 },   // fire : durée du brasier (s) ; fireDps : brûlure au contact
   hero: { cost: { gold: 150, food: 60 }, rallyTime: 15, rallyCd: 60, xp: [0, 60, 160, 320, 560] },
   tech: { alchemy: { name: 'Alchimie', ico: '⚗', info: 'Flèches enflammées : archers +20 % de dégâts', uni: 1, cost: { gold: 150, food: 100 }, time: 60 },
           engineering: { name: 'Ingénierie', ico: '📐', info: 'Murailles +25 % de PV', uni: 2, cost: { gold: 220, stone: 300 }, time: 90 },

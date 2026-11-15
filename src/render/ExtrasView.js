@@ -11,6 +11,7 @@ import { FadeRig, Rig, villagerParts, VILLAGER_STYLES, footParts, PALETTES } fro
 import { golemParts } from './Heroes.js';
 import { Bailey } from './Bailey.js';
 import { Battlefield } from './Battlefield.js';
+import { Campfires, FlameSet } from './Campfires.js';
 
 const lam = (c, o = {}) => applyNorthFog(new THREE.MeshLambertMaterial({ color: c, flatShading: true, ...o }));
 // ——— particules : un nuage de points (taille, couleur, opacité par particule) ———
@@ -71,9 +72,9 @@ function waterMaterial() {
 export class ExtrasView {
   constructor(rd) {
     this.rd = rd; const scene = this.scene = rd.scene, sim = this.sim = rd.sim; this.d = new THREE.Object3D(); this.c = new THREE.Color(); this.t = 0;
-    this.dust = new Particles(scene, 700); this.smoke = new Particles(scene, 500); this.fx = new Particles(scene, 300, THREE.AdditiveBlending);
+    this.dust = new Particles(scene, 700); this.smoke = new Particles(scene, 900); this.fx = new Particles(scene, 1400, THREE.AdditiveBlending);
     this.decals = new Decals(scene, 260); this.water = waterMaterial();
-    this.buildCastleMoat(); this.bailey = new Bailey(scene, sim); this.field = new Battlefield(scene, sim);
+    this.buildCastleMoat(); this.bailey = new Bailey(scene, sim); this.field = new Battlefield(scene, sim); this.camp = new Campfires(scene, sim, this.fx, this.smoke); this.fireSet = new FlameSet(scene, SECTORS * 26 + 160, true);
     // douves défensives (une bande d'eau ou de terre par secteur, suivant l'arc de la muraille)
     this.moatMeshes = [];
     // pièges
@@ -121,13 +122,13 @@ export class ExtrasView {
     const noise = th => 0.55 * Math.sin(th * 5 + 1.3) + 0.35 * Math.sin(th * 11 + 0.4) + 0.2 * Math.sin(th * 23 + 2.1);
     // rectangle arrondi (super-ellipse) autour du château, 24 × 19 m de demi-axes au bord intérieur
     const rr = (th, a, b) => { const c = Math.cos(th), s2 = Math.sin(th), p = 4.5; return 1 / Math.pow(Math.pow(Math.abs(c) / a, p) + Math.pow(Math.abs(s2) / b, p), 1 / p); };
-    const ring = []; for (let i = 0; i <= N; i++) { const th = i / N * Math.PI * 2, ri = rr(th, 23.5, 18.5) + 0.6 * noise(th), wdt = 4.2 + 0.9 * noise(th * 1.7 + 3) + (Math.abs(th - Math.PI * 1.5) < 0.0 ? 0 : 0); ring.push({ th, ri, ro: ri + wdt }); }
+    const ring = []; for (let i = 0; i <= N; i++) { const th = i / N * Math.PI * 2, ri = rr(th, 23.5, 18.5) + 0.6 * noise(th), wdt = 4.2 + 0.9 * (0.55 * Math.sin(th * 2 + 3) + 0.35 * Math.sin(th * 6 + 1.1) + 0.2 * Math.sin(th * 13 + 0.5));   /* (v9.8) fréquences entières : plus de cassure à la jonction θ = 0 / 2π */ ring.push({ th, ri, ro: ri + wdt }); }
     const at = (th, r) => [x0 + Math.cos(th) * r, z0 + Math.sin(th) * r];
     // eau : bandes de l'intérieur vers l'extérieur, couleur selon la profondeur (bord clair et vert, milieu sombre)
-    const wp = [], wc = [], idx = [], BANDS = 5, shallow = new THREE.Color(0x5f8a6a), deep = new THREE.Color(0x1d4258), cc = new THREE.Color();
-    for (let i = 0; i <= N; i++) for (let k = 0; k <= BANDS; k++) { const R = ring[i], f = k / BANDS, r = R.ri + (R.ro - R.ri) * f, [x, z] = at(R.th, r); wp.push(x, 0, z); const dpt = Math.sin(Math.PI * f); cc.copy(shallow).lerp(deep, Math.pow(dpt, 0.7)); wc.push(cc.r, cc.g, cc.b); }
+    const wp = [], wc = [], idx = [], BANDS = 8, shallow = new THREE.Color(0x6a8f6c), deep = new THREE.Color(0x173a50), cc = new THREE.Color();
+    const we = []; for (let i = 0; i <= N; i++) for (let k = 0; k <= BANDS; k++) { const R = ring[i], f = k / BANDS, r = R.ri + (R.ro - R.ri) * f, [x, z] = at(R.th, r); wp.push(x, 0, z); const dpt = Math.sin(Math.PI * f); cc.copy(shallow).lerp(deep, Math.pow(dpt, 0.7)); wc.push(cc.r, cc.g, cc.b); we.push(1 - dpt); }
     for (let i = 0; i < N; i++) for (let k = 0; k < BANDS; k++) { const a0 = i * (BANDS + 1) + k, b0 = a0 + BANDS + 1; idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1); }
-    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3)); wg.setIndex(idx);
+    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3)); wg.setAttribute('aEdge', new THREE.Float32BufferAttribute(we, 1)); wg.setIndex(idx);
     wg.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(wp.length).map((_, i) => i % 3 === 1 ? 1 : 0), 3));
     const uv = []; for (let i = 0; i < wp.length / 3; i++) uv.push((wp[i * 3] - x0) / 6, (wp[i * 3 + 2] - z0) / 6); wg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     this.natWater = this.naturalWater(); const water = new THREE.Mesh(wg, this.natWater); water.position.y = 0.06; water.renderOrder = 2; water.receiveShadow = true; scene.add(water);
@@ -135,7 +136,7 @@ export class ExtrasView {
     const bp = [], bc = [], bi = [], prof = [[-0.0, 0.0, 0x2e2418], [0.35, 0.14, 0x4a3a26], [0.9, 0.24, 0x6a5a3a], [1.7, 0.16, 0x667a40], [2.6, 0.0, 0x5f7d42]], P = prof.length;
     const side = (sign) => { const base = bp.length / 3;
       for (let i = 0; i <= N; i++) for (let k = 0; k < P; k++) { const R = ring[i], [o, y, col] = prof[k], r = sign < 0 ? R.ri - o * (1 + 0.25 * noise(R.th * 3 + k)) : R.ro + o * (1 + 0.25 * noise(R.th * 3 + k)), [x, z] = at(R.th, r); bp.push(x, k === 0 ? 0.03 : y, z); cc.setHex(col).multiplyScalar(0.9 + 0.2 * rn()); bc.push(cc.r, cc.g, cc.b); }
-      for (let i = 0; i < N; i++) for (let k = 0; k < P - 1; k++) { const a0 = base + i * P + k, b0 = a0 + P; if (sign > 0) bi.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1); else bi.push(a0, a0 + 1, b0, a0 + 1, b0 + 1, b0); } };
+      for (let i = 0; i < N; i++) for (let k = 0; k < P - 1; k++) { const a0 = base + i * P + k, b0 = a0 + P; if (sign > 0) { const th = ring[i].th, th2 = ring[i + 1].th; if (Math.min(th, Math.PI * 2 - th2) < 0.2) continue; bi.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1); } else bi.push(a0, a0 + 1, b0, a0 + 1, b0 + 1, b0); } };   /* (v9.8) berge extérieure ouverte là où le ruisseau sort */
     side(-1); side(1);
     const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(bp, 3)); bg.setAttribute('color', new THREE.Float32BufferAttribute(bc, 3)); bg.setIndex(bi); bg.computeVertexNormals();
     const bank = new THREE.Mesh(bg, applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true }))); bank.receiveShadow = true; scene.add(bank);
@@ -162,28 +163,48 @@ export class ExtrasView {
       this.beakM = new THREE.InstancedMesh(beak, lam(0xe8a030), 7); scene.add(this.beakM);
       this.ducks = Array.from({ length: 7 }, (_, k) => ({ u: k < 4 ? 0.02 + k * 0.012 : 0.42 + (k - 4) * 0.03, f: 0.45 + (k % 3) * 0.06, sp: (k < 4 ? 0.0028 : 0.0022) * (k >= 4 ? -1 : 1), ph: k * 1.7, sc: k < 4 && k > 0 ? 0.7 : 1 })); }
     // ruisseau : part de la douve vers l'est, serpente jusqu'à la lisière
-    this.buildStream(at(0, ring[0].ro - 0.5), rn);
+    this.buildStream(at(0, (ring[0].ri + ring[0].ro) / 2), rn);
   }
-  naturalWater() {
+  // (v9.8) eau réaliste : deux couches de vaguelettes en coordonnées monde qui dérivent en sens contraires (+ le courant
+  // pour le ruisseau), reflet du ciel selon l'angle, éclats du soleil sur les crêtes, écume qui ourle les berges.
+  naturalWater(stream = false) {
     const n = this.water.userData.n.clone(); n.needsUpdate = true; n.repeat.set(1, 1); n.wrapS = n.wrapT = THREE.RepeatWrapping;
-    const m = new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0x343c44, shininess: 50, normalMap: n, normalScale: new THREE.Vector2(0.3, 0.3), transparent: false, opacity: 1, depthWrite: true });
-    m.onBeforeCompile = sh => { patchNorthFog(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `
-      { float fr = pow( 1.0 - clamp( abs( dot( normalize( normal ), normalize( vViewPosition ) ) ), 0.0, 1.0 ), 3.0 );   // reflet du ciel en incidence rasante
-        outgoingLight = mix( outgoingLight, uHazeColor * 0.85, fr * 0.65 ); }
-      #include <opaque_fragment>`); };
-    m.customProgramCacheKey = () => 'water-nat'; m.userData.n = n; return m;
+    const m = new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0x4a5560, shininess: 160, normalMap: n, normalScale: new THREE.Vector2(1, 1) });
+    m.onBeforeCompile = sh => { patchNorthFog(sh);
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aEdge;\nvarying float vEdge;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvEdge = aEdge;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vEdge;')
+        .replace('#include <normal_fragment_maps>', `
+          { vec2 wp = vec2( vNX, vNZ ); float tt = uWindTime;
+            vec3 a = texture2D( normalMap, wp * 0.085 + vec2( tt * 0.021, tt * 0.013 ) ).xyz * 2.0 - 1.0;
+            vec3 b = texture2D( normalMap, wp * 0.21 + vec2( -tt * 0.034, tt * 0.019 ) ).xyz * 2.0 - 1.0;
+            vec3 c = texture2D( normalMap, wp * 0.55 + vec2( tt * 0.05, -tt * 0.041 ) ).xyz * 2.0 - 1.0;
+            ${stream ? 'vec3 f = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0; a = mix( a, f, 0.7 );' : ''}
+            vec2 sl = a.xy * 0.55 + b.xy * 0.35 + c.xy * 0.18;
+            normal = normalize( ( viewMatrix * vec4( sl.x * 0.6, 1.0, sl.y * 0.6, 0.0 ) ).xyz ); }`)
+        .replace('#include <opaque_fragment>', `
+          { vec3 V = normalize( vViewPosition ); float ndv = clamp( abs( dot( normal, V ) ), 0.0, 1.0 );
+            float fr = 0.04 + 0.96 * pow( 1.0 - ndv, 5.0 );                                   // Fresnel (Schlick)
+            vec3 sky = mix( uHazeColor * 0.9, uHazeColor * 1.15 + vec3( 0.04, 0.06, 0.08 ), clamp( normal.y, 0.0, 1.0 ) );
+            outgoingLight = mix( outgoingLight, sky, clamp( fr * 0.75, 0.0, 0.6 ) );
+            vec2 wp = vec2( vNX, vNZ ); float tt = uWindTime;
+            float lap = 0.5 + 0.5 * sin( vEdge * 18.0 - tt * 1.6 + sin( wp.x * 0.9 + wp.y * 0.7 ) * 2.0 );   // l'écume va et vient
+            float foam = smoothstep( 0.9, 1.0, vEdge ) * ( 0.4 + 0.6 * lap );
+            float lum = dot( outgoingLight, vec3( 0.3, 0.59, 0.11 ) );
+            outgoingLight = mix( outgoingLight, vec3( 0.8, 0.86, 0.84 ) * clamp( lum * 2.0 + 0.2, 0.3, 0.9 ), clamp( foam, 0.0, 1.0 ) * 0.4 ); }
+          #include <opaque_fragment>`); };
+    m.customProgramCacheKey = () => stream ? 'water-nat-s' : 'water-nat'; m.userData.n = n; return m;
   }
   buildStream([sx, sz], rn) {
     const pts = [[sx, sz], ...STREAM.filter(p => p[0] > sx + 1)];   // tracé partagé avec la simulation (aucun bâtiment dessus)
-    const wp = [], wc = [], idx = [], uv = [], bp = [], bc = [], bi = [], cc = new THREE.Color(); let len = 0;
-    pts.forEach(([px, pz], i) => { const [qx, qz] = pts[Math.min(pts.length - 1, i + 1)], [ox, oz] = pts[Math.max(0, i - 1)], dx = qx - ox, dz = qz - oz, l = Math.hypot(dx, dz) || 1, nx = -dz / l, nz = dx / l, w = 1.3 + 0.35 * Math.sin(i * 0.9) + (i < 2 ? 0.8 : 0);
+    const wp = [], wc = [], idx = [], uv = [], we = [], bp = [], bc = [], bi = [], cc = new THREE.Color(); let len = 0;
+    pts.forEach(([px, pz], i) => { const [qx, qz] = pts[Math.min(pts.length - 1, i + 1)], [ox, oz] = pts[Math.max(0, i - 1)], dx = qx - ox, dz = qz - oz, l = Math.hypot(dx, dz) || 1, nx = -dz / l, nz = dx / l, w = 1.3 + 0.35 * Math.sin(i * 0.9) + (i === 0 ? 2.2 : i === 1 ? 1.0 : 0);
       if (i) len += Math.hypot(px - pts[i - 1][0], pz - pts[i - 1][1]);
-      for (const f of [-1, -0.5, 0, 0.5, 1]) { wp.push(px + nx * w * f, 0, pz + nz * w * f); cc.setHex(0x5f8a6a).lerp(new THREE.Color(0x24506a), 1 - Math.abs(f)); wc.push(cc.r, cc.g, cc.b); uv.push(f * 0.4, len / 4); }
+      for (const f of [-1, -0.5, 0, 0.5, 1]) { wp.push(px + nx * w * f, 0, pz + nz * w * f); cc.setHex(0x6a8f6c).lerp(new THREE.Color(0x24506a), 1 - Math.abs(f)); if (i === 0) cc.setHex(0x173a50); wc.push(cc.r, cc.g, cc.b); uv.push(f * 0.4, len / 4); we.push(i === 0 ? 0 : Math.abs(f)); }   /* tête du ruisseau fondue dans la douve */
       for (const [o, y, col] of [[0, 0.03, 0x2e2418], [0.5, 0.14, 0x4a3a26], [1.3, 0.05, 0x667a40], [2.0, 0, 0x5f7d42]]) for (const sgn of [-1, 1]) { bp.push(px + nx * (w + o) * sgn, y, pz + nz * (w + o) * sgn); cc.setHex(col); bc.push(cc.r, cc.g, cc.b); } });
-    for (let i = 0; i < pts.length - 1; i++) { for (let k = 0; k < 4; k++) { const a0 = i * 5 + k, b0 = a0 + 5; idx.push(a0, a0 + 1, b0, a0 + 1, b0 + 1, b0); /* face vers le haut */ } for (let k = 0; k < 3; k++) for (const sgn of [0, 1]) { const a0 = i * 8 + k * 2 + sgn, a1 = a0 + 2, b0 = a0 + 8, b1 = a1 + 8; if (sgn) bi.push(a0, b0, a1, a1, b0, b1); else bi.push(a0, a1, b0, a1, b1, b0); } }
-    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3)); wg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); wg.setIndex(idx);
+    for (let i = 0; i < pts.length - 1; i++) { for (let k = 0; k < 4; k++) { const a0 = i * 5 + k, b0 = a0 + 5; idx.push(a0, a0 + 1, b0, a0 + 1, b0 + 1, b0); /* face vers le haut */ } if (i >= 1) for (let k = 0; k < 3; k++) for (const sgn of [0, 1]) { const a0 = i * 8 + k * 2 + sgn, a1 = a0 + 2, b0 = a0 + 8, b1 = a1 + 8; if (sgn) bi.push(a0, b0, a1, a1, b0, b1); else bi.push(a0, a1, b0, a1, b1, b0); } }
+    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3)); wg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); wg.setAttribute('aEdge', new THREE.Float32BufferAttribute(we, 1)); wg.setIndex(idx);
     wg.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(wp.length).map((_, i) => i % 3 === 1 ? 1 : 0), 3));
-    this.streamWater = this.naturalWater(); const w = new THREE.Mesh(wg, this.streamWater); w.position.y = 0.07; w.renderOrder = 2; this.scene.add(w);
+    this.streamWater = this.naturalWater(true); const w = new THREE.Mesh(wg, this.streamWater); w.position.y = 0.07; w.renderOrder = 2; this.scene.add(w);
     const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(bp, 3)); bg.setAttribute('color', new THREE.Float32BufferAttribute(bc, 3)); bg.setIndex(bi); bg.computeVertexNormals();
     const bank = new THREE.Mesh(bg, applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }))); bank.receiveShadow = true; this.scene.add(bank);
   }
@@ -202,7 +223,18 @@ export class ExtrasView {
   }
   update(dt, alpha) {
     const sim = this.sim, X = sim.extras, Z = sim.zombies, d = this.d, c = this.c; this.t += dt; const t = this.t;
-    this.bailey.update(dt, sim.night.light()); this.field.update(dt);
+    this.bailey.update(dt, sim.night.light()); this.field.update(dt); this.camp.update(dt, t);
+    // (v9.8) palissades en feu et zombies qui brûlent
+    { const F = this.fireSet, Zb = sim.zombies; F.begin(t);
+      for (let s = 0; s < SECTORS; s++) { const pf = X.palFire[s]; if (!(pf > 0)) continue; const k = Math.min(1, pf / 3, (EXTRA.palisade.fire - pf) / 1.5 + 0.2);
+        for (let j = 0; j < 20; j++) { const x = s * SECTOR_W + 1 + j * 1.95, z = palZ(x), ph = j * 1.9 + s; F.add(x, 0.2 + 0.5 * Math.abs(Math.sin(ph)), z, (1.4 + 0.9 * Math.abs(Math.sin(ph * 1.7))) * k, ph, j % 3 ? 0 : 0.35);
+          if (Math.random() < dt * 3) this.fx.add({ x: x + (Math.random() - 0.5), y: 2.5, z, vx: (Math.random() - 0.5) * 1.5, vy: 2.5 + Math.random() * 3, vz: (Math.random() - 0.5), t: 0, life: 1.4, a: 1, r: 1, gr: 0.6, b: 0.2, s: 0.22, g: -0.3 });
+          if (Math.random() < dt * 1.5) this.smoke.add({ x, y: 3.5, z, vx: 0.5, vy: 1.6, vz: -0.3, t: 0, life: 5, a: 0.35, r: 0.18, gr: 0.16, b: 0.15, s: 1.6, grow: 2.5 }); } }
+      if (Zb.burnT) for (let i = 0; i < Zb.n; i++) { const bt = Zb.burnT[i]; if (!(bt > 0) || Zb.hp[i] <= 0) continue; const sz = ZOMBIES[Zb.type[i]].size || 1, ph = i * 2.3;
+        F.add(Zb.x[i] + 0.15 * Math.sin(t * 7 + ph), 0.5 * sz, Zb.z[i], 0.75 * sz * Math.min(1, bt), ph, 0.35); F.add(Zb.x[i] - 0.1, 1.2 * sz, Zb.z[i] + 0.1, 0.5 * sz * Math.min(1, bt), ph + 1, 0);
+        if (Math.random() < dt * 4) this.smoke.add({ x: Zb.x[i], y: 2.2 * sz, z: Zb.z[i], vx: 0.3, vy: 1.4, vz: 0, t: 0, life: 2.2, a: 0.3, r: 0.16, gr: 0.14, b: 0.13, s: 0.7, grow: 2 });
+        if (Math.random() < dt * 6) this.fx.add({ x: Zb.x[i], y: 1.4 * sz, z: Zb.z[i], vx: (Math.random() - 0.5), vy: 2 + Math.random() * 2, vz: (Math.random() - 0.5), t: 0, life: 0.8, a: 1, r: 1, gr: 0.55, b: 0.15, s: 0.18 }); }
+      F.end(); }
     if (this.ducks) { this.ducks.forEach((q, i) => { q.u = (q.u + q.sp * dt + 1) % 1; const [x, z] = this.moatPath(q.u, q.f + 0.06 * Math.sin(t * 0.3 + q.ph)), [x2, z2] = this.moatPath((q.u + Math.sign(q.sp) * 0.004 + 1) % 1, q.f);
         d.position.set(x, 0.06 + 0.03 * Math.sin(t * 2.2 + q.ph), z); d.rotation.set(0, Math.atan2(x2 - x, z2 - z), 0.06 * Math.sin(t * 1.7 + q.ph)); d.scale.setScalar(q.sc); d.updateMatrix(); this.duckM.setMatrixAt(i, d.matrix); this.beakM.setMatrixAt(i, d.matrix); });
       this.duckM.instanceMatrix.needsUpdate = true; this.beakM.instanceMatrix.needsUpdate = true; }
@@ -229,7 +261,7 @@ export class ExtrasView {
     this.soldierDead.end(); this.golemDead.end();
     // villageois de la placette et enfants
     this.folk.begin();
-    if (sim.phase !== 'assault') for (const f of this.folkList) { d.position.set(f.x, f.sit ? -0.32 : 0, f.z); d.rotation.set(0, Math.PI + Math.sin(t * 0.3 + f.ph) * 0.4, 0); d.scale.setScalar(1.75); d.updateMatrix(); this.folk.push(d.matrix, c.setScalar(1), [0, f.sit ? -1.4 : 0, f.sit ? -1.4 : 0, -0.3 + 0.4 * Math.max(0, Math.sin(t * 2 + f.ph))]); }
+    // (v9.8) la rangée de villageois figés sur la placette est retirée : elle ressemblait à un bug
     if (sim.phase !== 'assault') for (const k of this.kids) { const a = t * 1.6 + k.ph, x = k.cx + Math.cos(a) * k.r, z = k.cz + Math.sin(a) * k.r * 0.7, sw = Math.sin(t * 12 + k.ph) * 0.8; d.position.set(x, Math.abs(Math.sin(t * 12 + k.ph)) * 0.12, z); d.rotation.set(0, -a, 0); d.scale.setScalar(1.05); d.updateMatrix(); this.folk.push(d.matrix, c.setRGB(1, 0.9, 0.8), [0, sw, -sw, sw]); }
     this.folk.end();
     // charrettes : seulement sur des routes pavées (Travaux publics niv. 3), en aller-retour
@@ -251,7 +283,7 @@ export class ExtrasView {
     for (const k in this.trapM) { this.trapM[k].count = cnt[k]; this.trapM[k].instanceMatrix.needsUpdate = true; }
     // palissade
     { let n = 0; for (let s = 0; s < SECTORS; s++) { const hp = X.pal[s] / EXTRA.palisade.hp; if (hp <= 0 && !(X.palWork[s] > 0)) continue; const building = X.palWork[s] > 0, frac = building ? 1 - X.palWork[s] / EXTRA.palisade.time : 1;
-        for (let k = 0; k < 40; k++) { if (k / 40 > frac) break; if (!building && hp < 0.5 && (k * 7 + s) % 5 === 0) continue; const x = s * SECTOR_W + 0.5 + k; d.position.set(x, 0, palZ(x)); d.rotation.set((k % 3 - 1) * 0.06, 0, (k % 2 ? 0.05 : -0.04)); d.scale.set(1, 0.85 + ((k * 13) % 7) * 0.04, 1); d.updateMatrix(); this.stakes.setMatrixAt(n, d.matrix); this.stakes.setColorAt(n, c.setHex(0x7a5a3a).lerp(this.c2 || (this.c2 = new THREE.Color(0x3a2a1a)), building ? 0.4 : 1 - hp)); n++; } }
+        for (let k = 0; k < 40; k++) { if (k / 40 > frac) break; if (!building && hp < 0.5 && (k * 7 + s) % 5 === 0) continue; const x = s * SECTOR_W + 0.5 + k; d.position.set(x, 0, palZ(x)); d.rotation.set((k % 3 - 1) * 0.06, 0, (k % 2 ? 0.05 : -0.04)); d.scale.set(1, 0.85 + ((k * 13) % 7) * 0.04, 1); d.updateMatrix(); this.stakes.setMatrixAt(n, d.matrix); this.stakes.setColorAt(n, c.setHex(0x7a5a3a).lerp(this.c2 || (this.c2 = new THREE.Color(0x3a2a1a)), building ? 0.4 : 1 - hp)); if (X.palFire[s] > 0) { const ch = 1 - X.palFire[s] / EXTRA.palisade.fire; c.lerp(this.c3 || (this.c3 = new THREE.Color(0x1a1210)), 0.35 + 0.6 * ch); c.r += 0.25 * Math.max(0, Math.sin(t * 7 + k)); this.stakes.setColorAt(n, c); } n++; } }
       this.stakes.count = n; this.stakes.instanceMatrix.needsUpdate = true; if (this.stakes.instanceColor) this.stakes.instanceColor.needsUpdate = true; }
     this.rebuildMoats();
     // héros

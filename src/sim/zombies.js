@@ -1,7 +1,7 @@
 // Hordes : agents individuels en tableaux typés (SoA). Dans ce prototype tous les zombies sont simulés ;
 // l'architecture prévoit des cohortes agrégées au-delà (voir conception §6).
 import { MAX_Z, W, WALL_Z1, WALL_Z0, WALL_STAND_Z, GW, CELL, CASTLE, SECTORS, segOfX, wallOff, sectorOfX } from './constants.js';
-import { GOLEM, ZOMBIES, SQUAD, INFECTION, ZOMBIE_PACE } from '../content/medieval.js';
+import { GOLEM, ZOMBIES, SQUAD, INFECTION, ZOMBIE_PACE, FIRE } from '../content/medieval.js';
 import { COST, T } from './terrain.js';
 
 const INSIDE_Z = WALL_Z1 + 0.8;      // + wallOff(x) : la muraille est en arc
@@ -19,7 +19,7 @@ export class ZombieSwarm {
     // morsures (v2.4) : bite = temps restant de l'animation, biteK = 1 morsure debout, 2 plongeon, 3 déchirement (géant), 4 coup (lourd) ; turned = ancien soldat
     this.bite = new Float32Array(n); this.biteK = new Uint8Array(n); this.rush = new Uint8Array(n); this.rushD = new Float32Array(n); this.rushK = new Float32Array(n); this.farK = new Float32Array(n); this.turned = new Uint8Array(n); this.atkT = new Float32Array(n);
     this.gx = new Float32Array(GROUPS); this.gz = new Float32Array(GROUPS); this.gn = new Int32Array(GROUPS); this.hpMult = 1;
-    this.n = 0; this.kills = 0; this.fallen = []; this.killsBySector = new Float32Array(SECTORS); this.climb = new Float32Array(n); this.flash = new Float32Array(n);   // (v5.0) éclair blanc quand il est touché (vue seulement)
+    this.n = 0; this.kills = 0; this.fallen = []; this.killsBySector = new Float32Array(SECTORS); this.climb = new Float32Array(n); this.flash = new Float32Array(n); this.burnT = new Float32Array(n);   // burnT (v9.8) : secondes pendant lesquelles le zombie brûle   // (v5.0) éclair blanc quand il est touché (vue seulement)
     this.near = new Int16Array(SECTORS);      // zombies proches (z>95) par secteur ciblé
     this.attacking = new Int16Array(SECTORS);
     this.dead = false;
@@ -49,7 +49,7 @@ export class ZombieSwarm {
   removeAt(i) {
     const l = --this.n; if (i === l) return;
     this.x[i] = this.x[l]; this.z[i] = this.z[l]; this.px[i] = this.px[l]; this.pz[i] = this.pz[l];
-    this.flash[i] = this.flash[l]; this.hp[i] = this.hp[l]; this.type[i] = this.type[l]; this.sector[i] = this.sector[l]; this.state[i] = this.state[l]; this.phase[i] = this.phase[l];
+    this.flash[i] = this.flash[l]; this.burnT[i] = this.burnT[l]; this.hp[i] = this.hp[l]; this.type[i] = this.type[l]; this.sector[i] = this.sector[l]; this.state[i] = this.state[l]; this.phase[i] = this.phase[l];
     this.grp[i] = this.grp[l]; this.ox[i] = this.ox[l]; this.oz[i] = this.oz[l]; this.slow[i] = this.slow[l]; this.slam[i] = this.slam[l];
     this.bite[i] = this.bite[l]; this.biteK[i] = this.biteK[l]; this.climb[i] = this.climb[l]; if (this.trapped) this.trapped[i] = this.trapped[l]; this.rush[i] = this.rush[l]; this.rushD[i] = this.rushD[l]; this.rushK[i] = this.rushK[l]; this.farK[i] = this.farK[l]; this.turned[i] = this.turned[l]; this.atkT[i] = this.atkT[l];
   }
@@ -58,7 +58,8 @@ export class ZombieSwarm {
   swing(i, dt, rng) { if (this.bite[i] > 0 || (this.atkT[i] -= dt) > 0) return; this.atkT[i] = 1.0 + rng() * 0.7; const t = this.type[i]; if (INFECTION.killers.includes(t)) { if (t === 6) { this.bite[i] = 1.4; this.biteK[i] = 5; this.atkT[i] = 1.8; } else { this.bite[i] = 0.9; this.biteK[i] = 4; } } else if (!INFECTION.tearers.includes(t)) { this.bite[i] = 0.75; this.biteK[i] = 1; } }
 
   update(dt, sim) {
-    for (let i = 0; i < this.n; i++) if (this.flash[i] > 0) this.flash[i] = Math.max(0, this.flash[i] - dt * 7);
+    for (let i = 0; i < this.n; i++) { if (this.flash[i] > 0) this.flash[i] = Math.max(0, this.flash[i] - dt * 7);
+      if (this.burnT[i] > 0) { this.burnT[i] -= dt; if (this.hp[i] > 0) { const b = FIRE.dps * 0.45 * dt; if (this.hp[i] - b <= 0) this.hit(i, b + 1); else this.hp[i] -= b; } } }   // (v9.8) un zombie en feu continue de brûler
     const { flow, wall, terrain, hash, army } = sim;
     const X = this.x, Z = this.z, n = this.n;
     hash.rebuild(X, Z, n);
@@ -146,7 +147,7 @@ export class ZombieSwarm {
       const wo = wallOff(nx), WSZ = WALL_STAND_Z + wo;
       const ty = this.type[i];
       // palissade (v4.0) : arrête la horde plus au nord tant qu'elle tient
-      if (sim.extras && !engaged && sim.extras.palisade(nx, nz, t.wall, dt)) { nz = Math.min(nz, z); attacking = true; X[i] = nx; Z[i] = nz; this.state[i] = 1; this.attacking[s]++; continue; }
+      if (sim.extras && !engaged && sim.extras.palisade(nx, nz, t.wall, dt, i)) { nz = Math.min(nz, z); attacking = true; X[i] = nx; Z[i] = nz; this.state[i] = 1; this.attacking[s]++; continue; }
       // cracheur (9) : s'arrête à distance et ronge la pierre à l'acide
       if (ty === 9 && nz > WSZ - 13 && wall.hp[segOfX(nx)] > 0) { nz = Math.min(nz, WSZ - 13); const seg = segOfX(nx); if ((this.slam[i] -= dt) <= 0) { this.slam[i] = 1.6; if (wall.damage(seg, t.wall * 1.6)) sim.onBreach(seg); if (sim.extras && sim.extras.spits.length < 40) sim.extras.spits.push({ x0: nx, z0: nz, x1: nx, z1: WSZ + 0.5, t: 0 }); } X[i] = nx; Z[i] = nz; this.state[i] = 1; this.attacking[s]++; continue; }
       if (nz > WSZ && nz < WALL_Z1 + wo + 0.5) {

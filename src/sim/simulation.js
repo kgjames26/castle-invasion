@@ -114,7 +114,7 @@ export class Simulation {
     for (let f = this.fires.length - 1; f >= 0; f--) {
       const F = this.fires[f]; F.t -= dt; if (F.t <= 0) { this.fires.splice(f, 1); continue; }
       const k = this.hash.query(F.x, F.z, F.r, Z.x, Z.z, this.scratch);
-      for (let q = 0; q < k; q++) { const i = this.scratch[q]; if (Z.hp[i] > 0 && (Z.x[i] - F.x) ** 2 + (Z.z[i] - F.z) ** 2 <= F.r * F.r) Z.hit(i, FIRE.dps * dt); }
+      for (let q = 0; q < k; q++) { const i = this.scratch[q]; if (Z.hp[i] > 0 && (Z.x[i] - F.x) ** 2 + (Z.z[i] - F.z) ** 2 <= F.r * F.r) { Z.hit(i, FIRE.dps * dt); Z.burnT[i] = Math.max(Z.burnT[i], 2.5); } }   // (v9.8) le zombie s'enflamme
     }
   }
   // garnison du château : ses archers tirent sur les zombies arrivés à ses portes (les vagues ne restent jamais bloquées)

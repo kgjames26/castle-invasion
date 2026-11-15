@@ -589,6 +589,7 @@ export class UI {
     const sim = this.sim, E = sim.eco, w = sim.wall, out = [], name = r => RES_INFO[r].name.toLowerCase();
     if (E.famine) out.push(['🌾', 'Famine : la nourriture est épuisée — envoie des fermiers', 'sheet:folk']);
     if (sim.phase === 'alert' || sim.phase === 'assault') for (const s of sim.targets || []) if (sim.army.archers[s].n === 0) { out.push(['🏹', `Aucun archer sur ${SECTOR_NAMES[s]} (visé)`, 'secgo:' + s]); break; }
+    if (sim.phase === 'assault' && sim.extras) for (let s = 0; s < SECTORS; s++) if (sim.extras.pal[s] > 0 && !(sim.extras.palFire[s] > 0) && (sim.zombies.attacking?.[s] || 0) > 3) { out.push(['🔥', `Palissade ${SECTOR_NAMES[s]} assaillie : enflamme-la`, 'x:palfire:' + s]); break; }
     for (let s = 0; s < SECTORS; s++) if (w.breaches(s)) { out.push(['💥', `Brèche à ${SECTOR_NAMES[s]} : les réparateurs doivent la refermer`, 'secgo:' + s]); break; }
     if (sim.army.reserve.archer >= 5 && !sim.army.autoArchers) out.push(['🏹', `${sim.army.reserve.archer} archers en réserve : place-les sur la muraille`, 'secgo:' + (sim.targets?.[0] ?? 2)]);
     if (E.popRoom() <= 0) out.push(['🏠', 'Population au maximum : bâtis ou améliore une maison', 'goto:house']);

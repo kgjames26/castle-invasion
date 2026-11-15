@@ -390,3 +390,11 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Fanion au-dessus de chaque escouade : type, effectif et barre de vie ; un clic ouvre sa fiche.
 - Pendant l'alerte, des chevrons rouges défilent au sol sur les couloirs qu'emprunteront les hordes : on sait où placer ses archers.
 - Ambiance sonore : chants d'oiseaux le jour, grillons la nuit (silence pendant les vagues, l'hiver et sous la pluie).
+
+## Phase 50 — Feux, palissades ardentes, eau et unités détaillées
+- Départ : caméra plus large (château, village et muraille) ; la rangée de villageois figés sur la placette est retirée.
+- Feux de bois : une cinquantaine de foyers (pierres, bûches, flammes en langues croisées, halo, étincelles, fumée) dans le village et la cour, et 14 allumeurs autonomes en tunique rouge, hors quota, qui vont chercher des bûches aux tas, ravivent les feux et les allument à la nuit, torche à la main.
+- Palissades enflammables : « 🔥 Enflammer la palissade » (ou toutes d'un coup) dans la fiche du secteur ; elle bloque toujours, brûle les zombies au contact pendant 25 s, puis se consume. Le conseiller la propose quand une palissade est assaillie.
+- Zombies en feu : ils continuent de brûler quelques secondes (flammes sur le corps, fumée, braises), aussi après l'huile, les boules de feu ou les feux au sol.
+- Douves : jonction de l'anneau d'eau corrigée, sortie du ruisseau fondue dans la douve ; eau réaliste (trois couches de vaguelettes qui dérivent, reflet du ciel selon l'angle, éclats du soleil, écume aux berges, courant sur le ruisseau).
+- Unités : 4 fois plus de polygones (subdivision de Loop sur chevaliers et chevaux, appliquée à chaque image de l'animation ; pièces des autres unités subdivisées et chanfreinées) ; textures de surface (tissu tissé, cuir grainé, acier martelé, salissures, ombre vers les pieds, liseré de lumière) ; armure des chevaliers nettoyée et capes visibles des deux côtés.

@@ -2,6 +2,7 @@
 // Maison du sorcier, et objets du pack low-poly (assets/items/items.bin, converti par tools/fbx_items.py) : grande épée, cristaux,
 // livre, potions, cœur… Les objets sont facultatifs : sans eux, des formes simples les remplacent.
 import * as THREE from 'three';
+import { loopOps, applyOps } from './subdiv.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { bx, cyl, part, Rig } from './Troops.js';
 import { applyNorthFog } from './fog.js';
@@ -66,7 +67,10 @@ export async function loadKnight(url = 'assets/characters/knight.bin') {
     const q = new Uint16Array(buf.slice(off, off + p.V * 6)); off = align(off + p.V * 6); const c = new Uint8Array(buf, off, p.V * 3); off = align(off + p.V * 3);
     const pos = new Float32Array(p.V * 3), col = new Float32Array(p.V * 3);
     for (let i = 0; i < p.V * 3; i++) { pos[i] = p.mn[i % 3] + q[i] / 65535 * (p.mx[i % 3] - p.mn[i % 3]); col[i] = c[i] / 255; }
-    parts[p.name] = { pos, col };
+    // (v9.8) subdivision de Loop : 4 fois plus de triangles, armure plus galbée (pièces rigides : calcul unique au chargement)
+    const SD = loopOps(pos, null, 1e-4), P2 = applyOps(SD.ops, pos), C2 = applyOps(SD.col, col), n = SD.index.length, pos4 = new Float32Array(n * 3), col4 = new Float32Array(n * 3);
+    for (let k = 0; k < n; k++) { const v = SD.index[k]; for (let c3 = 0; c3 < 3; c3++) { pos4[k * 3 + c3] = P2[v * 3 + c3]; col4[k * 3 + c3] = C2[v * 3 + c3]; } }
+    parts[p.name] = { pos: pos4, col: col4 };
   }
   KNIGHT_GLB.parts = parts; return parts;
 }
@@ -83,11 +87,18 @@ function glbPart(src, recolor) {
   if (recolor) for (let i = 0; i < col.length; i += 3) recolor(col, i);
   g.setAttribute('position', new THREE.BufferAttribute(src.pos.slice(), 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); return g;
 }
+// géométrie non indexée vue des deux côtés : on ajoute chaque triangle retourné (le matériau partagé des unités est simple face)
+function twoSided(g) { const p = g.attributes.position.array, c = g.attributes.color.array, n = p.length / 9, P2 = new Float32Array(p.length * 2), C2 = new Float32Array(c.length * 2); P2.set(p); C2.set(c);
+  for (let t = 0; t < n; t++) for (const [d, s] of [[0, 0], [1, 2], [2, 1]]) for (let k = 0; k < 3; k++) { P2[p.length + t * 9 + d * 3 + k] = p[t * 9 + s * 3 + k]; C2[c.length + t * 9 + d * 3 + k] = c[t * 9 + s * 3 + k] * 0.8; }
+  const o = new THREE.BufferGeometry(); o.setAttribute('position', new THREE.BufferAttribute(P2, 3)); o.setAttribute('color', new THREE.BufferAttribute(C2, 3)); return o; }
 export function knightGlbParts(tier = 0) {
   const P = KNIGHT_GLB.parts, T = KNIGHT_TIERS[tier], cape = new THREE.Color(T.cape), GOLDC = [1, 0.78, 0.32];
-  const armor = (c, i) => { const l = (c[i] + c[i + 1] + c[i + 2]) / 3; for (let k = 0; k < 3; k++) c[i + k] = Math.min(1, (c[i + k] * (1 - T.gold) + l * GOLDC[k] * 1.25 * T.gold) * T.armor[k]); };
-  const capeC = (c, i) => { const l = (c[i] + c[i + 1] + c[i + 2]) / 3, bright = l > 0.62 && T.gold > 0.1; const cc = bright ? GOLDC : [cape.r, cape.g, cape.b]; for (let k = 0; k < 3; k++) c[i + k] = Math.min(1, cc[k] * (0.55 + l * 0.9)); };
-  const body = [glbPart(P.body, armor)];
+  // (v9.8) armure nettoyée : les couleurs d'origine étaient tachetées (effet camouflage) ; on garde le relief de luminance, atténué,
+  // sur un acier propre et légèrement bleuté (le grain métallique vient du shader des unités)
+  const STEELC = [0.7, 0.73, 0.78];
+  const armor = (c, i) => { const l = (c[i] + c[i + 1] + c[i + 2]) / 3, lc = Math.max(0.55, Math.min(1.08, 0.82 + 0.55 * (l - 0.4))); for (let k = 0; k < 3; k++) c[i + k] = Math.min(1, (STEELC[k] * lc * (1 - T.gold) + lc * GOLDC[k] * 0.95 * T.gold) * T.armor[k]); };
+  const capeC = (c, i) => { const l = (c[i] + c[i + 1] + c[i + 2]) / 3, bright = l > 0.62 && T.gold > 0.1; const cc = bright ? GOLDC : [cape.r, cape.g, cape.b]; for (let k = 0; k < 3; k++) c[i + k] = Math.min(1, cc[k] * (0.85 + Math.min(0.3, l * 0.3))); };   /* cape unie (plus de lambeaux noirs) */
+  const body = [twoSided(glbPart(P.body, armor))];   // (v9.8) jupe de mailles et pièces fines visibles des deux côtés
   if (T.plume) body.push(bx(0.07, 0.3, 0.36, T.plume, 0, 2.08, -0.02), bx(0.05, 0.22, 0.26, T.plume, 0, 2.28, -0.08));
   if (T.crown) for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; body.push(bx(0.06, 0.14, 0.06, 0xf2c94a, Math.cos(a) * 0.14, 2.0, Math.sin(a) * 0.14)); }
   const sword = item(T.sword, T.len, -0.36, 0.86, -0.06, Math.PI / 2, 0, 0) || bx(0.07, 0.06, T.len, STEEL, -0.36, 0.86, T.len / 2);
@@ -95,7 +106,7 @@ export function knightGlbParts(tier = 0) {
     part('body', [0, 0, 0], body),
     part('legL', [-0.12, 0.92, 0], [glbPart(P.legA, armor)], 'rot'), part('legR', [0.12, 0.92, 0], [glbPart(P.legB, armor)], 'rot'),
     part('arm', [-0.32, 1.45, 0], [glbPart(P.arm, armor), sword], 'rot'),
-    part('cape', [0, 1.5, -0.1], [glbPart(P.cape, capeC)], 'rot'),
+    part('cape', [0, 1.5, -0.1], [twoSided(glbPart(P.cape, capeC))], 'rot'),   // (v9.8) cape visible des deux côtés (elle paraissait en lambeaux)
   ];
 }
 export const KNIGHT = { tabard: 0x2f5fb0, trim: 0xf2c94a, plume: 0xd03a2a, shield: 0x2f5fb0, cape: 0x1f3f80 };

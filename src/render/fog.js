@@ -83,3 +83,28 @@ export function applyNorthFog(material) {
   material.customProgramCacheKey = () => 'north-fog';
   return material;
 }
+
+// (v9.8) détail de surface des unités du joueur : grain de tissu / cuir / métal (bruit en coordonnées du modèle, donc stable
+// quand l'unité bouge), ombrage d'occlusion vers les pieds et liseré de lumière sur les contours. `s` = mètres par unité du modèle.
+export function unitDetail(sh, s = 1) {
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vULoc;').replace('#include <project_vertex>', 'vULoc = transformed * ' + s.toFixed(5) + ';\n#include <project_vertex>');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+varying vec3 vULoc;
+float uHash( vec3 p ) { p = fract( p * 0.3183099 + 0.1 ); p *= 17.0; return fract( p.x * p.y * p.z * ( p.x + p.y + p.z ) ); }
+float uNoise( vec3 x ) { vec3 i = floor( x ), f = fract( x ); f = f * f * ( 3.0 - 2.0 * f );
+  return mix( mix( mix( uHash( i ), uHash( i + vec3( 1, 0, 0 ) ), f.x ), mix( uHash( i + vec3( 0, 1, 0 ) ), uHash( i + vec3( 1, 1, 0 ) ), f.x ), f.y ),
+              mix( mix( uHash( i + vec3( 0, 0, 1 ) ), uHash( i + vec3( 1, 0, 1 ) ), f.x ), mix( uHash( i + vec3( 0, 1, 1 ) ), uHash( i + vec3( 1, 1, 1 ) ), f.x ), f.y ), f.z ); }`)
+    .replace('#include <color_fragment>', `#include <color_fragment>
+  { vec3 c = diffuseColor.rgb; float mx = max( c.r, max( c.g, c.b ) ), sat = mx > 0.0 ? ( mx - min( c.r, min( c.g, c.b ) ) ) / mx : 0.0;
+    float n1 = uNoise( vULoc * 26.0 ), n2 = uNoise( vULoc * 75.0 ), wv = sin( vULoc.x * 260.0 ) * sin( vULoc.y * 260.0 + vULoc.z * 180.0 );
+    float metal = smoothstep( 0.25, 0.08, sat ) * smoothstep( 0.35, 0.6, mx );               // acier : clair et peu saturé
+    float n3 = uNoise( vULoc * 9.0 );
+    float grain = ( 0.8 + 0.22 * n1 + 0.12 * n2 + 0.1 * n3 ) * ( 1.0 + 0.07 * wv * ( 1.0 - metal ) );   // tissu tissé, cuir grainé, usure
+    float shine = 0.95 + 0.08 * n2 + 0.16 * smoothstep( 0.6, 0.9, uNoise( vULoc * 7.0 + 3.0 ) );          // métal : reflets martelés
+    diffuseColor.rgb *= mix( grain, shine, metal );
+    diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * vec3( 0.86, 0.8, 0.72 ), smoothstep( 0.6, 0.9, n3 ) * 0.25 * ( 1.0 - metal ) );   // salissures
+    diffuseColor.rgb *= mix( 0.66, 1.07, smoothstep( -0.1, 1.3, vULoc.y ) ); }`)
+    .replace('#include <opaque_fragment>', `{ float rim = pow( 1.0 - clamp( abs( dot( normalize( normal ), normalize( vViewPosition ) ) ), 0.0, 1.0 ), 3.0 );
+  outgoingLight += diffuseColor.rgb * rim * 0.32; }
+#include <opaque_fragment>`);
+}
