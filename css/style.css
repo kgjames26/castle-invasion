@@ -289,7 +289,7 @@ body.fpv #fpvx { display:block; } body.fpv #top, body.fpv #dock, body.fpv #badge
 /* v4.6 : sur téléphone, le tutoriel passe en bas (au-dessus du dock) pour libérer la mini-carte ; il remonte quand un panneau est ouvert */
 @media (max-width:700px) {
   #tuto { top:auto; bottom:calc(env(safe-area-inset-bottom) + 96px); }
-  body:has(#sheet.on) #tuto, body:has(#card.on) #tuto { bottom:auto; top:calc(env(safe-area-inset-top) + 128px); }
+  body:has(#sheet.on) #tuto, body:has(#card.on) #tuto, body:has(#placebar.on) #tuto { bottom:auto; top:calc(env(safe-area-inset-top) + 128px); }
 }
 @media (max-width:700px) { #bossbar { left:calc(50% + 52px); width:calc(100vw - 130px); } }
 .cbar .bar.hit { animation:cbhit .6s ease-out; } @keyframes cbhit { 0% { box-shadow:0 0 0 3px rgba(220,60,40,.9); } 100% { box-shadow:0 0 0 0 rgba(220,60,40,0); } }

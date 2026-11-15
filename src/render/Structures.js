@@ -25,7 +25,7 @@ export class StructureView {
     this.scene = scene; this.sim = sim; this.camera = camera; this.kit = null; this.map = new Map(); this.sel = 0; this.ghost = null;
     this.barBg = new THREE.MeshBasicMaterial({ color: 0x1b140c, transparent: true, opacity: 0.8, depthTest: false });
     this.barFill = new THREE.MeshBasicMaterial({ color: 0xe8c14a, depthTest: false });
-    this.ghostMat = { ok: new THREE.MeshBasicMaterial({ color: 0x6fe08a, transparent: true, opacity: 0.5, depthWrite: false }), no: new THREE.MeshBasicMaterial({ color: 0xff5a4a, transparent: true, opacity: 0.5, depthWrite: false }) };
+    this.ghostMat = { ok: new THREE.MeshLambertMaterial({ color: 0x8ff0a4, emissive: 0x1f6a30, transparent: true, opacity: 0.5, depthWrite: false, flatShading: true }), no: new THREE.MeshLambertMaterial({ color: 0xff7a6a, emissive: 0x6a1a14, transparent: true, opacity: 0.5, depthWrite: false, flatShading: true }) };   // (v5.0) éclairé : on lit la forme du bâtiment
     const ring = new THREE.RingGeometry(0.9, 1, 40); ring.rotateX(-Math.PI / 2);
     this.ring = new THREE.Mesh(ring, new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.95, depthWrite: false })); this.ring.visible = false; scene.add(this.ring);
     // zone constructible (visible pendant le placement)
@@ -148,7 +148,7 @@ export class StructureView {
     const gh = this.ghost, mt = gh.ok ? this.ghostMat.ok : this.ghostMat.no;
     for (const m of gh.meshes) m.material = mt;
     gh.g.position.set(gh.x, 0.05 + 0.15 * Math.abs(Math.sin(clock * 3)), gh.z); gh.inner.rotation.y = -gh.rot * Math.PI / 2;
-    const t = 0.38 + 0.14 * Math.sin(clock * 5); this.ghostMat.ok.opacity = this.ghostMat.no.opacity = t;
+    const t = 0.55 + 0.12 * Math.sin(clock * 5); this.ghostMat.ok.opacity = this.ghostMat.no.opacity = t;
   }
   setSelected(id) { this.sel = id || 0; }
 }

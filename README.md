@@ -344,3 +344,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Pendant la vague : barre rouge de la horde restante et compteur de zombies abattus (💀) dans le bandeau.
 - Usure de la cour : passages polis devant les portes, flaques, mousse au pied du mur.
 - Barre du château qui change de couleur (vert → orange → rouge), flash et alerte quand il est frappé.
+- Fantôme de placement éclairé (on voit la forme du bâtiment) ; sur téléphone le tutoriel ne passe plus sous la barre de placement.
