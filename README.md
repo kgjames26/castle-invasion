@@ -412,3 +412,7 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Pastille « 🔥 Enflammer » au-dessus de chaque palissade pendant l'alerte et la vague : un toucher suffit (compte à rebours pendant qu'elle brûle).
 - Réglage « Faible » : deux fois moins de feux de camp et 8 allumeurs de village, pour les téléphones modestes.
 - Face arrière du château habillée (celle qu'on voit depuis la vue par défaut) : deux bannières, une poterne ferrée sous un linteau de pierre, deux contreforts.
+
+## Phase 52 — Matières
+- Bâtiments : matières déduites de la couleur (planches jointives, pierres appareillées avec joints, tuiles en rangs, chaume strié), pied des murs assombri.
+- Douves défensives : même eau réaliste que celles du château. Fleurs de printemps plus fines et plus nombreuses.

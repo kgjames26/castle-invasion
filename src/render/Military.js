@@ -7,7 +7,7 @@ import { patchNorthFog } from './fog.js';
 import { patchGrain } from './Stone.js';
 
 export const mats = new Map();
-export const mat = (c, ds = false) => { const k = c + (ds ? 'd' : ''); if (!mats.has(k)) { const m = new THREE.MeshLambertMaterial({ color: c, flatShading: true, side: ds ? THREE.DoubleSide : THREE.FrontSide }); m.onBeforeCompile = sh => { patchNorthFog(sh); patchGrain(sh); }; m.customProgramCacheKey = () => 'nfog-grain'; mats.set(k, m); } return mats.get(k); };
+export const mat = (c, ds = false) => { const k = c + (ds ? 'd' : ''); if (!mats.has(k)) { const m = new THREE.MeshLambertMaterial({ color: c, flatShading: true, side: ds ? THREE.DoubleSide : THREE.FrontSide }); m.onBeforeCompile = sh => { patchNorthFog(sh); patchGrain(sh); }; m.customProgramCacheKey = () => 'nfog-grain2'; mats.set(k, m); } return mats.get(k); };
 
 function gableGeo(w, d, h) {   // prisme triangulaire : longueur w (x), largeur d (z), hauteur h
   const a = [-w / 2, 0, -d / 2], b = [-w / 2, 0, d / 2], c = [-w / 2, h, 0], a2 = [w / 2, 0, -d / 2], b2 = [w / 2, 0, d / 2], c2 = [w / 2, h, 0];
