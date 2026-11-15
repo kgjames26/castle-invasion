@@ -381,6 +381,7 @@ export class UI {
     else if (e.type === 'autoRepairDone') this.toast(`🔧 Muraille réparée — ${e.n} villageois retournent à leur tâche`, 'ok');
     else if (e.type === 'mage') this.toast(e.what === 'summoned' ? '🔮 Le magicien est arrivé ! Il agit seul : soins, réparations, sorts.' : '💀 Le magicien est tombé — il reviendra dans 30 s', e.what === 'summoned' ? 'ok' : 'danger');
     else if (e.type === 'autoFormed') { const p = []; if (e.formed) p.push(`${e.formed} nouvelle${e.formed > 1 ? 's' : ''} troupe${e.formed > 1 ? 's' : ''}`); if (e.merged) p.push(`${e.merged} fusion${e.merged > 1 ? 's' : ''} en peloton ou escadron`); if (e.filled) p.push(`+${e.filled} renforts`); this.toast(`⚜ Après la vague : ${p.join(' · ')}`, 'ok'); }
+    else if (e.type === 'earlyBonus') this.toast(`⚡ Vague lancée en avance : +${e.gold} ${RES_INFO.gold.ico}`, 'ok');
     else if (e.type === 'waveEnd') { if (sim.army.squads.length) { this.invite = true; setTimeout(() => this.renderOrder(), 50); } const r = e.reward || {}; this.toast(`🏆 Vague ${e.wave} repoussée · ${Object.keys(r).map(k => `+${r[k]} ${RES_INFO[k].ico}`).join(' ')}`, 'ok'); this.buzz([30, 30, 30]); }
   }
   // ——— mise à jour de l'affichage ———
@@ -395,6 +396,7 @@ export class UI {
     $('#wave-phase').textContent = `${sim.extras.season().ico}${{ clear: '', rain: '🌧', fog: '🌫', snow: '❄' }[sim.extras.weather]} ` + (sim.phase === 'assault' ? `⚔ ${zl} zombies${sim.zombies.kills - (this.killsAt ?? sim.zombies.kills) > 0 ? ` · 💀${sim.zombies.kills - this.killsAt}` : ''}` : sim.phase === 'alert' ? '🔔 Ils arrivent' : sim.phase === 'calm' ? '🕊 Répit' : '🌿 Calme');
     if (this.lastPhase !== sim.phase) { if (this.lastPhase) this.phaseBanner(sim.phase); this.lastPhase = sim.phase; if (sim.phase === 'prep') this.newFoes(); if (sim.phase === 'assault') this.killsAt = sim.zombies.kills; }
     $('#wave-phase').dataset.p = sim.phase; $('#b-skip').style.display = sim.phase === 'prep' ? '' : 'none';
+    { const eb = sim.earlyBonus(), bs = $('#b-skip'), lab = eb > 0 ? `⚔<span class="lt"> Lancer</span> <small>+${eb}${RES_INFO.gold.ico}</small>` : '⚔ Lancer'; if (bs.dataset.l !== lab) { bs.dataset.l = lab; bs.innerHTML = lab; bs.title = eb > 0 ? `Lancer la vague maintenant : +${eb} or pour le temps gagné` : 'Lancer la vague maintenant'; } }
     { const tot = sim.phase === 'prep' ? (sim.wave === 1 ? TIMING.firstPrep : TIMING.prep) : sim.phase === 'alert' ? TIMING.alert : sim.phase === 'calm' ? TIMING.calm : 0, cb = $('#calm-bar');
       const asl = sim.phase === 'assault' && sim.spawn && sim.spawn.total > 0;   /* pendant la vague : part de la horde encore debout */
       cb.parentNode.style.display = tot || asl ? '' : 'none'; if (tot) cb.style.width = (100 * Math.max(0, sim.timer) / tot) + '%'; else if (asl) cb.style.width = Math.min(100, 100 * zl / sim.spawn.total) + '%'; cb.parentNode.dataset.p = sim.phase; cb.parentNode.title = asl ? 'Horde restante' : 'Avant la vague'; }

@@ -293,3 +293,6 @@ body.fpv #fpvx { display:block; } body.fpv #top, body.fpv #dock, body.fpv #badge
 }
 @media (max-width:700px) { #bossbar { left:calc(50% + 52px); width:calc(100vw - 130px); } }
 .cbar .bar.hit { animation:cbhit .6s ease-out; } @keyframes cbhit { 0% { box-shadow:0 0 0 3px rgba(220,60,40,.9); } 100% { box-shadow:0 0 0 0 rgba(220,60,40,0); } }
+.launch small { font-size:10px; font-weight:800; opacity:.95; margin-left:2px; } .launch small .ri { width:1.2em; height:1.2em; vertical-align:-0.25em; }
+@media (max-width:480px) { .launch .lt { display:none; } }
+.wave .wt { overflow:hidden; } .phase { overflow:hidden; text-overflow:ellipsis; } .cbar { min-width:36px; }

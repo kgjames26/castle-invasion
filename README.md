@@ -345,3 +345,5 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Usure de la cour : passages polis devant les portes, flaques, mousse au pied du mur.
 - Barre du château qui change de couleur (vert → orange → rouge), flash et alerte quand il est frappé.
 - Fantôme de placement éclairé (on voit la forme du bâtiment) ; sur téléphone le tutoriel ne passe plus sous la barre de placement.
+- Lancer la vague en avance rapporte de l'or (dès la vague 2), proportionnel au temps de préparation sacrifié ; le bonus s'affiche sur le bouton « Lancer ».
+- Bandeau de vague plus robuste sur téléphone (texte tronqué proprement, barres jamais écrasées).
