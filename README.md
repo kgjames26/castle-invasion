@@ -378,3 +378,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Écran de défaite : record de vague (🏅 nouveau record), bouton « Reprendre au début de la vague » directement sur l'écran, aides masquées.
 - Tutoriel : le bouton à toucher est entouré d'un halo doré qui pulse (dock, catégorie, bâtiment, puis « Poser »).
 - Une cane et ses canetons, et quelques canards, glissent sur les douves ; l'eau des douves est désormais opaque (les pavés ne se voyaient plus au travers).
+- Crépuscule doré : soleil orangé plus présent, horizon orangé et zénith mauve, sol réchauffé.
