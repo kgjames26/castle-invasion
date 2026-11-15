@@ -3,7 +3,7 @@
 // et grandes bannières bleues accrochées à la face intérieure du mur. Tout est fusionné en quelques maillages.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { SECTORS, SECTOR_W } from '../sim/constants.js';
+import { SECTORS, SECTOR_W, WALK_H } from '../sim/constants.js';
 import { GATE_XS } from '../sim/constants.js';
 import { arcPoint, STAIR_XS, Z_IN } from './WallView.js';
 import { applyNorthFog, applyFlutterFog } from './fog.js';
@@ -31,7 +31,10 @@ export class Bailey {
       put(metal, new THREE.CylinderGeometry(0.45, 0.45, 0.06, 12).rotateX(Math.PI / 2).translate(1.25, 0.55, -0.1), x, 0, z); put(cloth, new THREE.CylinderGeometry(0.3, 0.3, 0.07, 12).rotateX(Math.PI / 2).translate(1.25, 0.55, -0.06), x, 0, z); };
     this.flames = [];
     const brazier = (x, z) => { put(metal, new THREE.CylinderGeometry(0.05, 0.05, 1.0, 5).translate(0, 0.5, 0), x, 0, z); put(metal, new THREE.CylinderGeometry(0.45, 0.25, 0.35, 9, 1, true).translate(0, 1.15, 0), x, 0, z); put(stone, new THREE.CylinderGeometry(0.5, 0.55, 0.1, 9).translate(0, 0.05, 0), x, 0, z);
-      const p = arcPoint(x, z, _p); this.flames.push({ x: p.x, z: p.z, ph: rn() * 6 }); };
+      const p = arcPoint(x, z, _p); this.flames.push({ x: p.x, z: p.z, y: 1.2, ph: rn() * 6 }); };
+    // torches du chemin de ronde (allumées la nuit seulement) : poteau + coupelle côté cour du parapet
+    const torch = (x, z) => { put(metal, new THREE.CylinderGeometry(0.04, 0.05, 1.3, 5).translate(0, WALK_H + 0.65, 0), x, 0, z); put(metal, new THREE.CylinderGeometry(0.2, 0.1, 0.22, 7, 1, true).translate(0, WALK_H + 1.38, 0), x, 0, z);
+      const p = arcPoint(x, z, _p); this.flames.push({ x: p.x, z: p.z, y: WALK_H + 1.42, ph: rn() * 6, night: true, s: 0.55 }); };
     // une vignette différente entre chaque paire d'escaliers / porte
     const KINDS = ['barrels', 'crates', 'hay', 'rack', 'logs', 'mix'];
     let kk = 0;
@@ -46,6 +49,7 @@ export class Bailey {
     }
     // braseros de part et d'autre des portes (là où passent les troupes)
     for (const g of GATE_XS) for (const o of [-5.2, 5.2]) brazier(g + o, FACE + 1.2);
+    for (let x = 6; x < SECTORS * SECTOR_W - 4; x += 12.5) if (GATE_XS.every(g => Math.abs(x - g) > 6) && STAIR_XS.every(st => Math.abs(x - st) > 2)) torch(x, FACE - 1.1);
     // bannières sur la face intérieure du mur, au milieu de chaque tronçon libre
     for (let s = 0; s < SECTORS; s++) for (const f of [0.3, 0.7]) { const x = s * SECTOR_W + f * SECTOR_W; if (!free(x)) continue;
       put(cloth, new THREE.PlaneGeometry(1.7, 2.8, 1, 4).translate(0, 3.2, 0), x, 0, FACE + 0.12);
@@ -65,9 +69,9 @@ export class Bailey {
   }
   update(dt, light = 1) {
     this.t += dt; const d = this.d, night = Math.max(0, Math.min(1, (0.8 - light) / 0.5));
-    this.flames.forEach((f, i) => { const k = 0.85 + 0.25 * Math.sin(this.t * 9 + f.ph) + 0.1 * Math.sin(this.t * 23 + f.ph * 2);
-      d.position.set(f.x, 1.2, f.z); d.rotation.set(0.06 * Math.sin(this.t * 5 + f.ph), this.t * 1.5 + f.ph, 0.06 * Math.cos(this.t * 6 + f.ph)); d.scale.set(1, k, 1); d.updateMatrix(); this.flameM.setMatrixAt(i, d.matrix); d.scale.set(1, 0.8 + 0.3 * k, 1); d.updateMatrix(); this.coreM.setMatrixAt(i, d.matrix);
-      d.position.set(f.x, 0.04, f.z); d.rotation.set(0, 0, 0); d.scale.setScalar(0.9 + 0.1 * k); d.updateMatrix(); this.glow.setMatrixAt(i, d.matrix); });
+    this.flames.forEach((f, i) => { const on = f.night ? Math.min(1, night * 1.6) : 1, sc = (f.s || 1) * on, k = (0.85 + 0.25 * Math.sin(this.t * 9 + f.ph) + 0.1 * Math.sin(this.t * 23 + f.ph * 2));
+      d.position.set(f.x, f.y, f.z); d.rotation.set(0.06 * Math.sin(this.t * 5 + f.ph), this.t * 1.5 + f.ph, 0.06 * Math.cos(this.t * 6 + f.ph)); d.scale.set(sc, k * sc, sc); d.updateMatrix(); this.flameM.setMatrixAt(i, d.matrix); d.scale.set(sc, (0.8 + 0.3 * k) * sc, sc); d.updateMatrix(); this.coreM.setMatrixAt(i, d.matrix);
+      d.position.set(f.x, f.night ? WALK_H + 0.06 : 0.04, f.z); d.rotation.set(0, 0, 0); d.scale.setScalar((0.9 + 0.1 * k) * (f.night ? 0.45 * on + 1e-3 : 1)); d.updateMatrix(); this.glow.setMatrixAt(i, d.matrix); });
     this.flameM.instanceMatrix.needsUpdate = true; this.coreM.instanceMatrix.needsUpdate = true; this.glow.instanceMatrix.needsUpdate = true; this.glow.material.opacity = 0.03 + 0.55 * night;
   }
 }
