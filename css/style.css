@@ -286,3 +286,9 @@ body.fpv #fpvx { display:block; } body.fpv #top, body.fpv #dock, body.fpv #badge
 #bossbar.on { display:block; } #bossbar .bar { height:10px; border-radius:5px; background:rgba(0,0,0,.6); border:1px solid #6a1a12; overflow:hidden; margin-top:2px; } #bossbar .bar i { display:block; height:100%; background:linear-gradient(#ff6a3c,#8a1a10); transition:width .3s; }
 .rchip { cursor:pointer; } .rchip small { font-size:10px; font-weight:700; color:#3f7a2a; display:none; }
 @media (min-width:700px) { .rchip small { display:inline; } }
+/* v4.6 : sur téléphone, le tutoriel passe en bas (au-dessus du dock) pour libérer la mini-carte ; il remonte quand un panneau est ouvert */
+@media (max-width:700px) {
+  #tuto { top:auto; bottom:calc(env(safe-area-inset-bottom) + 96px); }
+  body:has(#sheet.on) #tuto, body:has(#card.on) #tuto { bottom:auto; top:calc(env(safe-area-inset-top) + 128px); }
+}
+@media (max-width:700px) { #bossbar { left:calc(50% + 52px); width:calc(100vw - 130px); } }
