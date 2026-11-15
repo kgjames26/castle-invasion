@@ -357,3 +357,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Flammes des braseros refaites (langues croisées lumineuses) et torches sur le chemin de ronde qui s'allument à la tombée de la nuit : la muraille se dessine dans le noir.
 - Noms de secteurs harmonisés partout (Porte gauche, Mur gauche, Grande porte…) ; le bilan n'affiche plus de « secteur le plus meurtrier » quand aucun zombie n'a été abattu.
 - Pastille dorée ⬆ au-dessus des bâtiments qu'on peut améliorer tout de suite (ressources suffisantes), pendant le temps calme ; un clic ouvre la fiche.
+- Compte à rebours de la prochaine vague dans le bandeau (🌿 2:30, puis 🔔 Ils arrivent 8s).
