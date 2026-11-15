@@ -1012,7 +1012,11 @@ export class UI {
     if (!part) return this.cats('tech', [
       { k: 'village', ico: '🎓', name: 'Améliorations du village', sub: E0.level.university ? `université niv. ${E0.level.university}` : 'construis l\'université' },
       { k: 'where', ico: '🗺', name: 'Où améliorer quoi ?', sub: 'chaque amélioration et son bâtiment' },
+      { k: 'guide', ico: '📖', name: 'Guide du défenseur', sub: 'bases, bestiaire, raccourcis' },
+      { k: 'wave', ico: '🔭', name: 'Prochaine vague', sub: 'composition et conseil' },
     ]);
+    if (part === 'guide') { this.guideOn = true; return this.back('tech', '📖 Guide du défenseur') + this.guideHtml().replace(/<button class="lnk"[^>]*>replier<\/button>/, ''); }
+    if (part === 'wave') { this.nav.tech = null; this.closeSheet(); setTimeout(() => this.toggleWavePop(true), 30); return ''; }
     const full = this.techFull(), cut = full.indexOf('<div class="tgrp">Village</div>');
     return this.back('tech', part === 'where' ? '🗺 Où améliorer quoi ?' : '🎓 Améliorations du village') + (part === 'where' ? full.slice(0, cut) : full.slice(cut));
   }

@@ -382,3 +382,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Bords de l'écran rouges et pulsants quand une brèche est ouverte ou que le château passe sous 50 %.
 - Robustesse : index d'animation des villageois borné, charges portées sans modèle ignorées.
 - Sons : fanfare de cuivres et cloche quand une vague est repoussée, pièces qui tintent pour le bonus de lancement anticipé.
+- Savoir : nouvelles cartes « Guide du défenseur » et « Prochaine vague » (accès direct à l'aperçu).
