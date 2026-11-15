@@ -723,7 +723,7 @@ export class Renderer {
       im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CC * 3), 3);
       im.anim = new THREE.InstancedBufferAttribute(new Float32Array(CC), 1); im.fade = new THREE.InstancedBufferAttribute(new Float32Array(CC), 1); g.setAttribute('aAnim', im.anim); g.setAttribute('aFade', im.fade); this.scene.add(im); return im;
     }); this.zcCount = new Int32Array(this.zc.length);
-    this.zTint = ZOMBIES.map(z => new THREE.Color(0xffffff).lerp(new THREE.Color(z.color), 0.62));   // types plus reconnaissables
+    this.zTint = ZOMBIES.map(z => new THREE.Color(0xffffff).lerp(new THREE.Color(z.color), 0.62).multiplyScalar(1.45));   // (v8.0) plus clairs : on distingue les types sur le champ de bataille   // types plus reconnaissables
     const mk = geo => { const im = new THREE.InstancedMesh(geo, ch.archerMat, SECTORS * ARCHER_SLOTS + 150); im.frustumCulled = false; im.count = 0; this.scene.add(im); return im; };
     this.ab = mk(ch.archer.body); this.abow = mk(ch.archer.bow); this.aMesh.visible = false;
     ch.archer.body.computeBoundingBox(); this.archerBB = ch.archer.body.boundingBox.clone(); this.aGear = null; this.aGearTier = -1;
