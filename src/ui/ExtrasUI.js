@@ -205,7 +205,7 @@ export function installExtrasUI(UI) {
   const STEPS = [
     ['🏠 Bâtis une maison', 'Touche ⚒ Bâtir, puis Habitations : les maisons logent villageois et soldats.', s => s.build.items.some(b => b.type === 'house')],
     ['🪚 Construis une scierie', 'Dans ⚒ Bâtir › Économie : le bois sert à presque tout.', s => s.build.items.some(b => b.type === 'sawmill')],
-    ['👥 Répartis tes villageois', 'Touche 👥 Villageois et envoie-les récolter (bûcherons, carriers…).', s => s.eco.assign.wood + s.eco.assign.stone >= 3],
+    ['👥 Recrute des villageois', 'Touche 👥 Villageois › « + Villageois » : plus de bras, plus de ressources (une maison donne de la place).', s => s.eco.villagers.length >= 12],
     ['🎯 Bâtis un champ de tir', 'Les archers défendent la muraille d\'eux-mêmes dès qu\'ils sont formés.', s => s.build.items.some(b => b.type === 'range' && b.state === 'built')],
     ['🏹 Forme des archers', 'Touche le champ de tir et commande des archers.', s => s.army.archers.reduce((a, b) => a + b.n, 0) + s.army.reserve.archer >= 3],
     ['⚔ Prêt !', 'Touche « Lancer » quand tu veux, ou attends la horde. Bonne défense !', s => s.phase !== 'prep'],

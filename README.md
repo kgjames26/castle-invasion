@@ -348,3 +348,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Lancer la vague en avance rapporte de l'or (dès la vague 2), proportionnel au temps de préparation sacrifié ; le bonus s'affiche sur le bouton « Lancer ».
 - Bandeau de vague plus robuste sur téléphone (texte tronqué proprement, barres jamais écrasées).
 - Conseiller 💡 au-dessus du dock : les 3 actions les plus utiles du moment (famine, secteur visé sans archer, brèche, population pleine, villageois sans travail, stock plein, muraille abîmée sans réparateurs, pas de champ de tir), chacune avec un raccourci direct.
+- Tutoriel : l'étape « répartis tes villageois » (déjà faite au départ) devient « recrute des villageois ».
