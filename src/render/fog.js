@@ -9,7 +9,8 @@ export const fogUniforms = {
   uWindTime: { value: 0 },
   uCloud: { value: 0 },
   uSnow: { value: 0 },
-  uAutumn: { value: 0 },                                                    // (v7.0) l'herbe roussit en automne                                                      // (v7.0) neige au sol en hiver (faces tournées vers le ciel)                                                     // (v5.0) ombres de nuages qui glissent sur le sol (0 la nuit)                                                  // vent : arbres et feuillages (animé par le Renderer)
+  uAutumn: { value: 0 },
+  uSpring: { value: 0 },                                                    // (v8.0) fleurs des champs au printemps                                                    // (v7.0) l'herbe roussit en automne                                                      // (v7.0) neige au sol en hiver (faces tournées vers le ciel)                                                     // (v5.0) ombres de nuages qui glissent sur le sol (0 la nuit)                                                  // vent : arbres et feuillages (animé par le Renderer)
 };
 export function patchNorthFog(shader) {
     Object.assign(shader.uniforms, fogUniforms);
@@ -28,13 +29,19 @@ export function patchNorthFog(shader) {
           #endif
           vec3 wnw = mat3( modelMatrix ) * wn; float wl = dot( wnw, wnw ); vNUp = wl > 1e-8 ? wnw.y * inversesqrt( wl ) : 0.0; }`);
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vNZ;\nvarying float vNX;\nvarying float vHzD;\nvarying float vNUp;\nuniform float uCloud;\nuniform float uSnow;\nuniform float uAutumn;\nuniform float uWindTime;\nuniform vec3 uNFogColor;\nuniform vec2 uNFogRange;\nuniform vec3 uHazeColor;\nuniform vec3 uHazeRange;')
+      .replace('#include <common>', '#include <common>\nvarying float vNZ;\nvarying float vNX;\nvarying float vHzD;\nvarying float vNUp;\nuniform float uCloud;\nuniform float uSnow;\nuniform float uAutumn;\nuniform float uSpring;\nuniform float uWindTime;\nuniform vec3 uNFogColor;\nuniform vec2 uNFogRange;\nuniform vec3 uHazeColor;\nuniform vec3 uHazeRange;')
       .replace('#include <tonemapping_fragment>', `
         { float t = uWindTime, c = sin( vNX * 0.019 + t * 0.045 ) * sin( vNZ * 0.016 - t * 0.03 ) + 0.55 * sin( ( vNX + vNZ ) * 0.041 + t * 0.06 ) + 0.3 * sin( vNX * 0.07 - vNZ * 0.05 - t * 0.08 );
           gl_FragColor.rgb *= 1.0 - smoothstep( 0.45, 1.1, c ) * 0.25 * uCloud; }
         if ( uAutumn > 0.001 ) { vec3 cA = gl_FragColor.rgb; float gr = clamp( ( cA.g - max( cA.r, cA.b ) ) * 12.0, 0.0, 1.0 ) * smoothstep( 0.3, 0.75, vNUp );
           float la = dot( cA, vec3( 0.299, 0.587, 0.114 ) ), va = 0.5 + 0.5 * sin( vNX * 0.09 + vNZ * 0.06 ) * sin( vNX * 0.031 - vNZ * 0.05 + 0.7 );
           gl_FragColor.rgb = mix( cA, vec3( la * 1.75, la * 0.98, la * 0.36 ), gr * uAutumn * ( 0.5 + 0.4 * va ) ); }
+        if ( uSpring > 0.001 ) { vec3 cS = gl_FragColor.rgb; float grS = clamp( ( cS.g - max( cS.r, cS.b ) ) * 12.0, 0.0, 1.0 ) * smoothstep( 0.6, 0.9, vNUp );
+          vec2 cell = floor( vec2( vNX, vNZ ) * 0.9 ); float h = fract( sin( dot( cell, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 ), h2 = fract( h * 17.13 );
+          vec2 fp = fract( vec2( vNX, vNZ ) * 0.9 ) - 0.5; float dot0 = 1.0 - smoothstep( 0.1, 0.17, length( fp - ( vec2( h, h2 ) - 0.5 ) * 0.6 ) );
+          float fpatch = smoothstep( 0.35, 0.75, 0.5 + 0.5 * sin( vNX * 0.07 + 1.1 ) * sin( vNZ * 0.05 - 0.4 ) );
+          vec3 fc = h2 < 0.33 ? vec3( 1.0, 0.82, 0.15 ) : h2 < 0.66 ? vec3( 0.95, 0.45, 0.68 ) : vec3( 0.98, 0.97, 0.94 );
+          gl_FragColor.rgb = mix( cS, fc * clamp( dot( cS, vec3( 0.3, 0.59, 0.11 ) ) * 4.5, 0.4, 1.1 ), dot0 * step( 0.6, h ) * grS * fpatch * uSpring ); }
         if ( uSnow > 0.001 ) { float nz = 0.5 + 0.22 * sin( vNX * 0.13 + vNZ * 0.071 ) + 0.16 * sin( -vNX * 0.047 + vNZ * 0.17 + 1.3 ) + 0.08 * sin( vNX * 0.41 - vNZ * 0.33 + 2.1 ) + 0.05 * sin( vNX * 0.9 + vNZ * 0.77 );
           float sn = smoothstep( 0.55, 0.9, vNUp ) * smoothstep( 0.12, 0.42, uSnow * 1.1 - nz * 0.55 );
           float lum = dot( gl_FragColor.rgb, vec3( 0.299, 0.587, 0.114 ) );
