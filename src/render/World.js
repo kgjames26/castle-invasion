@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FRONTIER, ROADWORKS } from '../content/medieval.js';
 import { FIRE_KEEP } from '../content/medieval.js';
-import { applyNorthFog } from './fog.js';
+import { applyNorthFog, applyWindFog } from './fog.js';
 import { groundMaterial } from './Ground.js';
 
 const lamV = () => applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
@@ -18,7 +18,9 @@ export class FrontierView {
     const oak = mergeGeometries([colored(new THREE.CylinderGeometry(0.25, 0.35, 1.6, 6).translate(0, 0.8, 0), 0x6b4a2c), colored(new THREE.IcosahedronGeometry(1.5, 0).translate(0, 2.6, 0), 0x4f7f3a), colored(new THREE.IcosahedronGeometry(1.0, 0).translate(0.7, 3.2, 0.3), 0x5f8f44)]);
     const stump = colored(new THREE.CylinderGeometry(0.3, 0.38, 0.45, 6).translate(0, 0.22, 0), 0x7a5a3a);
     const mk = (g, n) => { const m = new THREE.InstancedMesh(g, lamV(), n); m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; scene.add(m); return m; };
-    this.fir = mk(fir, N); this.oak = mk(oak, N); this.stump = mk(stump, N); this.stump.castShadow = false;
+    this.fir = mk(fir, N); this.oak = mk(oak, N);
+    for (const m of [this.fir, this.oak]) m.material = applyWindFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }), 0.03);   // vent dans les feuillages
+    this.stump = mk(stump, N); this.stump.castShadow = false;
     this.trees = []; let sd = 99; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
     // essences cohérentes par forêt : à l'ouest, sapinière au nord qui cède peu à peu la place aux feuillus vers le sud ;
     // à l'est, sapinière avec un bois de feuillus autour de (330, 285). Lisière de transition progressive (mélange sur ~40 m).

@@ -289,7 +289,7 @@ export class UI {
       case 'road': this.roadMode = {}; this.closeCard(); this.toast('🛤 Touche le point de départ de la route', 'info'); break;
       case 'summon': if (!sim.summonMage()) this.toast('Invocation impossible (or, vivres, une place de population)'); else this.toast('🔮 Invocation du magicien…', 'ok'); break;
       case 'gfx': { const q = quality, H = this.hooks; if (!H.setGfx) break;
-        if (x === 'fmt') H.setGfx(y); else H.setGfx(null, x === 'shadows' ? { shadows: !q.shadows } : x === 'glow' ? { glow: !q.glow } : x === 'grass' ? { grass: q.grass >= 0.7 ? 0.35 : 1 } : { pixelRatio: q.pixelRatio >= 1.5 ? 1 : 2 });
+        if (x === 'fmt') H.setGfx(y); else H.setGfx(null, x === 'shadows' ? { shadows: !q.shadows } : x === 'glow' ? { glow: !q.glow } : x === 'grass' ? { grass: q.grass >= 0.7 ? 0.35 : 1 } : x === 'post' ? { post: !q.post } : { pixelRatio: q.pixelRatio >= 1.5 ? 1 : 2 });
         this.html.sheet = ''; break; }
       case 'pref': { const p = this.prefs; if (x === 'difficulty') p.difficulty = y; else p[x] = !p[x]; this.applyPrefs(); this.html.sheet = ''; break; }
       case 'goto': { const t = sim.build.of(x); if (t) { this.cam.focusOn(t.x, t.z); this.openCard({ kind: 'struct', id: t.id }); } else this.startPlace(x); break; }
@@ -401,7 +401,7 @@ export class UI {
     const fmt = this.sim.format || 'tablet', q = quality, gt = (k, on, l, sub) => this.btn(`${on ? '✅' : '⬜'} ${l}`, sub, 'gfx:' + k, false, 'act slim' + (on ? '' : ' sec'));
     const qual = `<div class="vols"><div class="hint small"><b>Graphismes</b> — préréglage, puis ajuste à ton goût (enregistré avec la partie)</div>
       <div class="row">${Object.entries(FORMATS).map(([k, F]) => this.btn(`${F.ico} ${F.name}`, k === fmt && !this.sim.gfx ? 'actuel' : k === fmt ? 'actuel, modifié' : '', 'gfx:fmt:' + k, false, 'act slim' + (k === fmt ? '' : ' sec'))).join('')}</div>
-      <div class="row wrapr">${gt('shadows', q.shadows, 'Ombres', 'plus joli, plus lourd')}${gt('glow', q.glow, 'Lueurs', 'torches, feux, impacts')}${gt('grass', q.grass >= 0.7, 'Herbe dense', '')}${gt('res', q.pixelRatio >= 1.5, 'Haute résolution', 'image plus nette')}</div></div>`;
+      <div class="row wrapr">${gt('shadows', q.shadows, 'Ombres', 'plus joli, plus lourd')}${gt('glow', q.glow, 'Lueurs', 'torches, feux, impacts')}${gt('grass', q.grass >= 0.7, 'Herbe dense', '')}${gt('res', q.pixelRatio >= 1.5, 'Haute résolution', 'image plus nette')}${gt('post', !!q.post, 'Relief et halo', 'occlusion ambiante, halo des feux')}</div></div>`;
     const p = this.prefs, tog = (k, l, sub) => this.btn(`${p[k] ? '✅' : '⬜'} ${l}`, sub, 'pref:' + k, false, 'act slim' + (p[k] ? '' : ' sec'));
     const game = `<div class="vols"><div class="hint small"><b>Difficulté</b> (vagues suivantes)</div><div class="row">${Object.keys(DIFFICULTY).map(k => this.btn(DIFFICULTY[k].name, k === 'easy' ? '−25 % zombies' : k === 'hard' ? '+30 % zombies, +15 % PV' : '', 'pref:difficulty:' + k, false, 'act slim' + (k === p.difficulty ? '' : ' sec'))).join('')}</div>
       <div class="row wrapr">${tog('autoRepair', 'Réparation auto', 'emprunte 2 villageois')}${tog('shake', 'Secousses', 'explosions')}${tog('fx', 'Effets', 'particules, feu')}</div></div>`;

@@ -13,8 +13,9 @@ import { WallView } from './WallView.js';
 import { stoneMaterial, kitMaterial } from './Stone.js';
 import { Effects, EFFECTS } from './Effects.js';
 import { ATMOS, CAMERA, quality, setQualityName } from './config.js';
-import { fogUniforms, patchNorthFog } from './fog.js';
-import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry, troopRig, siegeRig, bx } from './Troops.js';
+import { fogUniforms, patchNorthFog, applyWindFog } from './fog.js';
+import { Post } from './Post.js';
+import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry, troopRig, siegeRig, bx, BLOBS } from './Troops.js';
 import { buildKnightRigs, makeMage, makePriest, poseMage, knightRig, golemRig } from './Heroes.js';
 import { carrierGeometry, TOOL_TINT } from './Village.js';
 import { OreView } from './Ores.js';
@@ -41,6 +42,7 @@ export class Renderer {
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     this.renderer.setClearColor(ATMOS.fogColor);
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;      // ombres douces
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = ATMOS.exposure;   // (v3.6) tonalité filmique : couleurs riches, hautes lumières douces
     canvasParent.appendChild(this.renderer.domElement);
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(CAMERA.fov, 1, 2, 900);
@@ -49,6 +51,7 @@ export class Renderer {
     sun.target.position.set(A.x, 0, A.z); sun.position.set(A.x + ATMOS.sunPos[0], ATMOS.sunPos[1], A.z + ATMOS.sunPos[2]); this.scene.add(sun, sun.target);
     Object.assign(sun.shadow.camera, { left: -A.hw, right: A.hw, top: A.hd, bottom: -A.hd, near: 10, far: 420 }); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.35; sun.shadow.radius = 3;
     this.dummy = new THREE.Object3D(); this.tmpColor = new THREE.Color();
+    this.buildSky();
     this.buildGround(); this.buildTerrainProps(); this.buildWall(); this.buildCastle(); this.buildEconomy(); this.buildUnits(); this.buildSiege(); this.rigs = buildTroopRigs(this.scene); Object.assign(this.rigs, buildKnightRigs(this.scene)); this.rigs.knightGold = this.rigs.knight; this.mageViews = new Map(); this.rigTier = {}; this.vrigs = buildVillagerRigs(this.scene); this.vMesh.visible = false; this.buildHighlight();
     this.buildGrass(); this.buildBlobs(); this.cartLevel = -1;
     this.frontierV = new FrontierView(this.scene, sim.frontier); this.roadV = new RoadView(this.scene); this.braziers = new BrazierView(this.scene, sim.night, quality.glow ? 6 : 0);
@@ -109,7 +112,7 @@ export class Renderer {
   // ——— ombres de contact sous les personnages (ils ne projettent pas d'ombre) : disques sombres instanciés, très bon marché ———
   buildBlobs() {
     const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-    gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(0.6, 'rgba(0,0,0,.28)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    gr.addColorStop(0, 'rgba(0,0,0,.72)'); gr.addColorStop(0.35, 'rgba(0,0,0,.5)'); gr.addColorStop(0.7, 'rgba(0,0,0,.16)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
     const geo = new THREE.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
     const cap = MAX_Z + 600; this.blobs = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false }), cap);
     this.blobs.frustumCulled = false; this.blobs.renderOrder = 2; this.blobs.count = 0; this.scene.add(this.blobs);
@@ -117,10 +120,14 @@ export class Renderer {
   updateBlobs(alpha) {
     const im = this.blobs, m = im.instanceMatrix.array, cap = im.instanceMatrix.count; let n = 0;
     const put = (x, z, s, sz = s) => { if (n >= cap) return; const o = n * 16; m[o] = s; m[o + 1] = 0; m[o + 2] = 0; m[o + 3] = 0; m[o + 4] = 0; m[o + 5] = 1; m[o + 6] = 0; m[o + 7] = 0; m[o + 8] = 0; m[o + 9] = 0; m[o + 10] = sz; m[o + 11] = 0; m[o + 12] = x; m[o + 13] = 0.07; m[o + 14] = z; m[o + 15] = 1; n++; };
+    const putY = (x, y, z, s) => { if (n >= cap) return; put(x, z, s); m[(n - 1) * 16 + 13] = y; };
     const Z = this.sim.zombies; for (let i = 0; i < Z.n; i++) put(Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, 1.5 * ZOMBIES[Z.type[i]].size);
     for (const v of this.sim.eco.villagers) put(v.px + (v.x - v.px) * alpha, v.pz + (v.z - v.pz) * alpha, 1.3);
     for (const w of this.sim.army.walkers) put(w.px + (w.x - w.px) * alpha, w.pz + (w.z - w.pz) * alpha, 1.4);
-    for (const q of this.sim.army.squads) put(q.px + (q.x - q.px) * alpha, q.pz + (q.z - q.pz) * alpha, q.rad * 2.1, q.rad * 1.8);
+    // (v3.6) une ombre de contact par combattant (positions laissées par les Rigs), par archer et par cadavre
+    for (let i = 0; i < BLOBS.length; i += 4) { const sc = Math.min(5, Math.max(0.9, BLOBS[i + 3] * 0.75)); putY(BLOBS[i], BLOBS[i + 1] + 0.06, BLOBS[i + 2], sc); } BLOBS.length = 0;
+    for (const p of this.archerSpots || []) putY(p[0], p[1] + 0.06, p[2], 1.2);
+    for (const c of this.corpses || []) { const a = this.clock - c.t0, f = a < 4.55 ? 1 : Math.max(0, 1 - (a - 4.55) / 1.2); if (f > 0.05) put(c.x, c.z, 1.6 * f, 2.2 * f); }
     im.count = n; im.instanceMatrix.needsUpdate = true;
   }
   // ——— torches des portes : flamme + lueur (désactivable avec la qualité) ———
@@ -258,7 +265,7 @@ export class Renderer {
       [new THREE.ConeGeometry(0.7, 1.4, 7).translate(0, 2.45, 0), 0x3a6b45, 1],
       [new THREE.ConeGeometry(0.34, 0.5, 7).translate(0, 3.05, 0), 0xf2f6fa, 2],
     ];
-    const ims = parts.map(([g, col]) => { const im = new THREE.InstancedMesh(g, lam(0xffffff), n); im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); this.scene.add(im); return [im, col]; });
+    const ims = parts.map(([g, col], pk) => { const im = new THREE.InstancedMesh(g, pk ? applyWindFog(new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), 0.012) : lam(0xffffff), n); im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); this.scene.add(im); return [im, col]; });
     list.forEach(([x, z, s], i) => {
       d.position.set(x, 0, z); d.rotation.set(0, i * 1.7, 0); const sy = s * (0.85 + r() * 0.35); d.scale.set(s, sy, s); d.updateMatrix();
       const hue = r(), v = 0.8 + r() * 0.35, snow = Math.min(1, Math.max(0, (175 - z) / 110 + (r() - 0.5) * 0.5));   // neige : progressive, du nord (plein) au village (aucune)
@@ -296,7 +303,19 @@ export class Renderer {
     this.wallMesh.instanceMatrix.needsUpdate = true; this.wallMesh.instanceColor.needsUpdate = true;
   }
   // brume du nord : respire lentement et avance pendant un assaut ; pulsation de l'indicateur de portée ; ombres des nouvelles structures
+  // ——— ciel (v3.6) : dôme en dégradé (zénith → horizon), suit la caméra, jour / nuit ———
+  buildSky() {
+    const U = { uZen: { value: new THREE.Color(ATMOS.skyZenith) }, uHor: { value: new THREE.Color(ATMOS.skyHorizon) } };
+    const m = new THREE.ShaderMaterial({ uniforms: U, side: THREE.BackSide, depthWrite: false, depthTest: false,
+      vertexShader: 'varying vec3 vD; void main() { vD = normalize( position ); vec4 p = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); gl_Position = p.xyww; }',
+      fragmentShader: 'varying vec3 vD; uniform vec3 uZen; uniform vec3 uHor; void main() { float t = pow( clamp( vD.y, 0.0, 1.0 ), 0.55 ); gl_FragColor = vec4( mix( uHor, uZen, t ), 1.0 ); \n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}' });
+    this.sky = new THREE.Mesh(new THREE.SphereGeometry(500, 24, 12), m); this.sky.renderOrder = -10; this.sky.frustumCulled = false; this.skyU = U; this.scene.add(this.sky);
+    this.post = null;
+  }
   updateAtmosphere(dt) {
+    fogUniforms.uWindTime.value = this.clock;
+    if (this.sky) { this.sky.position.copy(this.camera.position); const L0 = this.sim.night.light(); this.skyU.uZen.value.setHex(ATMOS.nightZenith).lerp(this._z || (this._z = new THREE.Color(ATMOS.skyZenith)), L0); this.skyU.uHor.value.setHex(ATMOS.nightHorizon).lerp(this._h || (this._h = new THREE.Color(ATMOS.skyHorizon)), L0);
+      fogUniforms.uHazeColor.value.copy(this.skyU.uHor.value); fogUniforms.uNFogColor.value.setHex(0x080c14).lerp(this._fc || (this._fc = new THREE.Color(ATMOS.fogColor)), L0); }   // brume du nord et lointain : teinte du ciel, sombres la nuit
     if (this.grassTime) this.grassTime.value = this.clock;
     // jour / nuit : soleil et ciel baissent progressivement ; la nuit est bleutée ; braseros, torches et feux prennent le relais
     const L = this.sim.night.light(), dusk = Math.max(0, 1 - Math.abs(L - 0.55) / 0.3);
@@ -327,7 +346,7 @@ export class Renderer {
       this.treePos.sort((a, b) => a[3] - b[3]);
       const mk = (geo, mat) => { const im = new THREE.InstancedMesh(geo, mat, N); im.frustumCulled = false; im.count = N; this.scene.add(im); return im; };
       const trunk = new THREE.CylinderGeometry(0.25, 0.35, 1.6, 6); trunk.translate(0, 0.8, 0); const fol = new THREE.ConeGeometry(1.5, 3.8, 6); fol.translate(0, 3.2, 0); const snow = new THREE.ConeGeometry(1.05, 2.2, 6); snow.translate(0, 4.7, 0);   // second étage de feuillage (forêt du sud : pas de neige)
-      this.treeT = mk(trunk, lam(0x6b4a2c)); this.treeF = mk(fol, lam(0x2f5d3c)); this.treeS = mk(snow, lam(0x3d7048)); }
+      this.treeT = mk(trunk, lam(0x6b4a2c)); this.treeF = mk(fol, applyWindFog(new THREE.MeshLambertMaterial({ color: 0x2f5d3c, flatShading: true }), 0.01)); this.treeS = mk(snow, applyWindFog(new THREE.MeshLambertMaterial({ color: 0x3d7048, flatShading: true }), 0.01)); }
     // gisements découverts par prospection : disque coloré + blocs de minerai ; anneau pulsant pendant l'exploration
     { const cap = 14; this.exDisc = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 0.3, 16), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.55 }), cap); this.exDisc.frustumCulled = false; this.exDisc.count = 0; this.exDisc.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); this.scene.add(this.exDisc);
       this.exRock = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), lam(0xffffff), cap * 6); this.exRock.frustumCulled = false; this.exRock.count = 0; this.exRock.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 6 * 3), 3); this.scene.add(this.exRock);
@@ -821,10 +840,10 @@ export class Renderer {
   }
   renderArchers(alpha) {
     const sim = this.sim, d = this.dummy, W = sim.army.walkers; let ai = 0, k = 0; const slot = { x: 0, z: 0 };
-    const gear = this.archerGear(RANKS.indexOf(sim.army.rank(sim, 'archer')));
+    const gear = this.archerGear(RANKS.indexOf(sim.army.rank(sim, 'archer'))), spots = this.archerSpots = [];
     for (let s = 0; s < SECTORS; s++) { const A = sim.army.archers[s]; for (k = 0; k < A.n; k++) {
       const p = archerPose(s, k, A.prog[k]), moving = A.prog[k] < 1e8, bob = moving ? Math.abs(Math.sin(this.clock * 9 + k)) * 0.08 : 0;
-      d.position.set(p.x, p.y + bob, p.z); d.scale.set(ASC, ASC, ASC); d.rotation.set(0, p.rot, 0); d.updateMatrix();
+      d.position.set(p.x, p.y + bob, p.z); d.scale.set(ASC, ASC, ASC); d.rotation.set(0, p.rot, 0); d.updateMatrix(); spots.push([p.x, p.y, p.z]);
       this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); if (gear) gear.setMatrixAt(ai, d.matrix); ai++;
     } }
     this.renderWalkers(alpha, 'archer', (x, z, rot, mv) => { d.position.set(x, mv ? Math.abs(Math.sin(this.clock * 9 + ai)) * 0.08 : 0, z); d.scale.set(ASC, ASC, ASC); d.rotation.set(0, rot, 0); d.updateMatrix(); this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); if (gear) gear.setMatrixAt(ai, d.matrix); ai++; });
@@ -917,7 +936,14 @@ export class Renderer {
     for (const v of this.struct.map.values()) { const o = v.model && v.model.userData.spin; if (o) { o.rotation.y = this.clock * 0.6; o.children.forEach((c, i) => { c.position.y = Math.sin(this.clock * 1.4 + i * 1.7) * 0.7; c.rotation.y = this.clock * 1.5; }); } }
     // secousse de caméra (explosions, brèches) : décalage le temps du rendu seulement
     const sh = this.fx.shake * (this.shakeOn === false ? 0 : 1), cp = this.camera.position;
-    if (sh > 0.01) { const ox = (Math.random() - 0.5) * sh, oy = (Math.random() - 0.5) * sh * 0.6, oz = (Math.random() - 0.5) * sh; cp.x += ox; cp.y += oy; cp.z += oz; this.camera.updateMatrixWorld(); this.renderer.render(this.scene, this.camera); cp.x -= ox; cp.y -= oy; cp.z -= oz; this.camera.updateMatrixWorld(); }
-    else this.renderer.render(this.scene, this.camera);
+    if (sh > 0.01) { const ox = (Math.random() - 0.5) * sh, oy = (Math.random() - 0.5) * sh * 0.6, oz = (Math.random() - 0.5) * sh; cp.x += ox; cp.y += oy; cp.z += oz; this.camera.updateMatrixWorld(); this.draw(); cp.x -= ox; cp.y -= oy; cp.z -= oz; this.camera.updateMatrixWorld(); }
+    else this.draw();
+  }
+  // rendu final : direct, ou avec occlusion ambiante + halo en qualité « Haute »
+  draw() {
+    if (quality.post) {
+      if (!this.post) this.post = new Post(this.renderer);
+      const dk = this.dark || 0; this.post.render(this.scene, this.camera, { ao: 0.85, bloom: 0.25 + 0.95 * dk, threshold: 0.95 - 0.45 * dk, exposure: ATMOS.exposure });
+    } else this.renderer.render(this.scene, this.camera);
   }
 }

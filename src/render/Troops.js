@@ -179,6 +179,8 @@ export const PALETTES = {
 export const MAT = applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
 
 // Jeu de pièces instanciées pour un modèle.
+// ombres de contact (v3.6) : chaque personnage dessiné par un Rig laisse sa position ici ; le Renderer en fait des taches au sol
+export const BLOBS = [];
 export class Rig {
   constructor(scene, parts, cap) {
     this.parts = parts; this.cap = cap; this.n = 0;
@@ -189,6 +191,7 @@ export class Rig {
   // base : matrice de l'instance ; r : g, b teinte (>1 = éclaircit) ; ang : valeur par pièce (angle pour 'rot', décalage en z pour 'slide')
   push(base, tint, ang) {
     if (this.n >= this.cap) return;
+    if (this.blob !== 0) { const e = base.elements; BLOBS.push(e[12], e[13], e[14], Math.hypot(e[0], e[1], e[2]) * (this.blob || 1)); }
     for (let i = 0; i < this.parts.length; i++) {
       const p = this.parts[i], l = this._l;
       if (p.mode === 'rot') { l.makeRotationX(ang[i] || 0); l.setPosition(p.pivot.x, p.pivot.y, p.pivot.z); }

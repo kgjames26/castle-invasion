@@ -290,3 +290,10 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Symbole dessiné de la scierie (lame de scie circulaire sur une bille), interface et enseigne.
 - Correction : le bâtiment des Travaux publics n'avait aucun modèle (invisible) — dépôt de voirie modélisé (halle à colombages, gravier, pavés, rouleau, brouette, outils, borne, poteau indicateur).
 - Routes refaites : Sentier → Terre battue → Gravier → Pavés. Centre texturé à l'échelle du mètre (pavés de même taille sur toutes les largeurs) + bordures dédiées à bord irrégulier et fondu (galets, pierres taillées, herbe) ; les routes d'origine sont recouvertes dès la terre battue, hors cour et placette.
+
+## Phase 36 — Qualité du rendu
+- Tonalité filmique ACES (exposition 1,12), lumières de ciel bleutée / sol chaud réajustées.
+- Ombres de contact : une tache douce sous chaque combattant (positions issues des Rigs), chaque archer sur la muraille, chaque zombie, villageois et cadavre.
+- Dôme de ciel en dégradé (jour / nuit), brume du nord bleu ardoise, perspective aérienne (le lointain pâlit vers l'horizon) ; brumes appliquées avant la tonalité.
+- Vent : balancement des sapins de bordure, de la forêt des bûcherons et des forêts vierges (en plus de l'herbe).
+- Post-traitement maison (qualité Haute, option « Relief et halo ») : occlusion ambiante SSAO demi-résolution lissée + halo (bloom) plus fort la nuit ; composition ACES + sRGB identique au rendu direct.
