@@ -336,3 +336,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 ## Phase 45 — Barres de vie des géants et revenus
 - Barres de vie au-dessus des colosses, golems et du boss ; grande barre du Seigneur pourri en haut de l'écran.
 - Revenu par minute affiché sous chaque ressource (écrans larges) ; toucher une ressource donne stock / capacité, revenu, nombre de travailleurs et, pour la nourriture, la consommation.
+- Halo de menace rouge adouci (dégradé) qui suit l'arc de la muraille ; plus de rectangle rouge visible à travers la grande porte.

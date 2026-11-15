@@ -543,7 +543,7 @@ export class UI {
     if (!want) { if (e) e.style.display = 'none'; return; }
     if (!e) { e = this.edges[s] = el('button', 'edgea'); e.addEventListener('click', () => { this.cam.focusOn(s * 40 + 20, 150); this.openCard({ kind: 'sector', id: s }); }); document.getElementById('app').appendChild(e); }
     let dx = p.x - vw / 2, dy = p.y - vh / 2; if (!p.vis) { dx = -dx; dy = -dy; }
-    const mx = vw / 2 - 34, my = vh / 2 - 100, k = Math.min(mx / Math.max(1e-3, Math.abs(dx)), my / Math.max(1e-3, Math.abs(dy)));
+    const mx = vw / 2 - 74, my = vh / 2 - 110, k = Math.min(mx / Math.max(1e-3, Math.abs(dx)), my / Math.max(1e-3, Math.abs(dy)));
     const x = vw / 2 + dx * k, y = vh / 2 + dy * k, ang = Math.atan2(dy, dx) * 180 / Math.PI;
     e.style.display = ''; e.style.left = x + 'px'; e.style.top = y + 'px'; e.className = 'edgea' + (br ? ' br' : dg === 2 ? ' d2' : ' tgt');
     const txt = (br ? '💥' : dg === 2 ? '⚔' : '🔔') + ' ' + SECTOR_NAMES[s];

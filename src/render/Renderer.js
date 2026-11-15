@@ -659,8 +659,10 @@ export class Renderer {
     this.targeting.rotation.x = -Math.PI / 2; this.targeting.position.set(W / 2, 0.15, 114); this.targeting.visible = false; this.scene.add(this.targeting);
     this.threat = [];
     for (let s = 0; s < SECTORS; s++) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(SECTOR_W - 1, 10), new THREE.MeshBasicMaterial({ color: 0xff3b30, transparent: true, opacity: 0, depthWrite: false }));
-      m.rotation.x = -Math.PI / 2; m.position.set(s * SECTOR_W + SECTOR_W / 2, 0.3, 136); this.scene.add(m); this.threat.push(m);
+      // (v4.3) halo rouge doux devant le tronçon menacé, qui suit l'arc de la muraille (plus de rectangle plein visible par la porte)
+      const tex = this.threatTex || (this.threatTex = (() => { const c = document.createElement('canvas'); c.width = 128; c.height = 32; const g = c.getContext('2d'), gx = g.createLinearGradient(0, 0, 128, 0); gx.addColorStop(0, 'rgba(255,255,255,0)'); gx.addColorStop(0.2, 'rgba(255,255,255,1)'); gx.addColorStop(0.8, 'rgba(255,255,255,1)'); gx.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gx; g.fillRect(0, 0, 128, 32); g.globalCompositeOperation = 'destination-in'; const gy = g.createLinearGradient(0, 0, 0, 32); gy.addColorStop(0, 'rgba(0,0,0,0)'); gy.addColorStop(1, 'rgba(0,0,0,1)'); g.fillStyle = gy; g.fillRect(0, 0, 128, 32); return new THREE.CanvasTexture(c); })());
+      const cx = s * SECTOR_W + SECTOR_W / 2, m = new THREE.Mesh(new THREE.PlaneGeometry(SECTOR_W + 4, 14), new THREE.MeshBasicMaterial({ color: 0xff3b30, map: tex, transparent: true, opacity: 0, depthWrite: false }));
+      m.rotation.set(-Math.PI / 2, 0, -Math.atan(wallSlope(cx))); m.position.set(cx, 0.3, 135 + wallOff(cx)); this.scene.add(m); this.threat.push(m);
     }
   }
   // ——— muraille GLB (assets/wall) : remplace la muraille provisoire / du kit, ajoute escaliers et porte à deux battants ———
@@ -950,7 +952,7 @@ export class Renderer {
     // alertes de secteur (menace proche / attaque)
     for (let s = 0; s < SECTORS; s++) {
       const dg = sim.danger(s), tgt = sim.phase === 'alert' && sim.targets.includes(s);
-      const o = dg === 2 ? 0.28 + 0.12 * Math.sin(this.clock * 8) : dg === 1 ? 0.12 : tgt ? 0.1 + 0.08 * Math.sin(this.clock * 5) : 0;
+      const o = dg === 2 ? 0.34 + 0.14 * Math.sin(this.clock * 8) : dg === 1 ? 0.16 : tgt ? 0.14 + 0.1 * Math.sin(this.clock * 5) : 0;
       this.threat[s].material.opacity = o;
     }
     this.updateWall(); this.updateEconomy(alpha); this.updateSiege(alpha); this.struct.update(dtReal, this.clock);
