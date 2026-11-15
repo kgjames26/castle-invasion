@@ -1,6 +1,7 @@
 // Interface des systèmes v4.0 : fiches (défenses du secteur, village, héros, recherches), pièges, événements, bilan de vague,
 // succès, mini-carte, sauvegardes multiples, tutoriel guidé, modes de jeu (survie, défi du jour, campagne), vue d'un archer.
-import { EXTRA, ZOMBIES, SIEGE } from '../content/medieval.js';
+import * as THREE from 'three';
+import { EXTRA, ZOMBIES, SIEGE, STRUCT, STREAM, FRONTIER } from '../content/medieval.js';
 import { SECTORS, SECTOR_W, W, D, CASTLE, WALL_STAND_Z, wallOff } from '../sim/constants.js';
 import { archerPos } from '../sim/army.js';
 import { serialize, restore } from '../sim/save.js';
@@ -168,19 +169,37 @@ export function installExtrasUI(UI) {
   };
   // ——— mini-carte ———
   P.buildMinimap = function () {
-    const el = document.createElement('div'); el.id = 'minimap'; el.innerHTML = '<canvas width="120" height="192"></canvas>'; document.getElementById('app').appendChild(el); this.mmOn = store('castle-mm') !== 0; el.classList.toggle('off', !this.mmOn);
+    const el = document.createElement('div'); el.id = 'minimap'; el.innerHTML = '<canvas width="200" height="320"></canvas>'; document.getElementById('app').appendChild(el); this.mmOn = store('castle-mm') !== 0; el.classList.toggle('off', !this.mmOn);
     const cv = el.querySelector('canvas'); this.mm = cv.getContext('2d');
     cv.addEventListener('click', e => { const r = cv.getBoundingClientRect(); this.cam.focusOn((e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * D); });
   };
+  // (v4.6) mini-carte lisible : fond tiré du sol réel (routes, terre), forêts, eau, bâtiments à l'échelle, hordes, champ de vision réel
+  P.mmBack = function () {
+    const c = document.createElement('canvas'); c.width = W; c.height = D; const g = c.getContext('2d'), gc = this.rd.groundColor;
+    if (gc) { g.drawImage(gc, 0, 0, W, D); g.fillStyle = 'rgba(40,60,30,.18)'; g.fillRect(0, 0, W, D); } else { g.fillStyle = '#4f6a3a'; g.fillRect(0, 0, W, D); }
+    g.strokeStyle = '#3d6f9a'; g.lineCap = 'round'; g.lineWidth = 2.6; g.beginPath(); STREAM.forEach(([x, z], i) => i ? g.lineTo(x, z) : g.moveTo(x, z)); g.stroke();
+    g.lineWidth = 4; g.strokeStyle = '#3d6f9a'; g.beginPath(); g.ellipse(CASTLE.x, CASTLE.z - 1, 26, 21, 0, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = '#9a958a'; g.fillRect(CASTLE.x - 18, CASTLE.z - 14, 36, 27); g.fillStyle = '#8a2a1c'; for (const [dx, dz] of [[-18, -14], [18, -14], [-18, 13], [18, 13]]) { g.beginPath(); g.arc(CASTLE.x + dx, CASTLE.z + dz, 3.4, 0, 7); g.fill(); }
+    return c;
+  };
   P.drawMinimap = function () {
-    const g = this.mm, sim = this.sim; if (!g || !this.mmOn) return; const k = 120 / W, t = performance.now() / 1000;
-    g.fillStyle = '#4f6a3a'; g.fillRect(0, 0, 120, 192); g.fillStyle = '#8f8a80'; g.fillRect(0, 146 * k, 120, 46 * k); g.fillStyle = '#5e7d42'; g.fillRect(0, 212 * k, 120, 192 - 212 * k);
-    for (let s = 0; s < SECTORS; s++) { const r = sim.wall.sectorHp(s) / sim.wall.sectorMax(s), br = sim.wall.breaches(s); g.fillStyle = br && Math.sin(t * 8) > 0 ? '#ff3b30' : r < 0.5 ? '#d9822b' : '#cfc8ba'; g.fillRect(s * SECTOR_W * k, (WALL_STAND_Z + wallOff(s * SECTOR_W + 20) + 2) * k, SECTOR_W * k - 1, 3); }
-    g.fillStyle = '#a49d8e'; g.fillRect((CASTLE.x - 18) * k, (CASTLE.z - 13) * k, 36 * k, 26 * k);
-    g.fillStyle = '#c9b48a'; for (const b of sim.build.items) if (!b.fixed) g.fillRect(b.x * k - 1, b.z * k - 1, 2.5, 2.5);
-    g.fillStyle = '#3d7bd6'; for (const q of sim.army.squads) g.fillRect(q.x * k - 1.5, q.z * k - 1.5, 3, 3);
-    g.fillStyle = '#ff4a3a'; const Z = sim.zombies; for (let i = 0; i < Z.n; i++) g.fillRect(Z.x[i] * k - 0.6, Z.z[i] * k - 0.6, Z.type[i] >= 5 && Z.type[i] <= 7 ? 3 : 1.4, Z.type[i] >= 5 && Z.type[i] <= 7 ? 3 : 1.4);
-    const c = this.cam; g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 1; g.strokeRect((c.tx - 30 * c.zoom * 1.6) * k, (c.tz - 22 * c.zoom * 1.6) * k, 60 * c.zoom * 1.6 * k, 44 * c.zoom * 1.6 * k);
+    const g = this.mm, sim = this.sim; if (!g || !this.mmOn) return; const t = performance.now() / 1000;
+    if (!this.mmBg && this.rd.groundColor) this.mmBg = this.mmBack(); if (this.mmBg) g.drawImage(this.mmBg, 0, 0); else { g.fillStyle = '#4f6a3a'; g.fillRect(0, 0, W, D); }
+    // forêts encore debout (lisière à défricher)
+    const F = sim.frontier; if (F) { g.fillStyle = '#25472a'; for (const p of F.patches) if (p.state !== 'cleared') g.fillRect(p.x0, p.z0, FRONTIER.cell, FRONTIER.cell); }
+    // muraille (couleur selon l'état de chaque secteur)
+    for (let s = 0; s < SECTORS; s++) { const r = sim.wall.sectorHp(s) / sim.wall.sectorMax(s), br = sim.wall.breaches(s); g.strokeStyle = br && Math.sin(t * 8) > 0 ? '#ff3b30' : r < 0.5 ? '#e08a2b' : '#ddd6c6'; g.lineWidth = 5; g.beginPath();
+      for (let k = 0; k <= 8; k++) { const x = s * SECTOR_W + k * SECTOR_W / 8, z = WALL_STAND_Z + wallOff(x) - 3; k ? g.lineTo(x, z) : g.moveTo(x, z); } g.stroke(); }
+    // bâtiments à l'échelle
+    for (const b of sim.build.items) { if (b.fixed) continue; const S = STRUCT[b.type]; if (!S) continue; const sz = S.size || [6, 4, 6], rot = b.rot && (Math.round(b.rot / (Math.PI / 2)) & 1), w = rot ? sz[2] : sz[0], d = rot ? sz[0] : sz[2];
+      g.fillStyle = b.state === 'built' ? '#d8c49a' : 'rgba(216,196,154,.5)'; g.fillRect(b.x - w / 2, b.z - d / 2, w, d); g.strokeStyle = '#5a4630'; g.lineWidth = 0.8; g.strokeRect(b.x - w / 2, b.z - d / 2, w, d); }
+    g.fillStyle = '#3d7bd6'; for (const q of sim.army.squads) { g.beginPath(); g.arc(q.x, q.z, 3.2, 0, 7); g.fill(); }
+    const Z = sim.zombies, pulse = 1 + 0.25 * Math.sin(t * 6); g.fillStyle = '#ff3a2a';
+    for (let i = 0; i < Z.n; i++) { const big = Z.type[i] >= 5 && Z.type[i] <= 7, r = big ? 6 * pulse : 3; g.fillRect(Z.x[i] - r / 2, Z.z[i] - r / 2, r, r); }
+    // champ de vision : intersection réelle des coins de l'écran avec le sol
+    const cam = this.rd.camera, v = this._mmv || (this._mmv = new THREE.Vector3()), pts = [];
+    for (const [nx, ny] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { v.set(nx, ny, 0.5).unproject(cam).sub(cam.position); const tt = v.y < -1e-3 ? -cam.position.y / v.y : 400; pts.push([cam.position.x + v.x * Math.min(tt, 400), cam.position.z + v.z * Math.min(tt, 400)]); }
+    g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 1.6; g.beginPath(); pts.forEach(([x, z], i) => i ? g.lineTo(x, z) : g.moveTo(x, z)); g.closePath(); g.stroke();
   };
   // ——— tutoriel guidé ———
   const STEPS = [

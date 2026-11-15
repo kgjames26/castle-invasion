@@ -337,3 +337,7 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Barres de vie au-dessus des colosses, golems et du boss ; grande barre du Seigneur pourri en haut de l'écran.
 - Revenu par minute affiché sous chaque ressource (écrans larges) ; toucher une ressource donne stock / capacité, revenu, nombre de travailleurs et, pour la nourriture, la consommation.
 - Halo de menace rouge adouci (dégradé) qui suit l'arc de la muraille ; plus de rectangle rouge visible à travers la grande porte.
+
+## Phase 46 — Mini-carte et confort mobile
+- Mini-carte refaite : fond tiré du vrai sol (routes, terre battue), douves et ruisseau en bleu, château et tours, muraille colorée par état, bâtiments à l'échelle (chantiers en transparence), escouades, hordes et géants qui pulsent, champ de vision réel de la caméra.
+- Téléphone : le tutoriel passe en bas de l'écran (la mini-carte reste visible) et remonte quand un panneau est ouvert ; la barre du boss évite la mini-carte.
