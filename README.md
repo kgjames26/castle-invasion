@@ -314,3 +314,9 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 ## Phase 41 — Herbe et poussière
 - Poussière des hordes fortement réduite (1 zombie sur 5, rare, voile léger ; traces au sol plus rares).
 - Nouvelles touffes d'herbe : 9 brins courbés (base sombre → pointe claire), teintées par la couleur exacte du sol sous elles, éclairées comme le sol (plus jamais noires), légère ondulation au vent ; placées selon la part d'herbe du sol (raréfaction progressive vers la terre et les pavés, aucune sur les chemins).
+
+## Phase 42 — Douves et ruisseau réalistes
+- Douves au tracé naturel : rectangle arrondi aux bords irréguliers, largeur variable, eau claire et verdâtre près des rives, sombre au centre, reflet du ciel en incidence rasante, ondulations douces.
+- Berges en pente (boue mouillée → terre → herbe), galets, touffes de roseaux qui ondulent au vent, nénuphars ; pont-levis en planches avec poteaux et chaînes face à la porte.
+- Ruisseau qui s'échappe des douves vers l'est en serpentant jusqu'à la forêt, avec courant visible ; son tracé est réservé (aucun bâtiment dessus).
+- Sécurité : les zombies isolés qui traînent 3 min après la dernière horde s'épuisent, la vague ne reste plus bloquée.

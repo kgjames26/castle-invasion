@@ -24,7 +24,7 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
   const sim = new Simulation(), R = sim.roads; rich(sim); const n0 = R.list.length;
   built(sim, 'granary', 66, 272, 1); sim.build.version++; run(sim, 1); ok(R.list.length === n0 + 1 && R.list.at(-1).kind === 'auto', 'embranchement automatique vers le nouveau bâtiment');
   ok(!sim.planRoad(60, 230, 60, 280).ok, 'tracer une route exige les Travaux publics');
-  built(sim, 'publicworks', 150, 300, 1); const r = sim.planRoad(60, 230, 60, 280); ok(r.ok && r.road.built === 0, 'route tracée : chantier ouvert');
+  built(sim, 'publicworks', 150, 280, 1); const r = sim.planRoad(60, 230, 60, 280); ok(r.ok && r.road.built === 0, 'route tracée : chantier ouvert');
   run(sim, 25); ok(r.road.built >= 1, 'route posée par les Travaux publics');
   ok(R.speedMult(sim, 60, 250) > 1.1 && R.speedMult(sim, 30, 300) === 1, 'villageois plus rapides sur la route');
 }

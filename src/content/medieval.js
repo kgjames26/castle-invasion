@@ -218,13 +218,15 @@ export const FIRE = { dps: 14, time: 4, catapultFire: true };
 export const DIFFICULTY = { easy: { name: 'Facile', n: 0.75, hp: 0.85 }, normal: { name: 'Normal', n: 1, hp: 1 }, hard: { name: 'Difficile', n: 1.3, hp: 1.15 } };
 // Réparation automatique : si personne ne répare et qu'un tronçon passe sous ce seuil, des villageois sont empruntés (puis rendus)
 export const AUTO_REPAIR = { threshold: 0.7, crew: 2 };
+// Ruisseau (v4.2) : s'échappe des douves du château vers l'est en serpentant (tracé fixe ; on ne bâtit pas dessus)
+export const STREAM = Array.from({ length: 34 }, (_, k) => { const x = 129 + k * 3; return [x, 297 + 6 * Math.sin((x - 128) / 14) + 2 * Math.sin((x - 128) / 5.3)]; });
 export const BUILD = {
   minX: 5, maxX: 195, minZ: 212, towerMinZ: 154, maxZ: 312, gap: 1.2,
   speed: 2.6,   // chantiers ~2,6× plus rapides (v3.1)
   refund: 0.8, moveWork: 6, workerExp: 0.85, maxWorkers: 4, upgradeTime: 0.7,
   houseUnits: [0, 1, 2.5, 4.5, 7], houseUpCost: lv => ({ wood: 60 + 70 * lv, stone: 30 + 60 * lv, ...(lv >= 2 ? { gold: 25 * lv } : {}) }),
   maxTowers: 14, houseCost: n => ({ wood: 40 + 4 * n, stone: 8 + 2 * n }), towerUpCost: lv => ({ wood: 50 * lv, stone: 90 * lv }),
-  blockers: [{ x: 100, z: 298, r: 30 }, { x: 75, z: 276, r: 4 }, { x: 125, z: 276, r: 4 }, { x: 75, z: 318, r: 4 }, { x: 125, z: 318, r: 4 }, { x: 162, z: 292, r: 6.5 }],
+  blockers: [...STREAM.filter((_, k) => k % 2 === 0).map(([x, z]) => ({ x, z, r: 3.2 })), { x: 100, z: 298, r: 30 }, { x: 75, z: 276, r: 4 }, { x: 125, z: 276, r: 4 }, { x: 75, z: 318, r: 4 }, { x: 125, z: 318, r: 4 }, { x: 162, z: 292, r: 6.5 }],
   oreR: 6.5, oreSnap: 16,      // gisements : seules les mines s'y posent (centrées dessus) ; aucun autre bâtiment ne peut les recouvrir
 };
 // Tours de défense : tirent seules ; les 6 tours de la muraille existent dès le départ.

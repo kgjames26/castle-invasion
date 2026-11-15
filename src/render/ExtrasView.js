@@ -4,9 +4,9 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { W, D, SECTORS, SECTOR_W, CASTLE, PLAZA, WALL_STAND_Z, wallOff, wallSlope } from '../sim/constants.js';
-import { EXTRA, ZOMBIES } from '../content/medieval.js';
+import { EXTRA, ZOMBIES, STREAM } from '../content/medieval.js';
 import { palZ, moatBand } from '../sim/extras.js';
-import { applyNorthFog, patchNorthFog, fogUniforms } from './fog.js';
+import { applyNorthFog, patchNorthFog, fogUniforms, applyWindFog } from './fog.js';
 import { FadeRig, Rig, villagerParts, VILLAGER_STYLES, footParts, PALETTES } from './Troops.js';
 import { golemParts } from './Heroes.js';
 
@@ -108,14 +108,71 @@ export class ExtrasView {
     this.spitM = mk(new THREE.SphereGeometry(0.28, 6, 4), new THREE.MeshBasicMaterial({ color: 0xa8ff4a }), 40); this.spitM.castShadow = false;
     this.lastN = new Map();
   }
+  // ——— douves du château (v4.2) : tracé naturel (bords irréguliers, angles arrondis), berges en pente (boue mouillée → terre → herbe),
+  //     eau plus claire et verdâtre au bord, profonde au milieu, reflet du ciel en incidence rasante, roseaux, galets, nénuphars,
+  //     et un ruisseau qui s'en échappe vers l'est en serpentant jusqu'à la forêt.
   buildCastleMoat() {
-    const hw = 24, hd = 19, w = 4, x0 = CASTLE.x, z0 = CASTLE.z - 1, shape = new THREE.Shape([new THREE.Vector2(-hw - w, -hd - w), new THREE.Vector2(hw + w, -hd - w), new THREE.Vector2(hw + w, hd + w), new THREE.Vector2(-hw - w, hd + w)]);
-    shape.holes.push(new THREE.Path([new THREE.Vector2(-hw, -hd), new THREE.Vector2(-hw, hd), new THREE.Vector2(hw, hd), new THREE.Vector2(hw, -hd)]));
-    const g = new THREE.ShapeGeometry(shape); g.rotateX(-Math.PI / 2);
-    const bank = new THREE.Mesh(g.clone(), lam(0x4a3a28)); bank.position.set(x0, 0.02, z0); bank.scale.set(1.04, 1, 1.05); this.scene.add(bank);   // berges de terre
-    const water = new THREE.Mesh(g, this.water); water.position.set(x0, 0.09, z0); water.renderOrder = 2; this.scene.add(water); water.receiveShadow = true;
-    const bridge = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.35, w + 3), lam(0x6b4a2c)); bridge.position.set(x0, 0.3, z0 + hd + w / 2); bridge.castShadow = bridge.receiveShadow = true; this.scene.add(bridge);   // pont-levis
-    for (const sx of [-1, 1]) { const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 6, 4), lam(0x3a3c42)); ch.position.set(x0 + sx * 2, 3, z0 + hd + 1.2); ch.rotation.x = 0.55; this.scene.add(ch); }
+    const x0 = CASTLE.x, z0 = CASTLE.z - 1, N = 160, scene = this.scene; let sd = 77; const rn = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    const noise = th => 0.55 * Math.sin(th * 5 + 1.3) + 0.35 * Math.sin(th * 11 + 0.4) + 0.2 * Math.sin(th * 23 + 2.1);
+    // rectangle arrondi (super-ellipse) autour du château, 24 × 19 m de demi-axes au bord intérieur
+    const rr = (th, a, b) => { const c = Math.cos(th), s2 = Math.sin(th), p = 4.5; return 1 / Math.pow(Math.pow(Math.abs(c) / a, p) + Math.pow(Math.abs(s2) / b, p), 1 / p); };
+    const ring = []; for (let i = 0; i <= N; i++) { const th = i / N * Math.PI * 2, ri = rr(th, 23.5, 18.5) + 0.6 * noise(th), wdt = 4.2 + 0.9 * noise(th * 1.7 + 3) + (Math.abs(th - Math.PI * 1.5) < 0.0 ? 0 : 0); ring.push({ th, ri, ro: ri + wdt }); }
+    const at = (th, r) => [x0 + Math.cos(th) * r, z0 + Math.sin(th) * r];
+    // eau : bandes de l'intérieur vers l'extérieur, couleur selon la profondeur (bord clair et vert, milieu sombre)
+    const wp = [], wc = [], idx = [], BANDS = 5, shallow = new THREE.Color(0x5f8a6a), deep = new THREE.Color(0x1d4258), cc = new THREE.Color();
+    for (let i = 0; i <= N; i++) for (let k = 0; k <= BANDS; k++) { const R = ring[i], f = k / BANDS, r = R.ri + (R.ro - R.ri) * f, [x, z] = at(R.th, r); wp.push(x, 0, z); const dpt = Math.sin(Math.PI * f); cc.copy(shallow).lerp(deep, Math.pow(dpt, 0.7)); wc.push(cc.r, cc.g, cc.b); }
+    for (let i = 0; i < N; i++) for (let k = 0; k < BANDS; k++) { const a0 = i * (BANDS + 1) + k, b0 = a0 + BANDS + 1; idx.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1); }
+    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3)); wg.setIndex(idx);
+    wg.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(wp.length).map((_, i) => i % 3 === 1 ? 1 : 0), 3));
+    const uv = []; for (let i = 0; i < wp.length / 3; i++) uv.push((wp[i * 3] - x0) / 6, (wp[i * 3 + 2] - z0) / 6); wg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    this.natWater = this.naturalWater(); const water = new THREE.Mesh(wg, this.natWater); water.position.y = 0.06; water.renderOrder = 2; water.receiveShadow = true; scene.add(water);
+    // berges : profil en travers (bord de l'eau → crête → rejoint le sol), couleurs boue mouillée → terre → herbe
+    const bp = [], bc = [], bi = [], prof = [[-0.0, 0.0, 0x2e2418], [0.35, 0.14, 0x4a3a26], [0.9, 0.24, 0x6a5a3a], [1.7, 0.16, 0x667a40], [2.6, 0.0, 0x5f7d42]], P = prof.length;
+    const side = (sign) => { const base = bp.length / 3;
+      for (let i = 0; i <= N; i++) for (let k = 0; k < P; k++) { const R = ring[i], [o, y, col] = prof[k], r = sign < 0 ? R.ri - o * (1 + 0.25 * noise(R.th * 3 + k)) : R.ro + o * (1 + 0.25 * noise(R.th * 3 + k)), [x, z] = at(R.th, r); bp.push(x, k === 0 ? 0.03 : y, z); cc.setHex(col).multiplyScalar(0.9 + 0.2 * rn()); bc.push(cc.r, cc.g, cc.b); }
+      for (let i = 0; i < N; i++) for (let k = 0; k < P - 1; k++) { const a0 = base + i * P + k, b0 = a0 + P; if (sign > 0) bi.push(a0, b0, a0 + 1, a0 + 1, b0, b0 + 1); else bi.push(a0, a0 + 1, b0, a0 + 1, b0 + 1, b0); } };
+    side(-1); side(1);
+    const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(bp, 3)); bg.setAttribute('color', new THREE.Float32BufferAttribute(bc, 3)); bg.setIndex(bi); bg.computeVertexNormals();
+    const bank = new THREE.Mesh(bg, applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true }))); bank.receiveShadow = true; scene.add(bank);
+    // galets, roseaux, nénuphars
+    const stones = [], reeds = [], pads = [];
+    for (let i = 0; i < N; i += 1) { const R = ring[i];
+      if (rn() < 0.35) { const sgn = rn() < 0.5 ? -1 : 1, [x, z] = at(R.th + rn() * 0.02, sgn < 0 ? R.ri - rn() * 0.5 : R.ro + rn() * 0.5), sz = 0.18 + rn() * 0.35; stones.push(new THREE.DodecahedronGeometry(sz, 0).scale(1, 0.55, 1).translate(x, sz * 0.25, z).toNonIndexed()); }
+      if (rn() < 0.22) { const sgn = rn() < 0.5 ? -1 : 1, rb = sgn < 0 ? R.ri + 0.3 : R.ro - 0.3, [cx, cz] = at(R.th, rb); for (let k = 0; k < 7; k++) { const h = 0.9 + rn() * 0.9, g2 = new THREE.ConeGeometry(0.035, h, 3).translate(0, h / 2, 0); g2.rotateX((rn() - 0.5) * 0.35); g2.rotateZ((rn() - 0.5) * 0.35); g2.translate(cx + (rn() - 0.5) * 0.7, 0, cz + (rn() - 0.5) * 0.7); reeds.push(g2.toNonIndexed()); if (k === 0 && rn() < 0.5) reeds.push(new THREE.CylinderGeometry(0.06, 0.06, 0.25, 5).translate(cx, h - 0.1, cz).toNonIndexed()); } }
+      if (rn() < 0.12) { const f = 0.25 + rn() * 0.5, [x, z] = at(R.th, R.ri + (R.ro - R.ri) * f); pads.push(new THREE.CylinderGeometry(0.32 + rn() * 0.2, 0.32, 0.02, 9, 1, false, 0.3, Math.PI * 1.8).translate(x, 0.08, z).toNonIndexed()); }
+    }
+    const put = (list, m) => { if (!list.length) return; const mm = new THREE.Mesh(mergeGeometries(list), m); mm.castShadow = true; mm.receiveShadow = true; scene.add(mm); };
+    put(stones, lam(0x7d7a72)); put(reeds, applyWindFog(new THREE.MeshLambertMaterial({ color: 0x6f8a3a, flatShading: true }), 0.5)); put(pads, lam(0x4f7f3a));
+    // pont-levis au sud (là où la douve est traversée), chaînes vers la porte
+    const S = ring[Math.round(N * 0.25)], bw = S.ro - S.ri + 2.6, bz = z0 + (S.ri + S.ro) / 2;
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.32, bw), lam(0x6b4a2c)); bridge.position.set(x0, 0.36, bz); bridge.castShadow = bridge.receiveShadow = true; scene.add(bridge);
+    for (let k = -4; k <= 4; k++) { const pl = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, bw), lam(0x4a3220)); pl.position.set(x0 + k * 0.5, 0.53, bz); scene.add(pl); }
+    for (const sx of [-1, 1]) { const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 6, 4), lam(0x3a3c42)); ch.position.set(x0 + sx * 2, 3, z0 + S.ri + 0.8); ch.rotation.x = 0.55; scene.add(ch); for (const e of [-1, 1]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 1.2, 6), lam(0x5a3a24)); post.position.set(x0 + sx * 2.4, 0.4, bz + e * bw / 2); scene.add(post); } }
+    // ruisseau : part de la douve vers l'est, serpente jusqu'à la lisière
+    this.buildStream(at(0, ring[0].ro - 0.5), rn);
+  }
+  naturalWater() {
+    const n = this.water.userData.n.clone(); n.needsUpdate = true; n.repeat.set(1, 1); n.wrapS = n.wrapT = THREE.RepeatWrapping;
+    const m = new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0x343c44, shininess: 50, normalMap: n, normalScale: new THREE.Vector2(0.3, 0.3), transparent: true, opacity: 0.93, depthWrite: false });
+    m.onBeforeCompile = sh => { patchNorthFog(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `
+      { float fr = pow( 1.0 - clamp( abs( dot( normalize( normal ), normalize( vViewPosition ) ) ), 0.0, 1.0 ), 3.0 );   // reflet du ciel en incidence rasante
+        outgoingLight = mix( outgoingLight, uHazeColor * 0.85, fr * 0.65 ); }
+      #include <opaque_fragment>`); };
+    m.customProgramCacheKey = () => 'water-nat'; m.userData.n = n; return m;
+  }
+  buildStream([sx, sz], rn) {
+    const pts = [[sx, sz], ...STREAM.filter(p => p[0] > sx + 1)];   // tracé partagé avec la simulation (aucun bâtiment dessus)
+    const wp = [], wc = [], idx = [], uv = [], bp = [], bc = [], bi = [], cc = new THREE.Color(); let len = 0;
+    pts.forEach(([px, pz], i) => { const [qx, qz] = pts[Math.min(pts.length - 1, i + 1)], [ox, oz] = pts[Math.max(0, i - 1)], dx = qx - ox, dz = qz - oz, l = Math.hypot(dx, dz) || 1, nx = -dz / l, nz = dx / l, w = 1.3 + 0.35 * Math.sin(i * 0.9) + (i < 2 ? 0.8 : 0);
+      if (i) len += Math.hypot(px - pts[i - 1][0], pz - pts[i - 1][1]);
+      for (const f of [-1, -0.5, 0, 0.5, 1]) { wp.push(px + nx * w * f, 0, pz + nz * w * f); cc.setHex(0x5f8a6a).lerp(new THREE.Color(0x24506a), 1 - Math.abs(f)); wc.push(cc.r, cc.g, cc.b); uv.push(f * 0.4, len / 4); }
+      for (const [o, y, col] of [[0, 0.03, 0x2e2418], [0.5, 0.14, 0x4a3a26], [1.3, 0.05, 0x667a40], [2.0, 0, 0x5f7d42]]) for (const sgn of [-1, 1]) { bp.push(px + nx * (w + o) * sgn, y, pz + nz * (w + o) * sgn); cc.setHex(col); bc.push(cc.r, cc.g, cc.b); } });
+    for (let i = 0; i < pts.length - 1; i++) { for (let k = 0; k < 4; k++) { const a0 = i * 5 + k, b0 = a0 + 5; idx.push(a0, a0 + 1, b0, a0 + 1, b0 + 1, b0); /* face vers le haut */ } for (let k = 0; k < 3; k++) for (const sgn of [0, 1]) { const a0 = i * 8 + k * 2 + sgn, a1 = a0 + 2, b0 = a0 + 8, b1 = a1 + 8; if (sgn) bi.push(a0, b0, a1, a1, b0, b1); else bi.push(a0, a1, b0, a1, b1, b0); } }
+    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.Float32BufferAttribute(wp, 3)); wg.setAttribute('color', new THREE.Float32BufferAttribute(wc, 3)); wg.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); wg.setIndex(idx);
+    wg.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(wp.length).map((_, i) => i % 3 === 1 ? 1 : 0), 3));
+    this.streamWater = this.naturalWater(); const w = new THREE.Mesh(wg, this.streamWater); w.position.y = 0.07; w.renderOrder = 2; this.scene.add(w);
+    const bg = new THREE.BufferGeometry(); bg.setAttribute('position', new THREE.Float32BufferAttribute(bp, 3)); bg.setAttribute('color', new THREE.Float32BufferAttribute(bc, 3)); bg.setIndex(bi); bg.computeVertexNormals();
+    const bank = new THREE.Mesh(bg, applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }))); bank.receiveShadow = true; this.scene.add(bank);
   }
   rebuildMoats() {
     const X = this.sim.extras; const key = [...X.moat].join(); if (key === this.moatKey) return; this.moatKey = key;
@@ -132,7 +189,7 @@ export class ExtrasView {
   }
   update(dt, alpha) {
     const sim = this.sim, X = sim.extras, Z = sim.zombies, d = this.d, c = this.c; this.t += dt; const t = this.t;
-    this.water.userData.n.offset.set(t * 0.02, t * 0.013);
+    this.water.userData.n.offset.set(t * 0.02, t * 0.013); if (this.natWater) this.natWater.userData.n.offset.set(t * 0.012, -t * 0.009); if (this.streamWater) this.streamWater.userData.n.offset.set(0, -t * 0.35);   // le ruisseau coule
     // poussière des hordes qui chargent + traces au sol
     // (v4.1) poussière très discrète : un zombie sur cinq, rarement, voile léger
     for (let i = 0; i < Z.n; i += 5) { if (!Z.rush[i] || Z.state[i] === 1 || Math.random() > dt * 0.9) continue; const x = Z.x[i], z = Z.z[i]; this.dust.add({ x: x + (Math.random() - 0.5), y: 0.25, z, vx: (Math.random() - 0.5) * 0.5, vy: 0.4 + Math.random() * 0.3, vz: -0.5, t: 0, life: 1.2, a: 0.14, r: 0.62, gr: 0.55, b: 0.45, s: 1.0, grow: 1.2 }); if (Math.random() < 0.08) this.decals.add(x, z, 'dirt', 1 + Math.random() * 0.6, 12); }

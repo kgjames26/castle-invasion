@@ -9,7 +9,7 @@ import { ZombieSwarm } from './zombies.js';
 import { Army, archerPos } from './army.js';
 import { Siege } from './siege.js';
 import { Extras } from './extras.js';
-import { START, UNITS, TIMING, waveSpec, giantsFor, golemsFor, GOLEM, PACK, FIRE, DIFFICULTY } from '../content/medieval.js';
+import { ZOMBIES, START, UNITS, TIMING, waveSpec, giantsFor, golemsFor, GOLEM, PACK, FIRE, DIFFICULTY } from '../content/medieval.js';
 import { Mages } from './mage.js';
 import { Priest } from './priest.js';
 import { Infection } from './infection.js';
@@ -189,7 +189,11 @@ export class Simulation {
           const k = this.spawnPack(sp, Math.min(sp.next, sp.left)); sp.acc = Math.max(0, sp.acc - k); sp.next = this.packSize(sp.total);
           if (!k) sp.acc = Math.min(sp.acc, sp.next);
         }
-      } else if (this.zombies.n === 0) {
+      } else if (this.zombies.n > 0) {
+        // garde-fou : 3 min après la dernière horde, les retardataires coincés pourrissent (la vague finit toujours)
+        this.straggle = (this.straggle || 0) + dt; if (this.straggle > 180) { const Z = this.zombies; for (let i = 0; i < Z.n; i++) Z.hit(i, ZOMBIES[Z.type[i]].hp * 0.04 * dt); }
+      }
+      if (this.phase === 'assault' && (!sp || sp.left <= 0) && this.zombies.n === 0) { this.straggle = 0;
         const spec = waveSpec(this.wave);
         for (const r in spec.reward) this.eco.add(r, spec.reward[r]); this.extras.waveEnd(spec.reward);
         this.events.push({ type: 'waveEnd', wave: this.wave, reward: spec.reward });
