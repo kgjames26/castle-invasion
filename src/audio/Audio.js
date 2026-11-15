@@ -123,6 +123,8 @@ export class AudioManager {
   // (v8.0) fanfare de victoire : arpège de cuivres montant (do-mi-sol-do) + cloche ; pièces d'or qui tintent
   fanfare() { const c = this.ctx; if (!c) return; const t = c.currentTime + 0.05, bus = this.sfxBus; [[262, 0], [330, 0.16], [392, 0.32], [523, 0.5]].forEach(([f, d], k) => this.brass(f, t + d, k === 3 ? 0.9 : 0.22, bus)); setTimeout(() => this.bell && this.bell(), 650); }
   coins() { for (let k = 0; k < 5; k++) setTimeout(() => this.tone('triangle', 1800 + Math.random() * 900, 1500, 0.08, 0.05), k * 70); }
+  chirp() { const n = 2 + (Math.random() * 4 | 0), f = 2600 + Math.random() * 1600; for (let k = 0; k < n; k++) setTimeout(() => this.tone('sine', f * (1 + 0.15 * Math.random()), f * (0.75 + 0.2 * Math.random()), 0.06 + Math.random() * 0.05, 0.022), k * (90 + Math.random() * 60)); }
+  cricket() { for (let k = 0; k < 3; k++) setTimeout(() => this.tone('square', 4200, 4100, 0.025, 0.006), k * 45); }
   // corbeau (v6.0) : deux ou trois croassements rauques (bruit filtré, glissando descendant)
   caw() { if (!this.ctx || this.voices > 24) return; const n = 2 + (Math.random() * 2 | 0); for (let k = 0; k < n; k++) setTimeout(() => { this.noiseBurst(0.16, 0.05, 'bandpass', 1500, 6, 900); this.tone('sawtooth', 520, 360, 0.14, 0.018); }, k * 210); }
   oil() { this.noiseBurst(1.2, 0.22, 'lowpass', 1600, 0.8, 400); }
@@ -153,6 +155,9 @@ export class AudioManager {
     // (v4.0) musique : couche selon le moment ; cloche à l'alerte ; gémissements selon la taille de la horde proche
     this.schedule(); const mood = sim.phase === 'assault' ? 'war' : sim.phase === 'alert' ? 'alert' : 'calm'; if (mood !== this.mood || !this.moodSet) { if (mood === 'alert' && this.mood !== 'alert') this.bell(); this.setMood(mood); }
     { let near = 0; const Z = sim.zombies; for (let i = 0; i < Z.n; i += 2) if (Z.z[i] > 90) near++; if (near && this.t > (this.nextGroan || 0)) { this.nextGroan = this.t + Math.max(0.35, 3 - near * 0.04) * (0.6 + Math.random() * 0.8); this.groan(Math.min(0.09, 0.025 + near * 0.0012)); } }
+    // (v9.0) ambiance : chants d'oiseaux le jour, grillons la nuit (hors vague, pas en hiver)
+    { const L = sim.night.light(), calm = sim.phase !== 'assault' && sim.extras?.season().name !== 'Hiver' && sim.extras?.weather !== 'rain';
+      if (calm && this.t > (this.nextAmb || 0)) { this.nextAmb = this.t + (L > 0.5 ? 2.5 + Math.random() * 5 : 0.6 + Math.random() * 1.2); if (L > 0.5) this.chirp(); else if (L < 0.3) this.cricket(); } }
     for (const b of sim.blasts) if (!b.au) { b.au = 1; if (b.kind === 'boom') this.boom(); }
     // tirs : flèches d'archers et de tours, à leur apparition
     let n = 0; for (const a of sim.arrows) if (!this.arrowSeen.has(a)) { this.arrowSeen.add(a); if (n++ < 2) this.shot(a.h ? 'tower' : 'archer'); }
