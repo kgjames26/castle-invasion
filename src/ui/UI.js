@@ -67,7 +67,7 @@ export class UI {
     // glisser le fantôme de construction avec le doigt (au lieu de déplacer la caméra)
     this.cam.ghostHit = (x, z) => this.mode !== 'idle' && this.place && Math.abs(x - this.place.x) < this.halfW() + 4 && Math.abs(z - this.place.z) < this.halfD() + 4;
     this.cam.ghostMove = (x, z) => this.moveGhost(x, z);
-    this.prefs = { difficulty: 'normal', autoRepair: true, shake: true, fx: true, ...loadPrefs() }; this.applyPrefs(true);
+    this.prefs = { difficulty: 'normal', autoRepair: true, shake: true, fx: true, hints: true, ...loadPrefs() }; this.applyPrefs(true);
     this.refresh(true);
     this.buildMinimap(); this.startTuto();   // (v4.0) mini-carte et tutoriel guidé
     { const fx = document.createElement('button'); fx.id = 'fpvx'; fx.textContent = '✕ Quitter la vue'; fx.addEventListener('click', () => { this.act('x:fpvx'); }); document.getElementById('app').appendChild(fx); }
@@ -450,7 +450,7 @@ export class UI {
       ${this.gfxAdv ? '' : `<div class="row">${this.btn('⚙ Réglages avancés', '', 'gfxadv', false, 'act slim sec')}</div>`}<div class="row wrapr" style="${this.gfxAdv ? '' : 'display:none'}">${gt('shadows', q.shadows, 'Ombres', 'plus joli, plus lourd')}${gt('glow', q.glow, 'Lueurs', 'torches, feux, impacts')}${gt('grass', q.grass >= 0.7, 'Herbe dense', '')}${gt('res', q.pixelRatio >= 1.5, 'Haute résolution', 'image plus nette')}${gt('post', !!q.post, 'Relief et halo', 'occlusion ambiante, halo des feux')}</div></div>`;
     const p = this.prefs, tog = (k, l, sub) => this.btn(`${p[k] ? '✅' : '⬜'} ${l}`, sub, 'pref:' + k, false, 'act slim' + (p[k] ? '' : ' sec'));
     const game = `<div class="vols"><div class="hint small"><b>Difficulté</b> (vagues suivantes)</div><div class="row">${Object.keys(DIFFICULTY).map(k => this.btn(DIFFICULTY[k].name, k === 'easy' ? '−25 % zombies' : k === 'hard' ? '+30 % zombies, +15 % PV' : '', 'pref:difficulty:' + k, false, 'act slim' + (k === p.difficulty ? '' : ' sec'))).join('')}</div>
-      <div class="row wrapr">${tog('autoRepair', 'Réparation auto', 'emprunte 2 villageois')}${tog('shake', 'Secousses', 'explosions')}${tog('fx', 'Effets', 'particules, feu')}</div></div>`;
+      <div class="row wrapr">${tog('autoRepair', 'Réparation auto', 'emprunte 2 villageois')}${tog('shake', 'Secousses', 'explosions')}${tog('fx', 'Effets', 'particules, feu')}${tog('hints', 'Aides à l\'écran', 'conseils, objectifs, ⬆')}</div></div>`;
     return `<div class="hint">Castle Invasion · <b>v${VERSION}</b></div>${this.guideHtml()}${game}${this.savesHtml()}${audio}${qual}${this.achHtml()}<div class="row">${this.btn('🔄 Nouvelle partie', 'la partie en cours sera perdue', 'newgame', false, 'act warnb')}</div>`;
   }
   // guide repliable : bases du jeu, bestiaire, raccourcis
@@ -534,7 +534,7 @@ export class UI {
   // (v6.0) flèche dorée ⬆ au-dessus des bâtiments améliorables MAINTENANT (assez de ressources), pendant le temps calme
   upMarks(vw, vh) {
     const sim = this.sim, B = sim.build, E = sim.eco, pool = this.upPool || (this.upPool = []); let k = 0;
-    const on = (sim.phase === 'prep' || sim.phase === 'calm') && this.mode === 'idle' && !this.sheet && UI_FLAGS.upMarks !== false;
+    const on = (sim.phase === 'prep' || sim.phase === 'calm') && this.mode === 'idle' && !this.sheet && this.prefs.hints;
     if (on && (!this.upT || performance.now() - this.upT > 600)) { this.upT = performance.now(); const cx = this.cam.tx, cz = this.cam.tz; this.upList = B.items.filter(b => b.state === 'built' && !b.fixed && (() => { const c = B.upCost(b); return c && E.afford(c); })()).sort((a, b) => ((a.x - cx) ** 2 + (a.z - cz) ** 2) - ((b.x - cx) ** 2 + (b.z - cz) ** 2)).slice(0, 5).map(b => b.id); }   /* au plus 5, les plus proches du centre de la vue */
     if (on) for (const id of this.upList || []) { const b = B.get(id); if (!b || b.state !== 'built') continue; const S = STRUCT[b.type], p = this.rd.project(b.x, (S.size ? S.size[1] : 4) + 2.2, b.z);
       if (!p.vis || p.x < 20 || p.x > vw - 20 || p.y < 100 || p.y > vh - 100) continue;
@@ -582,7 +582,7 @@ export class UI {
   renderAdvice() {
     let b = $('#advice'); const list = this.advice();
     if (!b) { b = el('button'); b.id = 'advice'; b.title = 'Conseils'; document.getElementById('app').appendChild(b); b.addEventListener('click', () => this.toggleAdvice()); }
-    b.style.display = list.length && !this.sheet && this.mode === 'idle' ? '' : 'none'; const k = list.length + ':' + list.map(x => x[0]).join(''); if (b.dataset.k !== k) { b.dataset.k = k; b.innerHTML = `💡<em>${list.length}</em>`; }
+    b.style.display = list.length && !this.sheet && this.mode === 'idle' && this.prefs.hints ? '' : 'none'; const k = list.length + ':' + list.map(x => x[0]).join(''); if (b.dataset.k !== k) { b.dataset.k = k; b.innerHTML = `💡<em>${list.length}</em>`; }
     const p = $('#advice-pop'); if (p && p.classList.contains('on')) this.toggleAdvice(true);
   }
   toggleAdvice(force) {

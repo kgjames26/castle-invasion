@@ -218,7 +218,7 @@ export function installExtrasUI(UI) {
     let el = $('#quest'); if (!el) { el = document.createElement('div'); el.id = 'quest'; document.getElementById('app').appendChild(el); el.addEventListener('click', e => { if (e.target.closest('[data-q=hide]')) { this.questHidden = !this.questHidden; el.dataset.k = ''; this.tickQuest(); } }); }
     const q = QUESTS[X.quest]; if (!q) { el.classList.remove('on'); return; }
     if (q[2](sim)) { for (const r in q[3]) sim.eco.add(r, q[3][r]); X.quest++; this.toast(`🎯 Objectif atteint : ${q[0].replace(/^\S+ /, '')} · ${Object.keys(q[3]).map(r => '+' + q[3][r] + ' ' + RICO(r)).join(' ')}`, 'ok'); this.buzz([20, 30, 20]); el.dataset.k = ''; return; }
-    const show = (sim.phase === 'prep' || sim.phase === 'calm') && !this.sheet && this.mode === 'idle';
+    const show = (sim.phase === 'prep' || sim.phase === 'calm') && !this.sheet && this.mode === 'idle' && this.prefs.hints;
     el.classList.toggle('on', show); el.classList.toggle('mini', !!this.questHidden);
     const k = X.quest + ':' + !!this.questHidden; if (el.dataset.k === k) return; el.dataset.k = k;
     el.innerHTML = this.questHidden ? `<button data-q="hide">🎯 ${X.quest + 1}/${QUESTS.length}</button>` : `<span class="tn">🎯 ${X.quest + 1}/${QUESTS.length}</span><b>${q[0]}</b><small>${q[1]} · récompense ${Object.keys(q[3]).map(r => q[3][r] + ' ' + RICO(r)).join(' ')}</small><button class="x" data-q="hide">réduire</button>`;
