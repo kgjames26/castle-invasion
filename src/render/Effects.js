@@ -130,7 +130,7 @@ export class Effects {
     this.burst(x, 0.9, z, 20 * k, 1 + r * 0.5, 5 + r * 0.3, 0.38, 0.22 + r * 0.03, 0, [1, 0.55, 0.1], true, 0.9);
     this.burst(x, 0.5, z, 16 * k, 3 + r * 0.9, 7, 1.1, 0.22, 14, COL.ember, true);
     this.burst(x, 0.6, z, 6 * k, 2 + r * 0.6, 6, 1.2, 0.26, 14, COL.debris);
-    this.burst(x, 1.8, z, 12 * k, 1 + r * 0.3, 2.5, 2.2, 0.55 + r * 0.05, -0.6, [0.17, 0.15, 0.14], false, 1.1);
+    this.burst(x, 1.8, z, 12 * k, 1 + r * 0.3, 2.5, 2.2, 0.5 + r * 0.04, -0.6, [0.17, 0.15, 0.14], false, 0.5);
     this.ring(x, z, r * 1.5 * k, 0.4, [0.55, 0.24, 0.06]);
     this.scorch(x, z, r * 0.9);
     this.addShake(big ? 0.55 : 0.18 + r * 0.03);

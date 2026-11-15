@@ -407,3 +407,5 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Braseros et bûchers de la défense redessinés avec les mêmes flammes que les feux de camp (les anciens blocs pâles sont très réduits).
 - Feu au sol (huile bouillante, boules de feu, poix) : nappe de flammes dessinée avec les nouvelles flammes ; explosion moins « en blocs » (éclats plus petits et plus nombreux, fumée sombre, éclair et anneau atténués).
 - Les allumeurs autonomes ne sortent plus dans la plaine pendant une vague.
+- Flammes redessinées : langues vrillées et renflées (plus de « pyramides »), cœur plus doux ; un zombie en feu brûle des pieds à la tête.
+- La flèche de secteur hors champ ne passe plus par-dessus une fiche ouverte.

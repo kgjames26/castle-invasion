@@ -615,7 +615,7 @@ export class UI {
   // flèche au bord de l'écran vers un secteur attaqué / percé / visé qu'on ne voit pas (clic → la caméra y va)
   edgeArrow(s, p, onScr, vw, vh) {
     this.edges = this.edges || []; let e = this.edges[s];
-    const sim = this.sim, br = sim.wall.breaches(s), dg = sim.danger(s), tgt = sim.phase === 'alert' && sim.targets.includes(s), want = !onScr && (br || dg === 2 || tgt);
+    const sim = this.sim, br = sim.wall.breaches(s), dg = sim.danger(s), tgt = sim.phase === 'alert' && sim.targets.includes(s), want = !onScr && (br || dg === 2 || tgt) && !this.card && !this.sheet;   /* pas par-dessus une fiche ouverte */
     if (!want) { if (e) e.style.display = 'none'; return; }
     if (!e) { e = this.edges[s] = el('button', 'edgea'); e.addEventListener('click', () => { this.cam.focusOn(s * 40 + 20, 150); this.openCard({ kind: 'sector', id: s }); }); document.getElementById('app').appendChild(e); }
     let dx = p.x - vw / 2, dy = p.y - vh / 2; if (!p.vis) { dx = -dx; dy = -dy; }

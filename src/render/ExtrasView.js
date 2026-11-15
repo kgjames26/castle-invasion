@@ -237,9 +237,9 @@ export class ExtrasView {
         else F.add(f.x, (f.zone === 'wall' ? 6.4 : 0) + 1.8, f.z, 1.05 * k, ph, f.zone === 'wall' ? 0 : 0.5); }
       // feux au sol (huile bouillante, boules de feu, poix, flèches enflammées) : nappe de flammes qui retombe en s'éteignant
       for (const f of sim.fires || []) { const life = Math.min(1, f.t / 1.2), n = Math.max(3, Math.min(9, Math.round(f.r * 2.2)));
-        for (let j = 0; j < n; j++) { const a = j * 2.4 + f.x, rr = f.r * 0.85 * Math.sqrt((j + 0.5) / n); F.add(f.x + Math.cos(a) * rr, 0.1, f.z + Math.sin(a) * rr, (0.9 + 0.5 * Math.abs(Math.sin(a * 3))) * life, a, j ? 0 : 0.5 * f.r / 2); } }
+        for (let j = 0; j < n; j++) { const a = j * 2.4 + f.x, rr = f.r * 0.85 * Math.sqrt((j + 0.5) / n); F.add(f.x + Math.cos(a) * rr, 0.1, f.z + Math.sin(a) * rr, (1.3 + 0.8 * Math.abs(Math.sin(a * 3))) * life, a, j ? 0 : 0.5 * f.r / 2); } }
       if (Zb.burnT) for (let i = 0; i < Zb.n; i++) { const bt = Zb.burnT[i]; if (!(bt > 0) || Zb.hp[i] <= 0) continue; const sz = ZOMBIES[Zb.type[i]].size || 1, ph = i * 2.3;
-        F.add(Zb.x[i] + 0.15 * Math.sin(t * 7 + ph), 0.5 * sz, Zb.z[i], 0.75 * sz * Math.min(1, bt), ph, 0.35); F.add(Zb.x[i] - 0.1, 1.2 * sz, Zb.z[i] + 0.1, 0.5 * sz * Math.min(1, bt), ph + 1, 0);
+        const kb = Math.min(1, bt); F.add(Zb.x[i] + 0.15 * Math.sin(t * 7 + ph), 0.15, Zb.z[i] + 0.2, 0.95 * sz * kb, ph, 0.4); F.add(Zb.x[i] - 0.12, 1.0 * sz, Zb.z[i] + 0.25, 0.85 * sz * kb, ph + 1, 0); F.add(Zb.x[i] + 0.1, 1.75 * sz, Zb.z[i] + 0.1, 0.6 * sz * kb, ph + 2, 0);   // pieds, torse, tête : le zombie est une torche
         if (Math.random() < dt * 4) this.smoke.add({ x: Zb.x[i], y: 2.2 * sz, z: Zb.z[i], vx: 0.3, vy: 1.4, vz: 0, t: 0, life: 2.2, a: 0.3, r: 0.16, gr: 0.14, b: 0.13, s: 0.7, grow: 2 });
         if (Math.random() < dt * 6) this.fx.add({ x: Zb.x[i], y: 1.4 * sz, z: Zb.z[i], vx: (Math.random() - 0.5), vy: 2 + Math.random() * 2, vz: (Math.random() - 0.5), t: 0, life: 0.8, a: 1, r: 1, gr: 0.55, b: 0.15, s: 0.18 }); }
       F.end(); }

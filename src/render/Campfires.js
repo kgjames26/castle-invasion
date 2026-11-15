@@ -27,11 +27,11 @@ const tex = () => TEX || (TEX = {
 // ——— flammes instanciées : trois langues croisées en dégradé, un cœur jaune, un halo au sol ———
 export class FlameSet {
   constructor(scene, cap, glow = true) {
-    const tongue = (r, h, a) => new THREE.ConeGeometry(r, h, 6, 1, true).translate(0, h / 2, 0).rotateY(a);
+    const tongue = (r, h, a) => { const g = new THREE.ConeGeometry(r, h, 9, 4, true).translate(0, h / 2, 0), P = g.attributes.position; for (let i = 0; i < P.count; i++) { const y = P.getY(i) / h, tw = y * 1.4, x = P.getX(i), z = P.getZ(i), bow = 1 + 0.35 * Math.sin(y * Math.PI); P.setXYZ(i, (x * Math.cos(tw) - z * Math.sin(tw)) * bow + 0.08 * r * Math.sin(y * 5), P.getY(i), (x * Math.sin(tw) + z * Math.cos(tw)) * bow); } return g.rotateY(a); };   // langue de feu vrillée et renflée
     const g = mergeGeometries([tongue(0.34, 0.95, 0), tongue(0.26, 1.2, 1.1).translate(0.07, 0, 0.04), tongue(0.22, 0.8, 2.2).translate(-0.08, 0, -0.03), tongue(0.18, 0.7, 3.0).translate(0.02, 0, -0.08)].map(strip));
     const add = { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending };
-    this.tongues = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ color: 0xf07a28, map: tex().flame, side: THREE.DoubleSide, opacity: 0.8, ...add }), cap);
-    this.core = new THREE.InstancedMesh(strip(new THREE.ConeGeometry(0.16, 0.55, 6).translate(0, 0.27, 0)), new THREE.MeshBasicMaterial({ color: 0xffe08a, opacity: 0.9, ...add }), cap);
+    this.tongues = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ color: 0xe8641a, map: tex().flame, side: THREE.DoubleSide, opacity: 0.72, ...add }), cap);
+    this.core = new THREE.InstancedMesh(strip(new THREE.ConeGeometry(0.16, 0.55, 6).translate(0, 0.27, 0)), new THREE.MeshBasicMaterial({ color: 0xffc860, map: tex().flame, opacity: 0.5, ...add }), cap);
     this.glow = glow ? new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff9a40, map: tex().glow, opacity: 0.5, ...add }), cap) : null;
     for (const m of [this.tongues, this.core, this.glow]) if (m) { m.frustumCulled = false; m.count = 0; m.renderOrder = 4; scene.add(m); }
     this.cap = cap; this.n = 0; this.d = new THREE.Object3D(); this.t = 0;
