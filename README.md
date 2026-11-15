@@ -285,3 +285,8 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Fiche d'un bâtiment : encadré « Au niveau N : » avec les gains chiffrés (emplacements, rendement, stocks, rang et vitesse d'entraînement, unités débloquées, plafonds, soins, routes, pouvoirs du prêtre, places…) et le nouvel aspect.
 - Les zombies tués tombent (en avant ou en arrière), gisent ~4 s puis s'effacent en transparence (1,2 s) ; instancié, coût négligeable.
 - Chemin de ronde : dallage de pierre taillée procédural haute qualité (rangs décalés, biseaux, fissures, éclats, mousse dans les joints, usure au passage).
+
+## Phase 35 — Scierie, Travaux publics, routes
+- Symbole dessiné de la scierie (lame de scie circulaire sur une bille), interface et enseigne.
+- Correction : le bâtiment des Travaux publics n'avait aucun modèle (invisible) — dépôt de voirie modélisé (halle à colombages, gravier, pavés, rouleau, brouette, outils, borne, poteau indicateur).
+- Routes refaites : Sentier → Terre battue → Gravier → Pavés. Centre texturé à l'échelle du mètre (pavés de même taille sur toutes les largeurs) + bordures dédiées à bord irrégulier et fondu (galets, pierres taillées, herbe) ; les routes d'origine sont recouvertes dès la terre battue, hors cour et placette.

@@ -14,6 +14,16 @@ const kitModel = (kit, name, sc, seed = 0) => { const g = new THREE.Group(), m =
 
 // Enseigne : médaillon rond sur un mât, avec l'icône du métier — se lit de loin, d'un coup d'œil.
 const signCache = new Map();
+// Scierie : grande lame de scie circulaire dorée sur une bille de bois, dessinées
+function drawSawmillSign(g) {
+  g.save(); g.translate(64, 64);
+  g.fillStyle = '#8a5a2b'; g.beginPath(); g.roundRect(-44, 14, 88, 26, 12); g.fill(); g.fillStyle = '#c99a62'; g.beginPath(); g.ellipse(40, 27, 9, 13, 0, 0, 7); g.fill();   // bille
+  g.strokeStyle = '#7a4a22'; g.lineWidth = 2; g.beginPath(); g.ellipse(40, 27, 5, 8, 0, 0, 7); g.stroke();
+  g.fillStyle = '#c9ced6'; g.beginPath(); for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2, R = i % 2 ? 30 : 37; g.lineTo(Math.cos(a) * R, -6 + Math.sin(a) * R); } g.closePath(); g.fill();   // lame dentée
+  g.strokeStyle = '#6a7080'; g.lineWidth = 2.5; g.stroke();
+  g.fillStyle = '#e8ecf0'; g.beginPath(); g.arc(0, -6, 22, 0, 7); g.fill(); g.fillStyle = '#d9a63a'; g.beginPath(); g.arc(0, -6, 8, 0, 7); g.fill(); g.fillStyle = '#5a3a1c'; g.beginPath(); g.arc(0, -6, 3, 0, 7); g.fill();
+  g.restore();
+}
 // Caserne : écu rouge et épées croisées, dessinés (pas d'emoji)
 function drawBarracksSign(g) {
   g.save(); g.translate(64, 66); const k = 2.6;
@@ -32,7 +42,7 @@ export function signSprite(ico) {
     const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
     g.fillStyle = '#3a2a1c'; g.beginPath(); g.arc(64, 64, 62, 0, 7); g.fill(); g.fillStyle = '#f4e4bc'; g.beginPath(); g.arc(64, 64, 55, 0, 7); g.fill();
     g.strokeStyle = '#b8924a'; g.lineWidth = 4; g.beginPath(); g.arc(64, 64, 49, 0, 7); g.stroke();
-    if (ico.startsWith('<svg')) drawBarracksSign(g);
+    if (ico.includes('Scierie')) drawSawmillSign(g); else if (ico.startsWith('<svg')) drawBarracksSign(g);
     else { g.font = '66px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#000'; g.fillText(ico, 64, 70); }
     tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; signCache.set(ico, tex);
   }
@@ -221,9 +231,39 @@ export function houseModel(kit, seed, lv) {
   return { g: b.g, top: 12 };
 }
 
+// TRAVAUX PUBLICS (v3.5) : dépôt de voirie — halle à colombages ouverte sur la cour, tas de gravier, piles de pavés, rouleau de pierre,
+// brouette, râtelier d'outils (pelles, pioches, dames), borne milliaire, poteau indicateur. Façade au sud (+z).
+function publicWorksModel() {
+  const b = new B(), PL = 0xe6d8b8, TB = 0x4e3522, RF = 0x7a4a30, ST = 0x9a958c;
+  b.box(12.4, 0.3, 9.2, 0xa8a090, 0, 0, 0);                                                      // cour gravillonnée
+  b.box(11.0, 0.5, 4.4, ST, 0, 0.3, -2.2);                                                       // soubassement de la halle
+  b.box(11.0, 3.4, 4.0, PL, 0, 0.8, -2.6);                                                       // mur du fond
+  for (const x of [-5.3, -1.8, 1.8, 5.3]) b.box(0.32, 3.6, 0.32, TB, x, 0.8, -0.4);                // poteaux de la façade ouverte
+  b.box(11.2, 0.3, 0.32, TB, 0, 4.2, -0.4);                                                      // sablière
+  for (const x of [-5.3, 5.3]) { b.box(0.3, 3.4, 4.2, PL, x, 0.8, -2.4); for (const z of [-4.4, -2.4, -0.4]) b.box(0.34, 3.4, 0.2, TB, x, 0.8, z); }   // pignons
+  for (const x of [-4.6, -2.3, 0, 2.3, 4.6]) b.box(0.2, 3.4, 0.14, TB, x, 0.8, -4.62);
+  const roof = b.gable(12.0, 5.4, 2.2, RF, 0, 4.5, -2.4);                                           // toit
+  b.box(1.4, 1.6, 0.6, 0x8a7f72, 3.6, 5.6, -3.4);                                                // cheminée
+  b.box(4.2, 0.9, 0.12, 0x5a3a24, 0, 3.55, -0.22); b.box(3.9, 0.6, 0.14, 0xe8d29a, 0, 3.55, -0.18);   // enseigne au-dessus de la halle
+  // dans la halle : établi, rouleau de pierre, râtelier d'outils
+  b.box(3.0, 0.9, 1.0, 0x7a5a3a, -3.4, 0.8, -3.6);
+  b.add(new THREE.CylinderGeometry(0.75, 0.75, 1.6, 12), 0x8a8580, 1.4, 1.55, -2.4, 0, 0, Math.PI / 2); b.box(0.12, 0.12, 2.2, TB, 1.4, 1.55, -1.1); b.box(1.9, 0.12, 0.12, TB, 1.4, 1.55, -0.05);
+  for (let k = 0; k < 4; k++) { b.box(0.1, 2.2, 0.1, 0x7a5a3a, -0.6 + k * 0.5, 0.8, -4.2, 0, 0.08); b.box(0.36, 0.42, 0.06, 0x8e98a4, -0.6 + k * 0.5, 2.9, -4.2); }
+  // cour : tas de gravier, piles de pavés taillés, brouette, bordures en attente
+  b.add(new THREE.ConeGeometry(1.7, 1.3, 9), 0xb8b0a0, -4.0, 0.95, 2.4); b.add(new THREE.ConeGeometry(1.0, 0.8, 8), 0xa49c8c, -2.6, 0.7, 3.2);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3 - i; j++) for (let k = 0; k < 2; k++) b.box(0.55, 0.32, 0.55, (i + j + k) % 2 ? 0xbab4a8 : 0xa9a397, 0.4 + j * 0.62 + i * 0.31, 0.3 + i * 0.33, 2.0 + k * 0.62);
+  for (let k = 0; k < 4; k++) b.box(1.6, 0.35, 0.4, 0xc4beb2, 3.6, 0.3 + k * 0.36, 3.4 - (k % 2) * 0.1);
+  { const g = new B(); g.box(1.1, 0.35, 0.8, 0x7a4f2a, 0, 0.55, 0); g.add(new THREE.TorusGeometry(0.28, 0.06, 5, 10), 0x3a3426, 0, 0.32, 0.5, 0, Math.PI / 2); g.box(0.06, 0.06, 1.3, 0x5a3a24, 0.32, 0.55, -0.7, 0.2); g.box(0.06, 0.06, 1.3, 0x5a3a24, -0.32, 0.55, -0.7, 0.2); g.add(new THREE.ConeGeometry(0.4, 0.3, 7), 0xb8b0a0, 0, 0.85, 0); g.g.position.set(-0.8, 0.3, 3.4); g.g.rotation.y = 0.6; b.g.add(g.g); }
+  // borne milliaire et poteau indicateur à deux flèches
+  b.cyl(0.32, 1.1, ST, 5.4, 0.3, 4.1, 8); b.ball(0.32, ST, 5.4, 1.4, 4.1);
+  b.cyl(0.08, 3.0, TB, -5.6, 0.3, 4.2, 5); b.box(1.5, 0.32, 0.08, 0xd9c08a, -5.0, 2.8, 4.2); b.box(1.3, 0.3, 0.08, 0xd9c08a, -6.1, 2.3, 4.2, 0, 0.1);
+  return { g: b.g, top: 7.2 };
+}
+
 // Fabrique le modèle d'une structure. `seed` varie l'aspect des maisons. Renvoie { g, top } ; les pastilles de niveau sont ajoutées par le vue.
 export function makeModel(type, kit, seed = 0, lv = 1) {
   if (type === 'house') return houseModel(kit, seed, lv);
+  if (type === 'publicworks') return publicWorksModel();
   if (type === 'wizard') return wizardModel();
   if (type === 'infirmary') return infirmaryModel();
   if (type === 'university') return universityModel();

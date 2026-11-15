@@ -61,30 +61,86 @@ export class FrontierView {
   }
 }
 
-// ——— routes : bande de terre pour chaque tronçon ; gravier puis pavés selon le niveau des Travaux publics ; chantier en pointillés ———
+// ——— routes (v3.5) : bandes texturées qui s'embellissent avec les Travaux publics ———
+//  0 sentier (trace foulée, herbe) · 1 terre battue (ornières, cailloux) · 2 gravier (bordure de galets) · 3 pavés (bordures de pierre)
+//  Chaque route = un centre (texture tuilée à l'échelle du mètre : même taille de pavés quelle que soit la largeur) + deux bordures
+//  (texture dédiée, bord extérieur irrégulier et fondu). TILE = mètres par tuile du centre.
+const TILE = 2.4, BW = [1.1, 0.8, 0.6, 0.55];
+const roadTex = {};
+function rtex(key, Wp, Hp, draw, wrapU) {
+  if (roadTex[key]) return roadTex[key];
+  const cv = document.createElement('canvas'); cv.width = Wp; cv.height = Hp; const g = cv.getContext('2d');
+  let sd = 0; for (const ch of key) sd = (sd * 31 + ch.charCodeAt(0)) % 2147483647; sd = sd || 7; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  draw(g, r, Wp, Hp);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = wrapU ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping; t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return (roadTex[key] = t);
+}
+// dessine fn en x,y et à ses copies de l'autre côté des bords (tuilable)
+const tiled = (Wp, Hp, x, y, m, fn) => { for (const dx of [0, -Wp, Wp]) for (const dy of [0, -Hp, Hp]) { const px = x + dx, py = y + dy; if (px < -m || px > Wp + m || py < -m || py > Hp + m) continue; fn(px, py); } };
+const soft = (g, x, y, rad, col) => { const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, col); gr.addColorStop(1, col.replace(/[\d.]+\)$/, '0)')); g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2); };
+function centerTex(q) {
+  return rtex('c' + q, 512, 512, (g, r, W, H) => {
+    if (q === 0) { g.fillStyle = 'rgba(122,98,66,.78)'; g.fillRect(0, 0, W, H); for (let i = 0; i < 60; i++) { const x = r() * W, y = r() * H, rad = 14 + r() * 40; tiled(W, H, x, y, rad, (px, py) => soft(g, px, py, rad, 'rgba(86,118,52,.5)')); } }
+    else if (q === 1) { g.fillStyle = 'rgb(138,110,76)'; g.fillRect(0, 0, W, H);
+      for (let i = 0; i < 140; i++) { const x = r() * W, y = r() * H, rad = 8 + r() * 26; tiled(W, H, x, y, rad, (px, py) => soft(g, px, py, rad, r() < 0.5 ? 'rgba(160,130,92,.4)' : 'rgba(98,76,52,.35)')); }
+      for (const ux of [0.28, 0.72]) for (let y = 0; y < H; y++) { g.fillStyle = 'rgba(92,70,48,.4)'; g.fillRect(ux * W - 22 + Math.sin(y / H * Math.PI * 4) * 5, y, 44, 1); }   // ornières
+      for (let i = 0; i < 380; i++) { const x = r() * W, y = r() * H, sz = 2 + r() * 4, v = 120 + r() * 70 | 0; tiled(W, H, x, y, 8, (px, py) => { g.fillStyle = 'rgba(40,30,20,.35)'; g.beginPath(); g.ellipse(px + 1, py + 1.5, sz, sz * 0.7, 0, 0, 7); g.fill(); g.fillStyle = `rgb(${v + 10},${v},${v - 14})`; g.beginPath(); g.ellipse(px, py, sz, sz * 0.7, 0, 0, 7); g.fill(); }); } }
+    else if (q === 2) { g.fillStyle = 'rgb(150,142,128)'; g.fillRect(0, 0, W, H);
+      for (let i = 0; i < 9000; i++) { const x = r() * W, y = r() * H, sz = 1.2 + r() * 3, v = 110 + r() * 120 | 0; g.fillStyle = `rgb(${v},${v - 5},${v - 14})`; g.beginPath(); g.ellipse(x, y, sz, sz * 0.8, r() * 3, 0, 7); g.fill(); }
+      for (let i = 0; i < 40; i++) { const x = r() * W, y = r() * H, rad = 20 + r() * 50; tiled(W, H, x, y, rad, (px, py) => soft(g, px, py, rad, r() < 0.5 ? 'rgba(90,82,70,.18)' : 'rgba(220,214,200,.14)')); } }
+    else { g.fillStyle = 'rgb(66,62,56)'; g.fillRect(0, 0, W, H);                                   // pavés : ~10 rangs par tuile (≈ 24 cm)
+      const rows = 10, rh = H / rows;
+      for (let k = 0; k < rows; k++) { let x = (k % 2) * 26 - 26; while (x < W) { const w = 40 + r() * 22, v = 136 + r() * 48 | 0, warm = r() * 14; for (const dx of [0, W]) { const px = x - dx; if (px + w < 0 || px > W) continue;
+        g.fillStyle = `rgb(${v + warm | 0},${v + warm * 0.5 | 0},${v - 8 | 0})`; g.beginPath(); g.roundRect(px + 3, k * rh + 3, w - 6, rh - 6, 9); g.fill();
+        const gr = g.createLinearGradient(0, k * rh, 0, k * rh + rh); gr.addColorStop(0, 'rgba(255,255,255,.2)'); gr.addColorStop(0.55, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(0,0,0,.24)'); g.fillStyle = gr; g.beginPath(); g.roundRect(px + 3, k * rh + 3, w - 6, rh - 6, 9); g.fill(); } x += w; } }
+      for (let i = 0; i < 120; i++) { const x = r() * W, y = r() * H; g.fillStyle = `rgba(80,${100 + r() * 30 | 0},52,${0.2 + r() * 0.3})`; g.beginPath(); g.arc(x, y, 1.5 + r() * 3, 0, 7); g.fill(); } }   // mousse dans les joints
+    const img = g.getImageData(0, 0, W, H), d = img.data; for (let i = 0; i < d.length; i += 4) { const n = (r() - 0.5) * 14; d[i] += n; d[i + 1] += n; d[i + 2] += n; } g.putImageData(img, 0, 0);
+  }, true);
+}
+// bordure : u = 0 côté route → 1 côté herbe ; bord extérieur irrégulier et fondu
+function borderTex(q) {
+  return rtex('b' + q, 128, 512, (g, r, W, H) => {
+    const edge = y => 0.62 + 0.16 * (Math.sin(y / H * Math.PI * 2 * 3 + q) * 0.6 + Math.sin(y / H * Math.PI * 2 * 8 + 1.3) * 0.4);
+    const base = ['rgba(122,98,66,A)', 'rgba(138,110,76,A)', 'rgba(150,142,128,A)', 'rgba(66,62,56,A)'][q];
+    for (let y = 0; y < H; y++) { const e = edge(y) * W; const gr = g.createLinearGradient(0, 0, W, 0); gr.addColorStop(0, base.replace('A', q === 0 ? 0.78 : 1)); gr.addColorStop(Math.max(0.05, e / W - 0.18), base.replace('A', q === 0 ? 0.6 : 0.9)); gr.addColorStop(e / W, base.replace('A', 0)); g.fillStyle = gr; g.fillRect(0, y, W, 1); }
+    if (q === 2) for (let y = 0; y < H; y += 14 + r() * 8) { const x = edge(y) * W - 18, v = 110 + r() * 50 | 0; tiled(W, H, x, y, 16, (px, py) => { g.fillStyle = 'rgba(0,0,0,.28)'; g.beginPath(); g.ellipse(px + 2, py + 3, 12, 10, 0, 0, 7); g.fill(); g.fillStyle = `rgb(${v},${v - 4},${v - 10})`; g.beginPath(); g.ellipse(px, py, 12 + r() * 4, 9 + r() * 3, r(), 0, 7); g.fill(); }); }   // galets de bordure
+    if (q === 3) { g.clearRect(0, 0, W, H); g.fillStyle = 'rgb(66,62,56)'; g.fillRect(0, 0, W * 0.72, H);
+      for (let y = 0; y < H; y += 64) { const v = 150 + r() * 30 | 0; g.fillStyle = `rgb(${v},${v - 2},${v - 8})`; g.fillRect(6, y + 3, W * 0.62, 58); g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(6, y + 3, W * 0.62, 5); g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(6, y + 56, W * 0.62, 5); g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(W * 0.62, y + 3, 4, 58); }   // bordures de pierre taillée
+      for (let i = 0; i < 60; i++) soft(g, W * (0.66 + r() * 0.25), r() * H, 4 + r() * 8, 'rgba(84,112,52,.55)'); }
+    if (q <= 1) for (let i = 0; i < 40; i++) soft(g, W * (0.45 + r() * 0.4), r() * H, 5 + r() * 12, 'rgba(86,118,52,.45)');   // herbe qui mord sur le bord
+  }, false);
+}
 export class RoadView {
   constructor(scene) {
     this.scene = scene; this.group = new THREE.Group(); scene.add(this.group); this.key = '';
-    this.dirt = applyNorthFog(new THREE.MeshLambertMaterial({ color: 0x8a7458, transparent: true, opacity: 0.85, depthWrite: false }));
-    this.gravel = applyNorthFog(new THREE.MeshLambertMaterial({ color: 0xa8a294 })); this.stoneM = applyNorthFog(new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }));
+    const m = t => applyNorthFog(new THREE.MeshLambertMaterial({ map: t, transparent: true, depthWrite: false }));
+    this.cm = [0, 1, 2, 3].map(q => m(centerTex(q))); this.bm = [0, 1, 2, 3].map(q => m(borderTex(q)));
     this.plan = new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.55, depthWrite: false });
   }
   update(sim) {
     const R = sim.roads, q = R.quality(sim), key = R.version + ':' + q + ':' + R.list.map(r => (r.built * 10) | 0).join(','); if (key === this.key) return; this.key = key;
     for (const c of [...this.group.children]) { this.group.remove(c); c.geometry.dispose(); }
-    const strips = [], gravel = [], stones = [], plans = []; let sd = 5; const rn = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    const centers = [], borders = [], plans = [], bw = BW[q];
+    // bande plate le long d'un axe : décalage latéral off, largeur w, uv (u0→u1 en travers, v en mètres / TILE)
+    const strip = (r, a, b, off, w, uu, list, y, flip) => {
+      const L = b - a; if (L <= 0.05) return; const g = new THREE.PlaneGeometry(w, L), uv = g.attributes.uv, R2 = Math.hypot(r.x1 - r.x0, r.z1 - r.z0), ux = (r.x1 - r.x0) / R2, uz = (r.z1 - r.z0) / R2;
+      for (let i = 0; i < uv.count; i++) { const u = uv.getX(i), v = uv.getY(i); uv.setXY(i, uu(flip ? 1 - u : u), (a + v * L) / TILE); }
+      g.rotateX(-Math.PI / 2); g.rotateY(Math.atan2(ux, uz)); const m = (a + b) / 2; g.translate(r.x0 + ux * m + uz * off, y, r.z0 + uz * m - ux * off); list.push(g);
+    };
     for (const r of R.list) {
-      const L = Math.hypot(r.x1 - r.x0, r.z1 - r.z0); if (L < 0.5) continue; const ux = (r.x1 - r.x0) / L, uz = (r.z1 - r.z0) / L, ang = Math.atan2(ux, uz), built = L * r.built;
-      const strip = (len, w, y, list) => { const g = new THREE.PlaneGeometry(w, len); g.rotateX(-Math.PI / 2); g.rotateY(ang); g.translate(r.x0 + ux * len / 2, y, r.z0 + uz * len / 2); list.push(g); };
-      if (r.kind !== 'base' && built > 0.3) strip(built, r.w, 0.045, strips);            // les chemins d'origine sont déjà peints dans le sol
-      if (r.built < 1) { const g = new THREE.PlaneGeometry(r.w, L - built); g.rotateX(-Math.PI / 2); g.rotateY(ang); g.translate(r.x0 + ux * (built + (L - built) / 2), 0.06, r.z0 + uz * (built + (L - built) / 2)); plans.push(g); }
-      if (q >= 2 && built > 1) strip(built, r.w * 0.82, 0.06, gravel);
-      if (q >= 3 || (q >= 1 && r.kind !== 'auto')) for (let dd = 0.6; dd < built; dd += q >= 3 ? 0.95 : 2.4) for (let o = -r.w * 0.38; o <= r.w * 0.38; o += q >= 3 ? 0.95 : 1.9) {
-        if (stones.length > 9000) break; const b = new THREE.BoxGeometry(0.82, 0.1, 0.78); b.rotateY(ang + (rn() - 0.5) * 0.3); b.translate(r.x0 + ux * dd - uz * o, 0.08, r.z0 + uz * dd + ux * o); stones.push(b);
+      const L = Math.hypot(r.x1 - r.x0, r.z1 - r.z0); if (L < 0.5) continue; const uz = (r.z1 - r.z0) / L, built = L * r.built;
+      if (built > 0.3 && (q >= 1 || r.kind !== 'base')) {
+        let a = 0, b = built;
+        if (r.kind === 'base') { const zc = 211; const za = r.z0, zb = r.z0 + uz * built; if (Math.max(za, zb) <= zc) a = b; else if (Math.min(za, zb) < zc && Math.abs(uz) > 1e-3) { const t = (zc - r.z0) / uz; if (za < zc) a = Math.max(a, t); else b = Math.min(b, t); } }   // pas sur la cour ni sur la placette
+        if (b - a > 0.3) {
+          const w = r.w * (q === 0 ? 0.8 : 1.05), cw = Math.max(0.6, w - 2 * bw * 0.5), y = 0.045 + (r.id % 7) * 0.002, ext = Math.min(1.2, cw * 0.3);
+          strip(r, a - ext, b + ext, 0, cw, u => u * cw / TILE, centers, y);
+          for (const s of [-1, 1]) strip(r, a, b, s * (cw / 2 + bw / 2 - 0.05), bw, u => u, borders, y + 0.001, s < 0);
+        }
       }
+      if (r.built < 1) { const ux = (r.x1 - r.x0) / L, g = new THREE.PlaneGeometry(r.w, L - built); g.rotateX(-Math.PI / 2); g.rotateY(Math.atan2(ux, uz)); g.translate(r.x0 + ux * (built + (L - built) / 2), 0.06, r.z0 + uz * (built + (L - built) / 2)); plans.push(g); }
     }
-    const add = (list, m, ro = 0) => { if (!list.length) return; const g = mergeGeometries(list.map(x => { x.deleteAttribute('uv'); return x; }), false); const mesh = new THREE.Mesh(g, m); mesh.receiveShadow = true; mesh.renderOrder = ro; this.group.add(mesh); };
-    add(strips, this.dirt, 1); add(gravel, this.gravel, 2); add(stones, this.stoneM, 3); add(plans, this.plan, 4);
+    const add = (list, m, ro, keepUv) => { if (!list.length) return; const g = mergeGeometries(list.map(x => { if (!keepUv) x.deleteAttribute('uv'); return x; }), false); const mesh = new THREE.Mesh(g, m); mesh.receiveShadow = true; mesh.renderOrder = ro; this.group.add(mesh); };
+    add(centers, this.cm[q], 1, true); add(borders, this.bm[q], 2, true); add(plans, this.plan, 4);
   }
 }
 

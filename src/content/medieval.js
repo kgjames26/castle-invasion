@@ -14,7 +14,7 @@ export const ZOMBIES = [
 export const FRONTIER = { left: [-200, 0], right: [200, 400], z0: 212, z1: 312, cell: 20, wood: 160, oreChance: 0.38, oreAmount: { stone: 4000, iron: 3000, gold: 2200 } };
 // ——— Routes : chemins d'origine (réseau de base) ; Travaux publics = qualité de toutes les routes + routes tracées ———
 export const ROADS_BASE = [[[[100, 150], [100, 200], [100, 284]], 9], [[[100, 238], [40, 255]], 5], [[[100, 238], [160, 255]], 5], [[[100, 262], [182, 243]], 4.5], [[[100, 262], [18, 238]], 4.5], [[[8, 205], [192, 205]], 4]];
-export const ROADWORKS = { speed: [0, 0.15, 0.3, 0.45], names: ['Terre', 'Terre battue', 'Gravier', 'Pavés'], costPerM: { wood: 0.6, stone: 0.8 }, buildSpeed: 3, maxLen: 160 };
+export const ROADWORKS = { speed: [0, 0.15, 0.3, 0.45], names: ['Sentier', 'Terre battue', 'Gravier', 'Pavés'], costPerM: { wood: 0.6, stone: 0.8 }, buildSpeed: 3, maxLen: 160 };
 // ——— Jour et nuit (v2.0) : un cycle complet dure `length` secondes ; la nuit réduit la portée des tireurs sans feux ———
 export const DAY = { length: 420, start: 0.12, dusk: [0.5, 0.62], dawn: [0.9, 0.99] };
 export const GATE_XS_LIST = [20, 100, 180];
@@ -133,8 +133,10 @@ export const TASKS = {
 // Bâtiments : niveau 0 = à construire. Coût du niveau N+1 = base × (N+1).
 // Symbole dessiné de la caserne : écu rouge et deux épées croisées (l'emoji casque s'affichait mal selon les appareils)
 export const BARRACKS_ICO = '<svg class="isvg" viewBox="0 0 32 32" aria-label="Caserne"><path d="M16 4 L27 8 V16 C27 22.5 22 27 16 29 C10 27 5 22.5 5 16 V8 Z" fill="#8a2f2f" stroke="#3a1a10" stroke-width="1.6"/><path d="M16 6.4 L25 9.6 V16 C25 21.2 21 25 16 26.8 Z" fill="#a84040"/><g stroke-linecap="round"><path d="M9.5 9.5 L22.5 22.5 M22.5 9.5 L9.5 22.5" stroke="#e8e8ee" stroke-width="2.4"/><path d="M9.5 9.5 L22.5 22.5 M22.5 9.5 L9.5 22.5" stroke="#9aa0ac" stroke-width="0.8"/><path d="M19.3 23.7 L23.7 19.3 M8.3 19.3 L12.7 23.7" stroke="#d9a63a" stroke-width="2.2"/></g><circle cx="23.6" cy="23.6" r="1.4" fill="#d9a63a"/><circle cx="8.4" cy="23.6" r="1.4" fill="#d9a63a"/></svg>';
+// Symbole dessiné de la scierie : lame de scie circulaire sur une bille de bois
+export const SAWMILL_ICO = '<svg class="isvg" viewBox="0 0 32 32" aria-label="Scierie"><rect x="4" y="21" width="24" height="7" rx="3.5" fill="#8a5a2b"/><ellipse cx="26.5" cy="24.5" rx="2.4" ry="3.4" fill="#c99a62"/><path d="M16 1.5l1.6 2.6 2.9-1.1 .8 3 3.1.1-.3 3.1 2.9 1.2-1.4 2.8 2.2 2.1-2.4 2-.1.2 1 3-3.1.5-.5 3.1-3-.8-1.4 2.8-2.3-2.1-2.3 2.1-1.4-2.8-3 .8-.5-3.1-3.1-.5 1-3-2.5-2.2 2.2-2.1-1.4-2.8 2.9-1.2-.3-3.1 3.1-.1.8-3 2.9 1.1z" fill="#c9ced6" stroke="#6a7080" stroke-width=".8"/><circle cx="16" cy="14" r="5.6" fill="#e8ecf0"/><circle cx="16" cy="14" r="2.2" fill="#d9a63a"/></svg>';
 export const BUILDINGS = {   // group: 'eco' (onglet Village) ou 'army' (onglet Armée)
-  sawmill:   { time: 25, base: 3, name: 'Scierie',   ico: '🪚', group: 'eco', start: 0, cost: { wood: 60 },             pos: { x: 40,  z: 262 }, size: [9, 5, 7],  color: 0x9b6a3a, info: 'Emplacements bûcherons · +15 % de rendement par niveau' },
+  sawmill:   { time: 25, base: 3, name: 'Scierie',   ico: SAWMILL_ICO, group: 'eco', start: 0, cost: { wood: 60 },             pos: { x: 40,  z: 262 }, size: [9, 5, 7],  color: 0x9b6a3a, info: 'Emplacements bûcherons · +15 % de rendement par niveau' },
   quarry:    { time: 25, base: 3, name: 'Carrière',  ico: '⛏', group: 'eco', start: 0, cost: { wood: 60 },             pos: { x: 160, z: 262 }, size: [9, 5, 7],  color: 0x8a8d92, info: 'Emplacements carriers · +15 % de rendement par niveau' },
   mine:      { time: 40, base: 0, name: 'Mine',      ico: '⛓', group: 'eco', start: 0, cost: { wood: 100, stone: 60 }, pos: { x: 182, z: 243 }, size: [8, 6, 8],  color: 0x4f5a72, info: 'Emplacements fer + or (partagés) · +15 %/niveau' },
   farm:      { time: 30, base: 3, name: 'Ferme',     ico: '🌾', group: 'eco', start: 0, cost: { wood: 70 },             pos: { x: 100, z: 244 }, size: [16, 1.2, 10], color: 0xc9b24a, max: 6, info: 'Emplacements fermiers · +15 % de rendement par niveau · s\'agrandit (champs, poulailler, verger, silo, pâture)' },
