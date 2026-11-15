@@ -320,3 +320,9 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Berges en pente (boue mouillée → terre → herbe), galets, touffes de roseaux qui ondulent au vent, nénuphars ; pont-levis en planches avec poteaux et chaînes face à la porte.
 - Ruisseau qui s'échappe des douves vers l'est en serpentant jusqu'à la forêt, avec courant visible ; son tracé est réservé (aucun bâtiment dessus).
 - Sécurité : les zombies isolés qui traînent 3 min après la dernière horde s'épuisent, la vague ne reste plus bloquée.
+
+## Phase 43 — Lisibilité du combat
+- Aperçu de la vague : touche « Vague » pour voir la composition attendue (types, nombre, ce que fait chaque ennemi), les nouveaux ennemis en rouge, le butin et un conseil de défense. Alerte quand de nouveaux ennemis apparaissent.
+- Flèches au bord de l'écran vers les secteurs attaqués, percés ou visés hors champ (clic → la caméra y va et ouvre la fiche).
+- Raccourcis clavier : Espace pause, 1-4 vitesse, B bâtir, T armée, V villageois, K savoir, H aide.
+- Le tutoriel se cache pendant l'alerte et la vague.

@@ -200,7 +200,7 @@ export function installExtrasUI(UI) {
     if (!st) { el.classList.remove('on'); this.tuto = null; store('castle-tuto', 1); return; }
     if (st[2](this.sim)) { this.tuto++; this.buzz(15); return; }
     const html = `<span class="tn">${this.tuto + 1}/${STEPS.length}</span><b>${st[0]}</b><small>${st[1]}</small><button class="x" data-a="x:tutox">Passer</button>`;
-    if (el.dataset.k !== String(this.tuto)) { el.dataset.k = this.tuto; el.innerHTML = html; } el.classList.add('on');
+    if (el.dataset.k !== String(this.tuto)) { el.dataset.k = this.tuto; el.innerHTML = html; } el.classList.toggle('on', this.sim.phase === 'prep' || this.sim.phase === 'calm');   /* caché pendant l'alerte et la vague : place au combat */
   };
   // ——— événements de la simulation (v4.0) ———
   P.extrasEvent = function (e) {

@@ -2,7 +2,7 @@
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
 import { SECTORS, SECTOR_NAMES, SECTOR_AT, ARCHER_SLOTS, CASTLE, wallOff } from '../sim/constants.js';
-import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, INFECTION, GRADES, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP, BARRACKS_ICO, SAWMILL_ICO, TIMING, TRAIN, TOWER } from '../content/medieval.js';
+import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, golemsFor, ZOMBIES, RANKS, RANK_BUILDINGS, MAGE, PRIEST, INFECTION, GRADES, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP, BARRACKS_ICO, SAWMILL_ICO, TIMING, TRAIN, TOWER } from '../content/medieval.js';
 import { MAGE_TIERS } from '../render/Heroes.js';
 import { FORMATS, idealFormat, quality } from '../render/config.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
@@ -34,8 +34,8 @@ export class UI {
     this.top.innerHTML = `
       <div class="rline">${RES.map(r => `<span class="rchip" id="r-${r}"><i>${RES_INFO[r].ico}</i><b>0</b></span>`).join('')}<span class="rchip pop" id="r-pop"><i>👥</i><b>0</b></span></div>
       <div class="wline"><div class="wave"><div class="wt"><b id="wave-title">Vague 1</b><span id="wave-phase" class="phase"></span></div><div class="cbar"><div class="bar thin" title="Avant la vague"><i id="calm-bar"></i></div><div class="bar" title="Château"><i id="castle-bar"></i></div></div><button id="b-skip" class="launch" title="Lancer la vague maintenant">⚔ Lancer</button></div>
-        <div class="tgroup"><button id="b-pause" class="rb" title="Pause / reprendre">❚❚</button><button id="b-speed" class="rb spd" title="Vitesse du jeu">1×</button></div><button id="b-turn" class="rb" title="Pivoter la vue (vers le sud / vers le nord)"><svg class="isvg cam" viewBox="0 0 32 32" aria-hidden="true"><path d="M7 11h4l2-3h6l2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="16" cy="17" r="3.6" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M4 7.5A13 13 0 0 1 16 2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M13.2 0.8 16.6 2.6 14.2 5.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 26.5A13 13 0 0 1 16 31.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18.8 33.2 15.4 31.4 17.8 28.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button id="b-menu" class="rb">☰</button></div>`;
-    this.dock.innerHTML = Object.entries(SHEETS).map(([k, n]) => { const [ic, ...t] = n.split(' '); return `<button class="dk" data-sheet="${k}">${ic}<span>${t.join(' ')}</span></button>`; }).join('');
+        <div class="tgroup"><button id="b-pause" class="rb" title="Pause / reprendre (Espace)">❚❚</button><button id="b-speed" class="rb spd" title="Vitesse du jeu (1-4)">1×</button></div><button id="b-turn" class="rb" title="Pivoter la vue (vers le sud / vers le nord)"><svg class="isvg cam" viewBox="0 0 32 32" aria-hidden="true"><path d="M7 11h4l2-3h6l2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="16" cy="17" r="3.6" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M4 7.5A13 13 0 0 1 16 2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M13.2 0.8 16.6 2.6 14.2 5.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 26.5A13 13 0 0 1 16 31.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18.8 33.2 15.4 31.4 17.8 28.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button id="b-menu" class="rb">☰</button></div>`;
+    this.dock.innerHTML = Object.entries(SHEETS).map(([k, n]) => { const [ic, ...t] = n.split(' '); return `<button class="dk" data-sheet="${k}" title="${t.join(' ')} (${{ build: 'B', army: 'T', folk: 'V', tech: 'K' }[k]})">${ic}<span>${t.join(' ')}</span></button>`; }).join('');
     this.badges = [];
     for (let s = 0; s < SECTORS; s++) {
       const b = el('button', 'badge', `<b>🧱</b><div class="bar"><i></i></div><small></small>`);   // pastille sans code : n'apparaît que si ce pan de muraille est abîmé ou attaqué
@@ -45,6 +45,7 @@ export class UI {
     $('#b-skip').addEventListener('click', () => sim.skipPrep());
     // temps : un bouton pause/lecture, un bouton vitesse (1× → 2× → 4× → 8×) qui ne met jamais en pause
     this.pace = 1;
+    $('.wave .wt').addEventListener('click', () => this.toggleWavePop());
     $('#b-pause').addEventListener('click', () => { if (this.deploy) return; sim.speed = sim.speed ? 0 : this.pace; this.syncTime(); });
     $('#b-speed').addEventListener('click', () => { this.pace = this.pace >= 8 ? 1 : this.pace * 2; if (sim.speed) sim.speed = this.pace; this.syncTime(); });
     $('#b-menu').addEventListener('click', () => this.toggleSheet('menu'));
@@ -59,6 +60,7 @@ export class UI {
     }
     addEventListener('pointerup', () => { setTimeout(() => { this.pressing = false; this.pressEl = null; this.refresh(true); }, 60); });
     // quitter la pose au clavier (Échap) ou au clic droit
+    addEventListener('keydown', e => this.hotkey(e));   // raccourcis : Espace pause, 1-4 vitesse, B/T/V/K menus, M minimap, H aide
     addEventListener('keydown', e => { if (e.key === 'Escape') { if (this.mode !== 'idle') { this.cancelPlace(); this.refresh(true); } else if (this.card) this.closeCard(); else if (this.sheet) this.closeSheet(); } });
     addEventListener('contextmenu', e => { if (this.mode !== 'idle') { e.preventDefault(); this.cancelPlace(); this.refresh(true); } });
     // glisser le fantôme de construction avec le doigt (au lieu de déplacer la caméra)
@@ -76,6 +78,36 @@ export class UI {
     try { localStorage.setItem(PREF_KEY, JSON.stringify(p)); } catch { /* sans stockage */ }
   }
   // ——— feuille ———
+  // ——— aperçu de la vague : composition, ennemis nouveaux, conseil ———
+  waveMix(v) {
+    const sp = waveSpec(v), D = DIFFICULTY[this.sim.difficulty] || DIFFICULTY.normal, n = Math.round(sp.n * D.n), c = sp.frac.map(f => Math.round(f * n));
+    for (const k in sp.extra) { const x = Math.round(sp.extra[k] * n); if (x) { c[+k] = x; c[0] -= x; } }
+    c[6] = golemsFor(v); c[7] = sp.boss || 0; return { n, c };
+  }
+  newFoes() {
+    const v = this.sim.wave; if (v < 2 || this.foesWarned === v) return; this.foesWarned = v;
+    const a = this.waveMix(v).c, b = this.waveMix(v - 1).c, nw = a.map((x, t) => x > 0 && !(b[t] > 0) && t ? ZOMBIES[t].name : null).filter(Boolean);
+    if (nw.length) setTimeout(() => this.toast(`⚠ Nouveaux ennemis à la vague ${v} : ${nw.join(', ')} — touche « Vague » pour les détails`, 'warn'), 2500);
+  }
+  toggleWavePop(force) {
+    let p = $('#wave-pop'); const on = force ?? !(p && p.classList.contains('on'));
+    if (!p) { p = el('div'); p.id = 'wave-pop'; document.getElementById('app').appendChild(p); p.addEventListener('click', () => this.toggleWavePop(false)); }
+    p.classList.toggle('on', on); if (!on) return;
+    const sim = this.sim, v = sim.phase === 'assault' || sim.phase === 'calm' ? sim.wave + (sim.phase === 'calm' ? 1 : 0) : sim.wave, { n, c } = this.waveMix(v), prev = v > 1 ? this.waveMix(v - 1).c : [];
+    const ICO = ['🧟', '🏃', '🛡', '🦍', '🔨', '👹', '🗿', '👑', '🧗', '🤮', '🎈', '🐕'];
+    const INFO = { 1: 'rapides, peu de PV', 2: 'encaissent beaucoup', 3: 'très solides, lents', 4: 'cassent la pierre vite', 6: 'ses coups font tomber les archers', 7: 'BOSS : énormes PV', 8: 'escaladent la muraille', 9: 'crachent de l\'acide sur la pierre', 10: 'explosent contre la muraille', 11: 'meute très rapide' };
+    const rows = c.map((x, t) => x > 0 ? `<div class="wr${!(prev[t] > 0) && v > 1 && t ? ' new' : ''}"><span>${ICO[t]} ${ZOMBIES[t].name}</span><b>×${x}</b>${t && INFO[t] ? `<small>${INFO[t]}${!(prev[t] > 0) && v > 1 ? ' · NOUVEAU' : ''}</small>` : ''}</div>` : '').join('');
+    const sp = waveSpec(v), tip = c[4] || c[9] || c[10] ? 'Renforce et répare la muraille : des casseurs de pierre arrivent.' : c[8] ? 'Des archers sur le chemin de ronde arrêtent les grimpeurs.' : c[11] || c[1] ? 'Des pièges et des archers ralentissent les rapides.' : 'Des archers sur la muraille suffisent au début.';
+    p.innerHTML = `<div class="ptitle">${sim.phase === 'assault' ? '⚔ Vague en cours' : '🔭 Prochaine vague'} · ${v}</div><div class="hint small">≈ ${n} zombies · ${sp.sectors} secteur${sp.sectors > 1 ? 's' : ''} visé${sp.sectors > 1 ? 's' : ''} · butin ${Object.keys(sp.reward).map(k => RES_INFO[k].ico + sp.reward[k]).join(' ')}</div>${rows}<div class="hint small tip">💡 ${tip}</div>`;
+  }
+  hotkey(e) {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
+    const k = e.key.toLowerCase(), sim = this.sim;
+    if (k === ' ') { e.preventDefault(); $('#b-pause').click(); return; }
+    if ('1234'.includes(k) && k.length === 1) { this.pace = [1, 2, 4, 8][+k - 1]; if (sim.speed) sim.speed = this.pace; this.syncTime(); this.toast(`⏩ Vitesse ${this.pace}×`, 'info'); return; }
+    const sh = { b: 'build', t: 'army', v: 'folk', k: 'tech' }[k]; if (sh && SHEETS[sh]) { this.toggleSheet(sh); return; }
+    if (k === 'h' || k === '?') this.toast('⌨ Espace pause · 1-4 vitesse · B bâtir · T armée · V villageois · K savoir · R pivoter · ZQSD/flèches caméra · Échap fermer', 'info');
+  }
   toggleSheet(n) { if (this.sheet === n) this.closeSheet(); else this.openSheet(n); }
   openSheet(n, sub) { if (n === 'menu') this.volSnap = this.hooks.audio ? { ...this.hooks.audio.vol } : {}; if (this.mode !== 'idle') this.cancelPlace(); this.closeCard(); this.sheet = n; if (sub) { this.asub = sub; if (this.nav[n] !== undefined) this.nav[n] = sub; } else if (this.nav[n] !== undefined) this.nav[n] = null; this.sheetEl.classList.add('on'); this.html.sheet = ''; this.refresh(true); }
   closeSheet() { this.sheet = null; this.rallying = false; this.sheetEl.classList.remove('on'); this.setTargeting(false); this.refresh(true); }
@@ -359,7 +391,7 @@ export class UI {
     $('#wave-title').textContent = `Vague ${sim.wave}`;
     const zl = sim.zombies.n + (sim.spawn ? sim.spawn.left : 0);
     $('#wave-phase').textContent = `${sim.extras.season().ico}${{ clear: '', rain: '🌧', fog: '🌫', snow: '❄' }[sim.extras.weather]} ` + (sim.phase === 'assault' ? `⚔ ${zl} zombies` : sim.phase === 'alert' ? '🔔 Ils arrivent' : sim.phase === 'calm' ? '🕊 Répit' : '🌿 Calme');
-    if (this.lastPhase !== sim.phase) { if (this.lastPhase) this.phaseBanner(sim.phase); this.lastPhase = sim.phase; }
+    if (this.lastPhase !== sim.phase) { if (this.lastPhase) this.phaseBanner(sim.phase); this.lastPhase = sim.phase; if (sim.phase === 'prep') this.newFoes(); }
     $('#wave-phase').dataset.p = sim.phase; $('#b-skip').style.display = sim.phase === 'prep' ? '' : 'none';
     { const tot = sim.phase === 'prep' ? (sim.wave === 1 ? TIMING.firstPrep : TIMING.prep) : sim.phase === 'alert' ? TIMING.alert : sim.phase === 'calm' ? TIMING.calm : 0, cb = $('#calm-bar');
       cb.parentNode.style.display = tot ? '' : 'none'; if (tot) cb.style.width = (100 * Math.max(0, sim.timer) / tot) + '%'; cb.parentNode.dataset.p = sim.phase; }
@@ -465,7 +497,9 @@ export class UI {
     const vw = innerWidth, vh = innerHeight;
     for (let s = 0; s < SECTORS; s++) {
       const p = this.rd.project(s * 40 + 20, 8, 143 + wallOff(s * 40 + 20)), b = this.badges[s];
-      b.style.display = b.dataset.show && p.vis && p.x > 0 && p.x < vw && p.y > 90 && p.y < vh - 90 ? '' : 'none'; b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
+      const onScr = p.vis && p.x > 0 && p.x < vw && p.y > 90 && p.y < vh - 90;
+      b.style.display = b.dataset.show && onScr ? '' : 'none'; b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
+      this.edgeArrow(s, p, onScr, vw, vh);
     }
     const c = this.card; if (!c) return;
     let a;
@@ -474,6 +508,19 @@ export class UI {
     const w = this.cardEl.offsetWidth, h = this.cardEl.offsetHeight, topMin = 96, botMax = vh - 90;
     let top = a.y - h - 26; if (top < topMin) top = Math.min(botMax - h, a.y + 30); if (top + h > botMax) top = Math.max(topMin, botMax - h);
     this.cardEl.style.left = Math.min(vw - w - 8, Math.max(8, a.x - w / 2)) + 'px'; this.cardEl.style.top = top + 'px';
+  }
+  // flèche au bord de l'écran vers un secteur attaqué / percé / visé qu'on ne voit pas (clic → la caméra y va)
+  edgeArrow(s, p, onScr, vw, vh) {
+    this.edges = this.edges || []; let e = this.edges[s];
+    const sim = this.sim, br = sim.wall.breaches(s), dg = sim.danger(s), tgt = sim.phase === 'alert' && sim.targets.includes(s), want = !onScr && (br || dg === 2 || tgt);
+    if (!want) { if (e) e.style.display = 'none'; return; }
+    if (!e) { e = this.edges[s] = el('button', 'edgea'); e.addEventListener('click', () => { this.cam.focusOn(s * 40 + 20, 150); this.openCard({ kind: 'sector', id: s }); }); document.getElementById('app').appendChild(e); }
+    let dx = p.x - vw / 2, dy = p.y - vh / 2; if (!p.vis) { dx = -dx; dy = -dy; }
+    const mx = vw / 2 - 34, my = vh / 2 - 100, k = Math.min(mx / Math.max(1e-3, Math.abs(dx)), my / Math.max(1e-3, Math.abs(dy)));
+    const x = vw / 2 + dx * k, y = vh / 2 + dy * k, ang = Math.atan2(dy, dx) * 180 / Math.PI;
+    e.style.display = ''; e.style.left = x + 'px'; e.style.top = y + 'px'; e.className = 'edgea' + (br ? ' br' : dg === 2 ? ' d2' : ' tgt');
+    const txt = (br ? '💥' : dg === 2 ? '⚔' : '🔔') + ' ' + SECTOR_NAMES[s];
+    if (e.dataset.t !== txt) { e.dataset.t = txt; e.innerHTML = `<i style="transform:rotate(${ang}deg)">➜</i><span>${txt}</span>`; } else e.firstChild.style.transform = `rotate(${ang}deg)`;
   }
   // ——— fiches ———
   cost(c) { const E = this.sim.eco; return Object.keys(c).map(r => `<i class="${E.res[r] >= c[r] ? '' : 'no'}">${RES_INFO[r].ico}${c[r]}</i>`).join(' '); }
