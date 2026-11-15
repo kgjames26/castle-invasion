@@ -119,6 +119,12 @@ export function buildCastleFort(cx, cz) {
     gold: fog(new THREE.MeshLambertMaterial({ color: 0xd9b43a, flatShading: true })),
     iron: fog(new THREE.MeshLambertMaterial({ color: 0x3a3c42, flatShading: true })),
   };
+  // (v10.6) face arrière habillée (c'est elle qu'on voit depuis le village de la caméra par défaut, le château étant retourné) :
+  // trois bannières, une poterne de bois ferrée sous un arc de pierre, deux contreforts
+  { const zb = cz - HD - T / 2 - 0.06;
+    for (const bx of [cx - 10, cx + 10]) { box('blue', 1.7, 3.6, 0.08, bx, 3.2, zb); box('gold', 1.9, 0.18, 0.1, bx, 6.8, zb - 0.01); box('gold', 0.55, 0.55, 0.09, bx, 4.9, zb - 0.02); }
+    box('dk', 2.6, 3.4, 0.3, cx, 0, zb + 0.05); box('wood', 1.9, 2.8, 0.2, cx, 0, zb - 0.12); for (const y of [0.7, 1.9]) box('iron', 1.9, 0.14, 0.06, cx, y, zb - 0.24); box('st', 3.0, 0.5, 0.5, cx, 3.4, zb - 0.1);
+    for (const bx of [cx - 5, cx + 5]) { box('st', 1.3, WH * 0.7, 1.1, bx, 0, zb - 0.45); box('st', 1.0, WH * 0.18, 0.7, bx, WH * 0.7, zb - 0.25); } }
   const grp = new THREE.Group();
   for (const k in parts) {
     if (!parts[k].length) continue;
