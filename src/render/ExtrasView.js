@@ -217,7 +217,7 @@ export class ExtrasView {
       g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); g.setIndex(idx); g.computeVertexNormals();
       const uv = []; for (let k = 0; k <= N; k++) uv.push(k / N * 4, 0, k / N * 4, 1); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
       const dirt = new THREE.Mesh(g, lam(0x3e3022)); dirt.position.y = 0.04; this.scene.add(dirt); this.moatMeshes.push(dirt);
-      if (lv >= 2) { const wm = new THREE.Mesh(g.clone(), this.water); wm.position.y = 0.1; wm.renderOrder = 2; this.scene.add(wm); this.moatMeshes.push(wm); }
+      if (lv >= 2) { const wg2 = g.clone(); wg2.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(wg2.attributes.position.count * 3).map((_, i) => [0.09, 0.2, 0.25][i % 3]), 3)); wg2.setAttribute('aEdge', new THREE.Float32BufferAttribute(new Float32Array(wg2.attributes.position.count).fill(0.4), 1)); const wm = new THREE.Mesh(wg2, this.natWater || this.water);   /* (v10.7) même eau réaliste que les douves du château */ wm.position.y = 0.1; wm.renderOrder = 2; this.scene.add(wm); this.moatMeshes.push(wm); }
       if (lv >= 3) { const st = []; for (let x = s * SECTOR_W + 1.5; x < (s + 1) * SECTOR_W; x += 2.2) { const [a, b] = moatBand(x); for (const zz of [a + 1.2, b - 1.2]) st.push(new THREE.ConeGeometry(0.12, 1.4, 4).rotateX(zz < (a + b) / 2 ? 0.5 : -0.5).translate(x, 0.6, zz).toNonIndexed()); }
         const sm = new THREE.Mesh(mergeGeometries(st), lam(0x6a5038)); this.scene.add(sm); this.moatMeshes.push(sm); } }
   }

@@ -37,11 +37,11 @@ export function patchNorthFog(shader) {
           float la = dot( cA, vec3( 0.299, 0.587, 0.114 ) ), va = 0.5 + 0.5 * sin( vNX * 0.09 + vNZ * 0.06 ) * sin( vNX * 0.031 - vNZ * 0.05 + 0.7 );
           gl_FragColor.rgb = mix( cA, vec3( la * 1.75, la * 0.98, la * 0.36 ), gr * uAutumn * ( 0.5 + 0.4 * va ) ); }
         if ( uSpring > 0.001 ) { vec3 cS = gl_FragColor.rgb; float grS = clamp( ( cS.g - max( cS.r, cS.b ) ) * 12.0, 0.0, 1.0 ) * smoothstep( 0.6, 0.9, vNUp );
-          vec2 cell = floor( vec2( vNX, vNZ ) * 0.9 ); float h = fract( sin( dot( cell, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 ), h2 = fract( h * 17.13 );
-          vec2 fp = fract( vec2( vNX, vNZ ) * 0.9 ) - 0.5; float dot0 = 1.0 - smoothstep( 0.1, 0.17, length( fp - ( vec2( h, h2 ) - 0.5 ) * 0.6 ) );
+          vec2 cell = floor( vec2( vNX, vNZ ) * 2.6 ); float h = fract( sin( dot( cell, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 ), h2 = fract( h * 17.13 );
+          vec2 fp = fract( vec2( vNX, vNZ ) * 2.6 ) - 0.5; float dot0 = 1.0 - smoothstep( 0.09, 0.16, length( fp - ( vec2( h, h2 ) - 0.5 ) * 0.6 ) );
           float fpatch = smoothstep( 0.35, 0.75, 0.5 + 0.5 * sin( vNX * 0.07 + 1.1 ) * sin( vNZ * 0.05 - 0.4 ) );
           vec3 fc = h2 < 0.33 ? vec3( 1.0, 0.82, 0.15 ) : h2 < 0.66 ? vec3( 0.95, 0.45, 0.68 ) : vec3( 0.98, 0.97, 0.94 );
-          gl_FragColor.rgb = mix( cS, fc * clamp( dot( cS, vec3( 0.3, 0.59, 0.11 ) ) * 4.5, 0.4, 1.1 ), dot0 * step( 0.6, h ) * grS * fpatch * uSpring ); }
+          gl_FragColor.rgb = mix( cS, fc * clamp( dot( cS, vec3( 0.3, 0.59, 0.11 ) ) * 4.5, 0.4, 1.1 ), dot0 * step( 0.72, h ) * grS * fpatch * uSpring ); }
         if ( uSnow > 0.001 ) { float nz = 0.5 + 0.22 * sin( vNX * 0.13 + vNZ * 0.071 ) + 0.16 * sin( -vNX * 0.047 + vNZ * 0.17 + 1.3 ) + 0.08 * sin( vNX * 0.41 - vNZ * 0.33 + 2.1 ) + 0.05 * sin( vNX * 0.9 + vNZ * 0.77 );
           float sn = smoothstep( 0.55, 0.9, vNUp ) * smoothstep( 0.12, 0.42, uSnow * 1.1 - nz * 0.55 );
           float lum = dot( gl_FragColor.rgb, vec3( 0.299, 0.587, 0.114 ) );
