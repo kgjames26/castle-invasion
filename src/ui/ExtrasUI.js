@@ -1,12 +1,13 @@
 // Interface des systèmes v4.0 : fiches (défenses du secteur, village, héros, recherches), pièges, événements, bilan de vague,
 // succès, mini-carte, sauvegardes multiples, tutoriel guidé, modes de jeu (survie, défi du jour, campagne), vue d'un archer.
 import * as THREE from 'three';
-import { EXTRA, ZOMBIES, SIEGE, STRUCT, STREAM, FRONTIER } from '../content/medieval.js';
+import { EXTRA, ZOMBIES, SIEGE, STRUCT, STREAM, FRONTIER, RES_INFO } from '../content/medieval.js';
 import { SECTORS, SECTOR_W, SECTOR_NAMES, W, D, CASTLE, WALL_STAND_Z, wallOff } from '../sim/constants.js';
 import { archerPos } from '../sim/army.js';
 import { serialize, restore } from '../sim/save.js';
 
 const $ = s => document.querySelector(s);
+const RICO = r => RES_INFO[r].ico;
 const SECT = SECTOR_NAMES;   // mêmes noms que partout ailleurs (Porte gauche… Porte droite)
 const WEATHER = { clear: ['☀', 'Temps clair'], rain: ['🌧', 'Pluie : portée des tireurs −15 %'], fog: ['🌫', 'Brouillard : hordes invisibles plus longtemps, portée −10 %'], snow: ['❄', 'Neige : tout le monde ralentit'] };
 export const ACH = [
@@ -200,6 +201,27 @@ export function installExtrasUI(UI) {
     const cam = this.rd.camera, v = this._mmv || (this._mmv = new THREE.Vector3()), pts = [];
     for (const [nx, ny] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { v.set(nx, ny, 0.5).unproject(cam).sub(cam.position); const tt = v.y < -1e-3 ? -cam.position.y / v.y : 400; pts.push([cam.position.x + v.x * Math.min(tt, 400), cam.position.z + v.z * Math.min(tt, 400)]); }
     g.strokeStyle = 'rgba(255,255,255,.9)'; g.lineWidth = 1.6; g.beginPath(); pts.forEach(([x, z], i) => i ? g.lineTo(x, z) : g.moveTo(x, z)); g.closePath(); g.stroke();
+  };
+  // ——— objectifs (v6.0) : une chaîne de buts concrets avec récompense, affichée quand le tutoriel est fini ———
+  const QUESTS = [
+    ['🗼 Bâtis une tour', 'Les tours tirent seules sur les hordes à portée.', s => s.build.items.some(b => b.type === 'tower' && !b.fixed && b.state === 'built'), { stone: 40 }],
+    ['🏠 Améliore une maison', 'Une maison niv. 2 loge bien plus de monde.', s => s.build.items.some(b => b.type === 'house' && !b.fixed && b.level >= 2), { wood: 50 }],
+    ['🏹 Aie 15 archers', 'Forme des archers au champ de tir.', s => s.army.archers.reduce((a, b) => a + b.n, 0) + s.army.reserve.archer >= 15, { gold: 60 }],
+    ['🧱 Renforce un secteur de muraille', 'Touche un tronçon de muraille › Renforcer.', s => s.wall.level.some(l => l >= 2), { stone: 80 }],
+    ['🛡 Forme une escouade', 'Armée › Recruter des soldats : ils forment des escouades après la vague.', s => s.army.squads.length >= 1, { iron: 60 }],
+    ['⚔ Repousse la vague 5', 'Tiens bon jusqu\'à la cinquième horde.', s => s.wave >= 6, { gold: 120 }],
+    ['🎓 Bâtis l\'université', 'Les recherches débloquent de puissants bonus.', s => s.build.items.some(b => b.type === 'university' && b.state === 'built'), { gold: 80, stone: 60 }],
+    ['👑 Repousse la vague 10', 'Le Seigneur pourri t\'attend…', s => s.wave >= 11, { gold: 250, iron: 120 }],
+  ];
+  P.tickQuest = function () {
+    const sim = this.sim, X = sim.extras; if (!X || this.tuto != null) { $('#quest')?.classList.remove('on'); return; }
+    let el = $('#quest'); if (!el) { el = document.createElement('div'); el.id = 'quest'; document.getElementById('app').appendChild(el); el.addEventListener('click', e => { if (e.target.closest('[data-q=hide]')) { this.questHidden = !this.questHidden; el.dataset.k = ''; this.tickQuest(); } }); }
+    const q = QUESTS[X.quest]; if (!q) { el.classList.remove('on'); return; }
+    if (q[2](sim)) { for (const r in q[3]) sim.eco.add(r, q[3][r]); X.quest++; this.toast(`🎯 Objectif atteint : ${q[0].replace(/^\S+ /, '')} · ${Object.keys(q[3]).map(r => '+' + q[3][r] + ' ' + RICO(r)).join(' ')}`, 'ok'); this.buzz([20, 30, 20]); el.dataset.k = ''; return; }
+    const show = (sim.phase === 'prep' || sim.phase === 'calm') && !this.sheet && this.mode === 'idle';
+    el.classList.toggle('on', show); el.classList.toggle('mini', !!this.questHidden);
+    const k = X.quest + ':' + !!this.questHidden; if (el.dataset.k === k) return; el.dataset.k = k;
+    el.innerHTML = this.questHidden ? `<button data-q="hide">🎯 ${X.quest + 1}/${QUESTS.length}</button>` : `<span class="tn">🎯 ${X.quest + 1}/${QUESTS.length}</span><b>${q[0]}</b><small>${q[1]} · récompense ${Object.keys(q[3]).map(r => q[3][r] + ' ' + RICO(r)).join(' ')}</small><button class="x" data-q="hide">réduire</button>`;
   };
   // ——— tutoriel guidé ———
   const STEPS = [

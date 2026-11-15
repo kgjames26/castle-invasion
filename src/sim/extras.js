@@ -18,7 +18,7 @@ export class Extras {
     this.pal = new Float32Array(SECTORS); this.palWork = new Float32Array(SECTORS);
     this.hero = null; this.rally = 0; this.rallyCd = 0;
     this.tech = {}; this.research = null;
-    this.stats = null; this.recap = null; this.festCd = 0;
+    this.stats = null; this.recap = null; this.festCd = 0; this.quest = 0;   // (v6.0) objectifs suivis après le tutoriel
     this.mode = this.mode || { kind: 'classic' }; this.spits = [];
   }
   season() { return SEASONS[Math.floor((this.sim.wave - 1) / EXTRA.seasonWaves) % 4]; }
@@ -157,6 +157,6 @@ export class Extras {
     for (let i = this.traps.length - 1; i >= 0; i--) if (this.traps[i].uses <= 0 && (this.traps[i].kind !== 'pitch' || this.traps[i].lit)) { if ((this.traps[i].gone = (this.traps[i].gone || 0) + dt) > 2) this.traps.splice(i, 1); }
     for (let i = this.spits.length - 1; i >= 0; i--) { this.spits[i].t += dt; if (this.spits[i].t > 0.9) this.spits.splice(i, 1); }
   }
-  serialize() { return { weather: this.weather, morale: this.morale, spec: { ...this.spec }, traps: this.traps.map(t => ({ ...t })), moat: [...this.moat], pal: [...this.pal], hero: this.hero && { ...this.hero }, tech: { ...this.tech }, research: this.research && { ...this.research }, mode: this.mode, festCd: this.festCd }; }
-  restore(st) { if (!st) return; this.weather = st.weather || 'clear'; this.morale = st.morale ?? 70; Object.assign(this.spec, st.spec || {}); this.traps = (st.traps || []).map(t => ({ ...t })); this.trapId = 1 + Math.max(0, ...this.traps.map(t => t.id)); (st.moat || []).forEach((v, i) => this.moat[i] = v); (st.pal || []).forEach((v, i) => this.pal[i] = v); this.hero = st.hero || null; this.tech = st.tech || {}; this.research = st.research || null; this.mode = st.mode || { kind: 'classic' }; this.festCd = st.festCd || 0; }
+  serialize() { return { quest: this.quest, weather: this.weather, morale: this.morale, spec: { ...this.spec }, traps: this.traps.map(t => ({ ...t })), moat: [...this.moat], pal: [...this.pal], hero: this.hero && { ...this.hero }, tech: { ...this.tech }, research: this.research && { ...this.research }, mode: this.mode, festCd: this.festCd }; }
+  restore(st) { if (!st) return; this.quest = st.quest || 0; this.weather = st.weather || 'clear'; this.morale = st.morale ?? 70; Object.assign(this.spec, st.spec || {}); this.traps = (st.traps || []).map(t => ({ ...t })); this.trapId = 1 + Math.max(0, ...this.traps.map(t => t.id)); (st.moat || []).forEach((v, i) => this.moat[i] = v); (st.pal || []).forEach((v, i) => this.pal[i] = v); this.hero = st.hero || null; this.tech = st.tech || {}; this.research = st.research || null; this.mode = st.mode || { kind: 'classic' }; this.festCd = st.festCd || 0; }
 }

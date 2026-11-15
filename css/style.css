@@ -302,8 +302,15 @@ body.fpv #fpvx { display:block; } body.fpv #top, body.fpv #dock, body.fpv #badge
 #advice-pop { position:fixed; right:10px; bottom:calc(env(safe-area-inset-bottom) + 148px); z-index:8; width:min(88vw, 340px); padding:10px; border-radius:12px; background:var(--paper); border:1px solid var(--line); box-shadow:var(--sh); color:var(--ink); display:none; }
 #advice-pop.on { display:block; } #advice-pop .adv { display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:8px 6px; border:0; border-top:1px dashed var(--line); background:none; color:var(--ink); font-size:13px; }
 #advice-pop .adv span { font-size:18px; } #advice-pop .adv b { margin-left:auto; color:var(--ink2); }
-@media (max-width:700px) { body:has(#tuto.on) #advice { bottom:calc(env(safe-area-inset-bottom) + 170px); } }
+@media (max-width:700px) { body:has(#tuto.on) #advice, body:has(#quest.on:not(.mini)) #advice { bottom:calc(env(safe-area-inset-bottom) + 170px); } }
 .guide .gz { display:flex; flex-direction:column; padding:4px 0; border-top:1px dashed var(--line); font-size:13px; } .guide .gz small { color:var(--ink2); font-size:11px; }
 .guide .lnk { background:none; border:0; color:var(--ink2); text-decoration:underline; font-size:11px; float:right; }
 .upm { position:fixed; z-index:3; transform:translate(-50%,-100%); width:24px; height:24px; border-radius:50%; padding:0; font-size:13px; font-weight:900; color:#2a1e0a; background:radial-gradient(circle at 35% 30%, #ffe08a, #d9a63a); border:1px solid #8a6420; box-shadow:0 2px 6px rgba(0,0,0,.35); animation:upbob 1.4s ease-in-out infinite; }
 @keyframes upbob { 0%,100% { margin-top:0; } 50% { margin-top:-4px; } }
+/* v6.0 : objectifs */
+#quest { position:fixed; left:50%; top:calc(env(safe-area-inset-top) + 128px); transform:translateX(-50%); z-index:6; width:min(92vw, 420px); padding:8px 12px 8px 60px; border-radius:12px; background:rgba(28,22,12,.82); color:#f4e4bc; display:none; box-shadow:var(--sh); }
+#quest.on { display:block; } #quest b { display:block; font-size:14px; } #quest small { display:block; font-size:12px; opacity:.85; } #quest small .ri { width:1.2em; height:1.2em; vertical-align:-0.25em; }
+#quest .tn { position:absolute; left:10px; top:10px; font-weight:800; font-size:11px; background:#6fae4a; color:#10200a; border-radius:8px; padding:2px 5px; }
+#quest .x { position:absolute; right:8px; top:8px; background:none; border:0; color:#f4e4bc; font-size:11px; text-decoration:underline; }
+#quest.mini { width:auto; padding:0; left:auto; right:10px; transform:none; background:none; box-shadow:none; } #quest.mini button { border-radius:14px; padding:4px 10px; background:rgba(28,22,12,.82); color:#f4e4bc; border:0; font-weight:700; font-size:12px; }
+@media (max-width:700px) { #quest:not(.mini) { top:auto; bottom:calc(env(safe-area-inset-bottom) + 96px); } #quest.mini { top:calc(env(safe-area-inset-top) + 128px); } }
