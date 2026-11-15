@@ -376,3 +376,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Lucioles les nuits douces au-dessus des prés du village (ni en hiver ni sous la pluie).
 - Conseiller : signale les archers en réserve à placer quand le placement automatique est coupé.
 - Écran de défaite : record de vague (🏅 nouveau record), bouton « Reprendre au début de la vague » directement sur l'écran, aides masquées.
+- Tutoriel : le bouton à toucher est entouré d'un halo doré qui pulse (dock, catégorie, bâtiment, puis « Poser »).

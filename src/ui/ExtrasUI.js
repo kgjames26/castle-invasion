@@ -101,7 +101,7 @@ export function installExtrasUI(UI) {
       case 'load': this.loadSlot(+y); break;
       case 'retry': this.retryWave(); break;
       case 'mode': this.newMode = y === 'daily' ? dailyChallenge() : y === 'survival' ? { kind: 'survival' } : y.startsWith('c') ? { kind: 'campaign', ...CAMPAIGN[+y.slice(1) - 1] } : { kind: 'classic' }; this.html.sheet = ''; break;
-      case 'tutox': this.tuto = null; store('castle-tuto', 1); $('#tuto')?.classList.remove('on'); break;
+      case 'tutox': this.tuto = null; store('castle-tuto', 1); $('#tuto')?.classList.remove('on'); this.tutoPoint(); break;
       case 'mm': this.mmOn = !this.mmOn; $('#minimap')?.classList.toggle('off', !this.mmOn); store('castle-mm', this.mmOn ? 1 : 0); break;
       case 'vic': $('#victory')?.classList.remove('on'); break;
       case 'modego': $('#victory')?.classList.remove('on'); this.openSheet('newgame'); break;
@@ -232,15 +232,30 @@ export function installExtrasUI(UI) {
     ['🏹 Forme des archers', 'Touche le champ de tir et commande des archers.', s => s.army.archers.reduce((a, b) => a + b.n, 0) + s.army.reserve.archer >= 3],
     ['⚔ Prêt !', 'Touche « Lancer » quand tu veux, ou attends la horde. Bonne défense !', s => s.phase !== 'prep'],
   ];
+  // (v8.0) le tutoriel montre du doigt le bouton à toucher : premier élément visible de la liste, du plus précis au plus général
+  const TUTO_HI = [
+    ['[data-a="pok"]', '[data-a="bld:house"]', '[data-a="nav:build:home"]', '[data-sheet=build]'],
+    ['[data-a="pok"]', '[data-a="bld:sawmill"]', '[data-a="nav:build:res"]', '[data-a="nav:build:"]', '[data-sheet=build]'],
+    ['[data-a="vil"]', '[data-sheet=folk]'],
+    ['[data-a="pok"]', '[data-a="bld:range"]', '[data-a="nav:build:army"]', '[data-a="nav:build:"]', '[data-sheet=build]'],
+    ['[data-a^="train:archer"]', '[data-a="nav:army:train"]', '[data-sheet=army]'],
+    ['#b-skip'],
+  ];
+  P.tutoPoint = function () {
+    document.querySelectorAll('.tutohi').forEach(e => e.classList.remove('tutohi'));
+    if (this.tuto == null) return; const list = TUTO_HI[this.tuto]; if (!list) return;
+    for (const sel of list) { const e = [...document.querySelectorAll(sel)].find(x => x.offsetParent !== null && !x.disabled); if (e) { e.classList.add('tutohi'); return; } }
+  };
   P.startTuto = function () {
     if (store('castle-tuto') || this.hooks.resumed) return; this.tuto = 0;
     const el = document.createElement('div'); el.id = 'tuto'; document.getElementById('app').appendChild(el); el.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) this.act(b.dataset.a); });
   };
   P.tickTuto = function () {
     if (this.tuto == null) return; const el = $('#tuto'); if (!el) return; const st = STEPS[this.tuto];
-    if (!st) { el.classList.remove('on'); this.tuto = null; store('castle-tuto', 1); return; }
+    if (!st) { el.classList.remove('on'); this.tuto = null; store('castle-tuto', 1); this.tutoPoint(); return; }
     if (st[2](this.sim)) { this.tuto++; this.buzz(15); return; }
     const html = `<span class="tn">${this.tuto + 1}/${STEPS.length}</span><b>${st[0]}</b><small>${st[1]}</small><button class="x" data-a="x:tutox">Passer</button>`;
+    this.tutoPoint();
     if (el.dataset.k !== String(this.tuto)) { el.dataset.k = this.tuto; el.innerHTML = html; } el.classList.toggle('on', this.sim.phase === 'prep' || this.sim.phase === 'calm');   /* caché pendant l'alerte et la vague : place au combat */
   };
   // ——— événements de la simulation (v4.0) ———
