@@ -117,7 +117,10 @@ function farm() {
 function forge() {
   const b = new B();
   b.box(11, 0.3, 8.6, 0x9a9a98, 0, 0, 0);
-  b.box(8, 3.8, 5.4, 0x6b6670, -0.6, 0.3, -1.0); b.box(8.8, 0.45, 6.2, 0x3d3a44, -0.6, 4.1, -1.0);
+  b.box(8, 3.8, 5.4, 0x8f8a84, -0.6, 0.3, -1.0); b.box(8.2, 0.35, 5.6, 0x6e5a44, -0.6, 4.0, -1.0);   // (v6.0) murs de pierre claire, sablière en bois
+  b.gable(9.0, 6.4, 2.6, 0x4a4f5c, -0.6, 4.3, -1.0);                                                  // toit d'ardoise à deux pans
+  for (const x of [-4.0, -1.6, 0.8, 3.0]) b.box(0.28, 3.6, 0.2, 0x6e5a44, x, 0.4, 1.75);               // colombages en façade
+  b.box(1.8, 1.2, 0.15, 0x2a2428, 1.9, 1.6, 1.78); b.box(1.5, 0.9, 0.1, 0xffa04a, 1.9, 1.75, 1.84);     // fenêtre rougeoyante
   b.box(1.7, 6.4, 1.7, 0x55505a, 2.4, 0.3, -2.0); b.box(1.45, 0.5, 1.45, 0xff8a3a, 2.4, 6.8, -2.0); b.box(0.9, 0.9, 0.9, 0xffc14a, 2.4, 7.3, -2.0);   // cheminée + flamme
   b.box(3.2, 2.0, 0.5, 0x2a2428, -2.4, 0.3, 1.7); b.box(2.4, 1.2, 0.3, 0xff7a2a, -2.4, 0.5, 1.95); b.box(1.4, 0.7, 0.3, 0xffc14a, -2.4, 0.7, 2.1);   // grand foyer ardent
   b.box(1.8, 0.8, 1.0, 0x2a2a30, 0.8, 0.3, 3.0); b.box(0.7, 0.6, 0.7, 0x2a2a30, 0.8, 1.1, 3.0); b.box(2.6, 0.45, 0.8, 0x33343a, 0.8, 1.7, 3.0); b.box(0.9, 0.35, 0.5, 0x33343a, 2.4, 1.75, 3.0);   // enclume
