@@ -373,3 +373,5 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - L'hiver blanchit le paysage : neige en nappes irrégulières sur le sol, les toits, les remparts et tout ce qui regarde le ciel, arrivée et fonte progressives ; une chute de neige pose aussi un léger voile blanc en toute saison.
 - L'automne roussit l'herbe (teinte dorée irrégulière) ; les sapins restent verts.
 - Bannières et torches du rempart tombent avec leur tronçon quand une brèche s'ouvre (plus d'objets flottant dans le vide) et reviennent à la réparation.
+- Lucioles les nuits douces au-dessus des prés du village (ni en hiver ni sous la pluie).
+- Conseiller : signale les archers en réserve à placer quand le placement automatique est coupé.
