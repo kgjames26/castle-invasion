@@ -79,30 +79,41 @@ export class Renderer {
   // les objets qui projettent et reçoivent une ombre (personnages animés exclus : leur ombre serait figée)
   shadowize(obj) { obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }
   // ——— touffes d'herbe : une seule maille instanciée (3 lames croisées par touffe), balancée par le vent dans le shader ———
+  // ——— touffes d'herbe (v4.1) : vraies touffes de 9 brins courbés, base sombre → pointe claire, teintées par le sol sous elles
+  //     (même couleur que la prairie peinte) ; placées selon la part d'herbe du sol (jamais sur la terre ni les pavés, raréfaction douce)
   buildGrass() {
-    const MAXN = 4200, blades = [], pos = [], nor = [];
-    for (let b = 0; b < 3; b++) {   // mini-herbe immobile (v1.9) : 3 petites lames, aucune animation
-      const a = b * 2.09 + 0.3, h = 0.32 + 0.12 * (b % 2), lean = 0.06, w = 0.06, ox = Math.cos(a) * 0.12, oz = Math.sin(a) * 0.12, cx = Math.cos(a + 1.57), cz = Math.sin(a + 1.57);
-      pos.push(ox - cx * w, 0, oz - cz * w, ox + cx * w, 0, oz + cz * w, ox + Math.cos(a) * lean, h, oz + Math.sin(a) * lean); for (let i = 0; i < 3; i++) nor.push(0, 1, 0);
+    const MAXN = 6000, pos = [], col = [];
+    let sd = 99; const rn = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    for (let b = 0; b < 9; b++) {
+      const a = b / 9 * Math.PI * 2 + rn() * 0.5, h = 0.28 + rn() * 0.26, lean = 0.08 + rn() * 0.14, w = 0.035 + rn() * 0.02, r0 = rn() * 0.09;
+      const ox = Math.cos(a) * r0, oz = Math.sin(a) * r0, dx = Math.cos(a), dz = Math.sin(a), px = -dz, pz = dx;
+      const P = (t, side) => { const ww = w * (1 - t) * side; return [ox + dx * lean * t * t + px * ww, h * t, oz + dz * lean * t * t + pz * ww]; };
+      const C = t => { const v = 0.42 + 0.58 * t; return [v, v, v]; };
+      // brin = 3 triangles (base large, milieu, pointe)
+      const p0 = P(0, -1), p1 = P(0, 1), p2 = P(0.5, -1), p3 = P(0.5, 1), p4 = P(1, 0);
+      for (const [q, t] of [[p0, 0], [p1, 0], [p3, 0.5], [p0, 0], [p3, 0.5], [p2, 0.5], [p2, 0.5], [p3, 0.5], [p4, 1]]) { pos.push(...q); col.push(...C(t)); }
     }
-    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-    const mat = applyNorthFog(new THREE.MeshLambertMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+    // double face « à la main » (chaque triangle dans les deux sens) et normales vers le ciel : les brins s'éclairent comme le sol, jamais noirs
+    { const n0 = pos.length / 9; for (let i = 0; i < n0; i++) { const o = i * 9; pos.push(pos[o], pos[o + 1], pos[o + 2], pos[o + 6], pos[o + 7], pos[o + 8], pos[o + 3], pos[o + 4], pos[o + 5]); col.push(col[o], col[o + 1], col[o + 2], col[o + 6], col[o + 7], col[o + 8], col[o + 3], col[o + 4], col[o + 5]); } }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(pos.length).map((_, i) => i % 3 === 1 ? 1 : 0), 3));
+    const mat = applyWindFog(new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true }), 0.22);
     const im = new THREE.InstancedMesh(geo, mat, MAXN); im.frustumCulled = false; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAXN * 3), 3);
-    const type = this.sim.terrain.type; let seed = 4242; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647, d = this.dummy, c = this.tmpColor; let n = 0, tries = 0;
-    const cols = { south: [[0.32, 0.5, 0.22], [0.42, 0.55, 0.26], [0.55, 0.55, 0.28]], north: [[0.66, 0.66, 0.6], [0.58, 0.6, 0.55], [0.74, 0.74, 0.7]] };   // herbe givrée, claire sur la neige
-    while (n < MAXN && tries++ < MAXN * 8) {
-      const south = r() < 0.86, z = south ? 206 + r() * 106 : 30 + r() * 108, x = 2 + r() * 196;
-      // (v4.0) densité qui décroît en douceur près des pavés, des chemins et des rochers (plus de bord net)
-      let p = 1; const ec = Math.hypot((x - CASTLE.x) / 38, (z - CASTLE.z) / 28); if (ec < 1) continue; if (ec < 1.4) p *= (ec - 1) / 0.4;
-      const dpx = Math.max(0, Math.abs(x - PLAZA.x) - PLAZA.hw - 1), dpz = Math.max(0, Math.abs(z - PLAZA.z) - PLAZA.hd - 1), dpl = Math.hypot(dpx, dpz); if (!dpx && !dpz) continue; if (dpl < 5) p *= dpl / 5;
-      const t = type[((z / CELL) | 0) * GW + ((x / CELL) | 0)]; if (t === T.ROAD || t === T.ROCK) continue;
-      for (const [ox, oz] of [[CELL, 0], [-CELL, 0], [0, CELL], [0, -CELL]]) { const tt = type[Math.max(0, Math.min(GD - 1, ((z + oz) / CELL) | 0)) * GW + Math.max(0, Math.min(GW - 1, ((x + ox) / CELL) | 0))]; if (tt === T.ROAD || tt === T.ROCK) p *= 0.6; }
-      if (r() > p) continue;
-      const frost = Math.max(0, Math.min(1, (175 - z) / 110)), ia = (r() * 3) | 0, cs = cols.south[ia], cn = cols.north[ia], col = [cs[0] + (cn[0] - cs[0]) * frost, cs[1] + (cn[1] - cs[1]) * frost, cs[2] + (cn[2] - cs[2]) * frost];   // givre progressif vers le nord
-      const k = (0.7 + r() * 0.6) * (0.6 + 0.4 * p), v = 1.45 + r() * 0.5;
-      d.position.set(x, 0, z); d.rotation.set(0, r() * 6.28, 0); d.scale.set(k, k * (0.8 + r() * 0.5), k); d.updateMatrix(); im.setMatrixAt(n, d.matrix); im.setColorAt(n, c.setRGB(col[0] * v, col[1] * v, col[2] * v)); n++;
+    // le sol : couleur peinte et part d'herbe (R = terre, G = pavés dans la carte de répartition)
+    const cv = this.groundColor, k = this.groundK, cd = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data, sv = this.groundSplat, sdat = sv.getContext('2d').getImageData(0, 0, sv.width, sv.height).data;
+    const grassAt = (x, z) => { const px = Math.min(sv.width - 1, Math.max(0, (x * 2) | 0)), pz = Math.min(sv.height - 1, Math.max(0, (z * 2) | 0)), o = (pz * sv.width + px) * 4; return 1 - Math.min(255, sdat[o] + sdat[o + 1]) / 255; };
+    const type = this.sim.terrain.type, d = this.dummy, c = this.tmpColor; let n = 0, tries = 0;
+    while (n < MAXN && tries++ < MAXN * 10) {
+      const z = rn() < 0.8 ? 206 + rn() * 108 : 4 + rn() * 132, x = 1 + rn() * 198;
+      if (Math.hypot((x - CASTLE.x) / 40, (z - CASTLE.z) / 30) < 1) continue;
+      const t = type[Math.min(GD - 1, (z / CELL) | 0) * GW + ((x / CELL) | 0)]; if (t === T.ROCK) continue;
+      const g = grassAt(x, z); if (g < 0.25 || rn() > (g - 0.25) / 0.75) continue;   // raréfaction progressive vers la terre et les pavés
+      const o = ((Math.min(cv.height - 1, (z * k) | 0)) * cv.width + Math.min(cv.width - 1, (x * k) | 0)) * 4;
+      c.setRGB(cd[o] / 255, cd[o + 1] / 255, cd[o + 2] / 255, THREE.SRGBColorSpace).multiplyScalar(1.35 + rn() * 0.25);   // un peu plus clair que le sol
+      const sc = (0.75 + rn() * 0.6) * (0.65 + 0.35 * g);
+      d.position.set(x, 0, z); d.rotation.set(0, rn() * 6.28, 0); d.scale.set(sc, sc * (0.8 + rn() * 0.45), sc); d.updateMatrix(); im.setMatrixAt(n, d.matrix); im.setColorAt(n, c); n++;
     }
-    im.userData.max = n; im.count = n; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; this.scene.add(im); this.grass = im;
+    im.userData.max = n; im.count = n; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.receiveShadow = true; this.scene.add(im); this.grass = im;
     this.grassBase = im.instanceMatrix.array.slice(0, n * 16); this.grassVer = -1;
   }
   // pas d'herbe à travers les bâtiments : les touffes sous une emprise (et sur les chemins pavés) sont masquées quand la construction change
@@ -241,7 +252,7 @@ export class Renderer {
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const stex = new THREE.CanvasTexture(sv); stex.colorSpace = THREE.NoColorSpace; stex.magFilter = THREE.LinearFilter;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, D), groundMaterial(tex, stex));
-    m.rotation.x = -Math.PI / 2; m.position.set(W / 2, 0, D / 2); m.receiveShadow = true; this.scene.add(m); this.groundMesh = m; this.groundSplat = sv;
+    m.rotation.x = -Math.PI / 2; m.position.set(W / 2, 0, D / 2); m.receiveShadow = true; this.scene.add(m); this.groundMesh = m; this.groundSplat = sv; this.groundColor = cv; this.groundK = k;
   }
   buildTerrainProps() {
     const type = this.sim.terrain.type, rock = [], tree = [];

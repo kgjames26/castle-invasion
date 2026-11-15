@@ -134,7 +134,8 @@ export class ExtrasView {
     const sim = this.sim, X = sim.extras, Z = sim.zombies, d = this.d, c = this.c; this.t += dt; const t = this.t;
     this.water.userData.n.offset.set(t * 0.02, t * 0.013);
     // poussière des hordes qui chargent + traces au sol
-    for (let i = 0; i < Z.n; i += 2) { if (!Z.rush[i] || Z.state[i] === 1 || Math.random() > dt * 6) continue; const x = Z.x[i], z = Z.z[i]; this.dust.add({ x: x + (Math.random() - 0.5), y: 0.3, z, vx: (Math.random() - 0.5) * 0.8, vy: 0.6 + Math.random() * 0.6, vz: -0.8, t: 0, life: 1.6, a: 0.35, r: 0.62, gr: 0.52, b: 0.4, s: 1.4, grow: 1.6 }); if (Math.random() < 0.15) this.decals.add(x, z, 'dirt', 1.2 + Math.random(), 18); }
+    // (v4.1) poussière très discrète : un zombie sur cinq, rarement, voile léger
+    for (let i = 0; i < Z.n; i += 5) { if (!Z.rush[i] || Z.state[i] === 1 || Math.random() > dt * 0.9) continue; const x = Z.x[i], z = Z.z[i]; this.dust.add({ x: x + (Math.random() - 0.5), y: 0.25, z, vx: (Math.random() - 0.5) * 0.5, vy: 0.4 + Math.random() * 0.3, vz: -0.5, t: 0, life: 1.2, a: 0.14, r: 0.62, gr: 0.55, b: 0.45, s: 1.0, grow: 1.2 }); if (Math.random() < 0.08) this.decals.add(x, z, 'dirt', 1 + Math.random() * 0.6, 12); }
     // fumées : cheminées des maisons de niveau 2+, forge, Travaux publics, château
     this.smokeT = (this.smokeT || 0) + dt;
     if (this.smokeT > 0.25) { this.smokeT = 0;

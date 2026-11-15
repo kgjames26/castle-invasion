@@ -310,3 +310,7 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Modes** : survie (classement), défi du jour (2 modificateurs tirés de la date), campagne en 3 missions.
 - **Immersion** : musique dynamique (luth au calme, tambours à l'alerte, tambours + cuivres pendant la vague), cloche d'alarme, gémissements selon la horde, cris des capitaines, vue à la première personne depuis un archer.
 - Demandes en cours de route : niveaux graphiques Faible / Moyen / Élevé (réglages avancés repliés) ; transitions d'herbe et de touffes encore plus douces ; nuit ≈ 1/10e du cycle ; trajets des hordes variés (dérive par horde, serpentement par zombie).
+
+## Phase 41 — Herbe et poussière
+- Poussière des hordes fortement réduite (1 zombie sur 5, rare, voile léger ; traces au sol plus rares).
+- Nouvelles touffes d'herbe : 9 brins courbés (base sombre → pointe claire), teintées par la couleur exacte du sol sous elles, éclairées comme le sol (plus jamais noires), légère ondulation au vent ; placées selon la part d'herbe du sol (raréfaction progressive vers la terre et les pavés, aucune sur les chemins).
