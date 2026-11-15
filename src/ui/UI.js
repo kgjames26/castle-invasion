@@ -330,6 +330,7 @@ export class UI {
         if (x === 'fmt') H.setGfx(y); else H.setGfx(null, x === 'shadows' ? { shadows: !q.shadows } : x === 'glow' ? { glow: !q.glow } : x === 'grass' ? { grass: q.grass >= 0.7 ? 0.35 : 1 } : x === 'post' ? { post: !q.post } : { pixelRatio: q.pixelRatio >= 1.5 ? 1 : 2 });
         this.html.sheet = ''; break; }
       case 'pref': { const p = this.prefs; if (x === 'difficulty') p.difficulty = y; else p[x] = !p[x]; this.applyPrefs(); this.html.sheet = ''; break; }
+      case 'guide': this.guideOn = !this.guideOn; this.html.sheet = ''; break;
       case 'secgo': this.cam.focusOn(+x * 40 + 20, 150); this.openCard({ kind: 'sector', id: +x }); break;
       case 'goto': { const t = sim.build.of(x); if (t) { this.cam.focusOn(t.x, t.z); this.openCard({ kind: 'struct', id: t.id }); } else this.startPlace(x); break; }
     }
@@ -450,7 +451,19 @@ export class UI {
     const p = this.prefs, tog = (k, l, sub) => this.btn(`${p[k] ? '✅' : '⬜'} ${l}`, sub, 'pref:' + k, false, 'act slim' + (p[k] ? '' : ' sec'));
     const game = `<div class="vols"><div class="hint small"><b>Difficulté</b> (vagues suivantes)</div><div class="row">${Object.keys(DIFFICULTY).map(k => this.btn(DIFFICULTY[k].name, k === 'easy' ? '−25 % zombies' : k === 'hard' ? '+30 % zombies, +15 % PV' : '', 'pref:difficulty:' + k, false, 'act slim' + (k === p.difficulty ? '' : ' sec'))).join('')}</div>
       <div class="row wrapr">${tog('autoRepair', 'Réparation auto', 'emprunte 2 villageois')}${tog('shake', 'Secousses', 'explosions')}${tog('fx', 'Effets', 'particules, feu')}</div></div>`;
-    return `<div class="hint">Castle Invasion · <b>v${VERSION}</b></div>${game}${this.savesHtml()}${audio}${qual}${this.achHtml()}<div class="row">${this.btn('🔄 Nouvelle partie', 'la partie en cours sera perdue', 'newgame', false, 'act warnb')}</div>`;
+    return `<div class="hint">Castle Invasion · <b>v${VERSION}</b></div>${this.guideHtml()}${game}${this.savesHtml()}${audio}${qual}${this.achHtml()}<div class="row">${this.btn('🔄 Nouvelle partie', 'la partie en cours sera perdue', 'newgame', false, 'act warnb')}</div>`;
+  }
+  // guide repliable : bases du jeu, bestiaire, raccourcis
+  guideHtml() {
+    if (!this.guideOn) return `<div class="row">${this.btn('📖 Guide du défenseur', 'bases, bestiaire, raccourcis', 'guide', false, 'act slim sec')}</div>`;
+    const ICO = ['🧟', '🏃', '🛡', '🦍', '🔨', '👹', '🗿', '👑', '🧗', '🤮', '🎈', '🐕'];
+    const NOTE = ['le gros de la horde', 'rapide, fragile', 'encaisse beaucoup', 'très solide, lent', 'casse la pierre très vite', 'géant : mène une horde', 'ses coups font tomber les archers', 'boss toutes les 10 vagues', 'escalade la muraille', 'acide à distance sur la pierre', 'explose contre la muraille', 'meute très rapide'];
+    const best = ZOMBIES.map((z, t) => `<div class="gz"><span>${ICO[t]} <b>${z.name}</b></span><small>❤ ${z.hp} · 🏃 ${z.speed} m/s · 🧱 ${z.wall}/s — ${NOTE[t]}</small></div>`).join('');
+    return `<div class="vols guide"><div class="hint small"><b>📖 Guide du défenseur</b> <button class="lnk" data-a="guide">replier</button></div>
+      <div class="hint small">① Le <b>temps calme</b> sert à bâtir, récolter, recruter. ② À l'<b>alerte</b>, les secteurs visés clignotent. ③ Pendant la <b>vague</b>, les archers tirent seuls ; les réparateurs referment les brèches. Si le château tombe, la partie est perdue.</div>
+      <div class="hint small">💡 Lancer la vague en avance rapporte de l'or. Les stocks pleins gaspillent la récolte : bâtis entrepôt et grenier. Une maison améliorée loge beaucoup plus de monde.</div>
+      <div class="hint small"><b>Bestiaire</b></div>${best}
+      <div class="hint small"><b>Raccourcis</b> : Espace pause · 1-4 vitesse · B bâtir · T armée · V villageois · K savoir · R pivoter · ZQSD / flèches caméra · Échap fermer</div></div>`;
   }
   renderCard() {
     const c = this.card; if (!c) return;

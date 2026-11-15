@@ -303,3 +303,5 @@ body.fpv #fpvx { display:block; } body.fpv #top, body.fpv #dock, body.fpv #badge
 #advice-pop.on { display:block; } #advice-pop .adv { display:flex; align-items:center; gap:8px; width:100%; text-align:left; padding:8px 6px; border:0; border-top:1px dashed var(--line); background:none; color:var(--ink); font-size:13px; }
 #advice-pop .adv span { font-size:18px; } #advice-pop .adv b { margin-left:auto; color:var(--ink2); }
 @media (max-width:700px) { body:has(#tuto.on) #advice { bottom:calc(env(safe-area-inset-bottom) + 170px); } }
+.guide .gz { display:flex; flex-direction:column; padding:4px 0; border-top:1px dashed var(--line); font-size:13px; } .guide .gz small { color:var(--ink2); font-size:11px; }
+.guide .lnk { background:none; border:0; color:var(--ink2); text-decoration:underline; font-size:11px; float:right; }
