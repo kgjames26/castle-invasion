@@ -19,7 +19,7 @@ export class Economy {
     this.assign = {}; for (const t of TASK_IDS) this.assign[t] = START.assign[t] || 0;
     this.repairPriority = -1;
     this.deposit = {}; for (const t of GATHER) if (TASKS[t].deposit) this.deposit[t] = TASKS[t].deposit;
-    this.extra = {}; for (const r in START_DEPOSITS) this.extra[r] = START_DEPOSITS[r].map(d => ({ ...d, max: d.amount }));
+    this.extra = {}; for (const r in START_DEPOSITS) this.extra[r] = START_DEPOSITS[r].map(d => ({ ...d, max: d.amount, start: true }));
     for (const r of ['stone', 'iron', 'gold']) this.extra[r] ||= []; this.prospect = null;
     this.villagers = []; this.nextId = 1;
     for (let i = 0; i < START.villagers; i++) this.addVillager();

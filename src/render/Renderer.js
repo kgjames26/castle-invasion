@@ -166,10 +166,11 @@ export class Renderer {
     // terre : teinte brune sur la carte de couleurs + rouge sur la carte de répartition (même forme)
     const dirt = (x, z, rad, a, col = 'rgba(124,98,66,A)') => { blob(x, z, rad, col, a); const gr = sp.createRadialGradient(S(x), S(z), 0, S(x), S(z), S(rad)); gr.addColorStop(0, `rgba(255,0,0,${Math.min(1, a * 1.6)})`); gr.addColorStop(1, 'rgba(255,0,0,0)'); sp.globalCompositeOperation = 'lighter'; sp.fillStyle = gr; sp.fillRect(S(x - rad), S(z - rad), S(rad * 2), S(rad * 2)); sp.globalCompositeOperation = 'source-over'; };
     // variations de la prairie : herbe grasse, herbe sèche, fleurs des champs
-    for (let i = 0; i < 1400; i++) { const z = r() * D; if (z > WALL_Z0 - 1 && z < 200) continue; const t = r(); blob(r() * W, z, rr(3, 12), t < 0.4 ? 'rgba(70,104,44,A)' : t < 0.75 ? 'rgba(150,146,78,A)' : 'rgba(96,128,58,A)', rr(0.12, 0.3)); }
+    // variations de la prairie (v3.3) : grandes nappes très douces (herbe grasse / herbe sèche), jamais de taches nettes
+    for (let i = 0; i < 260; i++) { const z = r() * D; if (z > WALL_Z0 - 1 && z < 200) continue; const t = r(); blob(r() * W, z, rr(18, 42), t < 0.5 ? 'rgba(84,112,52,A)' : 'rgba(128,132,72,A)', rr(0.05, 0.11)); }
     // types de terrain issus de la simulation (forêt, colline, rocher, route)
     const type = this.sim.terrain.type, pal = { [T.FOREST]: 'rgba(40,66,34,A)', [T.HILL]: 'rgba(140,150,90,A)', [T.ROCK]: 'rgba(110,108,100,A)' };
-    for (let gz = 0; gz < GD; gz++) for (let gx = 0; gx < GW; gx++) { const t = type[gz * GW + gx], x = (gx + .5) * CELL, z = (gz + .5) * CELL; if (t === T.ROAD) dirt(x, z, CELL * 1.2, 0.5); else if (t === T.ROCK) dirt(x, z, CELL * 1.2, 0.35, 'rgba(110,108,100,A)'); else if (t && pal[t]) blob(x, z, CELL * 1.5, pal[t], 0.5); }
+    for (let gz = 0; gz < GD; gz++) for (let gx = 0; gx < GW; gx++) { const t = type[gz * GW + gx], x = (gx + .5) * CELL, z = (gz + .5) * CELL; if (t === T.ROAD) dirt(x, z, CELL * 1.2, 0.5); else if (t === T.ROCK) dirt(x, z, CELL * 1.2, 0.35, 'rgba(110,108,100,A)'); else if (t && pal[t] && (gx + gz) % 2 === 0) blob(x, z, CELL * 4, pal[t], 0.1); }   // sous-bois et collines : teinte fondue, pas de tache nette
     // front de bataille : terre foulée de plus en plus marquée vers la muraille (z 100 → 141), ornières
     for (let i = 0; i < 260; i++) { const z = rr(100, 141); dirt(r() * W, z, rr(2.5, 8), 0.12 + 0.4 * (z - 100) / 41); }
     for (let i = 0; i < 200; i++) { const z = rr(96, 141), x = r() * W, len = rr(3, 11), a = 0.08 + 0.25 * (z - 96) / 45; g.strokeStyle = `rgba(92,72,48,${a})`; g.lineWidth = rr(0.5, 1.6) * k; g.lineCap = 'round'; g.beginPath(); g.moveTo(X(x), X(z)); g.lineTo(X(x + rr(-2, 2)), X(z + len)); g.stroke(); }
@@ -220,8 +221,7 @@ export class Renderer {
       }
       sp.restore();
     }
-    // vignettage des bords du monde
-    for (const [x0, x1] of [[0, 12], [W, W - 12]]) { const gr = g.createLinearGradient(X(x0), 0, X(x1), 0); gr.addColorStop(0, 'rgba(20,30,20,.3)'); gr.addColorStop(1, 'rgba(20,30,20,0)'); g.fillStyle = gr; g.fillRect(Math.min(X(x0), X(x1)), 0, X(12), cv.height); }
+    // (v3.3) plus de vignettage aux bords : le sol au-delà prolonge exactement la même prairie
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const stex = new THREE.CanvasTexture(sv); stex.colorSpace = THREE.NoColorSpace; stex.magFilter = THREE.LinearFilter;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, D), groundMaterial(tex, stex));

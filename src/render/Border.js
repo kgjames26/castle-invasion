@@ -62,16 +62,16 @@ export function buildBorder(scene, shadowize) {
   const X0 = -360, Z0 = -90, SW = W + 720, SD = D + 180, k = 1, cv = document.createElement('canvas'); cv.width = SW * k; cv.height = SD * k; const g = cv.getContext('2d');
   const sv = document.createElement('canvas'); sv.width = SW / 2; sv.height = SD / 2; const sp = sv.getContext('2d');
   const grad = g.createLinearGradient(0, 0, 0, SD * k);
-  for (const [z, col] of [[-90, '#43592f'], [0, '#4b6435'], [100, '#5a733c'], [200, '#58773b'], [320, '#4f6c36'], [D + 90, '#46602f']]) grad.addColorStop((z - Z0) / SD, col);
+  for (const [z, col] of [[-90, '#4a6436'], [0, '#4f6a3a'], [40, '#5f7d42'], [100, '#6a8445'], [138, '#6f8446'], [205, '#6e8a45'], [260, '#6a8a43'], [320, '#5f7e3e'], [D + 90, '#587639']]) grad.addColorStop((z - Z0) / SD, col);   // mêmes teintes que la carte, à la même latitude
   g.fillStyle = grad; g.fillRect(0, 0, cv.width, cv.height); sp.fillStyle = '#000'; sp.fillRect(0, 0, sv.width, sv.height);
-  for (let i = 0; i < 2600; i++) {
-    const x = r() * SW, z = r() * SD, rad = rr(3, 14), t = r(), a = rr(0.1, 0.3);
-    const col = t < 0.45 ? `rgba(48,70,36,${a})` : t < 0.75 ? `rgba(110,112,66,${a})` : `rgba(96,78,54,${a})`;
+  for (let i = 0; i < 700; i++) {      // grandes nappes douces, comme sur la carte ; sous la forêt, un sous-bois à peine plus sombre
+    const x = r() * SW, z = r() * SD, rad = rr(18, 46), t = r(), a = rr(0.05, 0.11);
+    const col = t < 0.5 ? `rgba(84,112,52,${a})` : t < 0.8 ? `rgba(128,132,72,${a})` : `rgba(70,92,46,${a})`;
     const gr = g.createRadialGradient(x * k, z * k, 0, x * k, z * k, rad * k); gr.addColorStop(0, col); gr.addColorStop(1, col.replace(/[\d.]+\)$/, '0)')); g.fillStyle = gr; g.fillRect((x - rad) * k, (z - rad) * k, rad * 2 * k, rad * 2 * k);
-    if (t > 0.75) { const gs = sp.createRadialGradient(x / 2, z / 2, 0, x / 2, z / 2, rad / 2); gs.addColorStop(0, `rgba(255,0,0,${a * 1.8})`); gs.addColorStop(1, 'rgba(255,0,0,0)'); sp.fillStyle = gs; sp.fillRect((x - rad) / 2, (z - rad) / 2, rad, rad); }
+    if (t > 0.92) { const gs = sp.createRadialGradient(x / 2, z / 2, 0, x / 2, z / 2, rad / 4); gs.addColorStop(0, 'rgba(255,0,0,.25)'); gs.addColorStop(1, 'rgba(255,0,0,0)'); sp.fillStyle = gs; sp.fillRect((x - rad / 2) / 2, (z - rad / 2) / 2, rad / 2, rad / 2); }
   }
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; const stex = new THREE.CanvasTexture(sv);
-  const skirt = new THREE.Mesh(new THREE.PlaneGeometry(SW, SD), groundMaterial(tex, stex, { strength: 0.9 }));
+  const skirt = new THREE.Mesh(new THREE.PlaneGeometry(SW, SD), groundMaterial(tex, stex));
   skirt.rotation.x = -Math.PI / 2; skirt.position.set(X0 + SW / 2, -0.06, Z0 + SD / 2); skirt.receiveShadow = true; scene.add(skirt);
   return { hills: hm, rocks: rm, skirt };
 }

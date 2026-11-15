@@ -272,3 +272,10 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 
 ## Phase 32 — Géant zombie humain
 - L'ancien « golem » devient un **homme mort-vivant géant** : anatomie humaine en formes arrondies (proportions réalistes, tête ≈ 1/7), dos voûté, tête tendue en avant qui hoche et se rejette à l'élan, peau livide marbrée d'ecchymoses, côtes à nu, plaies, crâne entaillé, mâchoire décrochée, cheveux épars, haillons de chemise et braies, pieds nus. Il garde sa massue de chêne cerclée de fer.
+
+## Phase 33 — Finitions
+- Bouton de vue : symbole de caméra qui pivote (plus de boussole).
+- Herbe harmonisée : mêmes teintes sur la carte, au-delà de la crête et sur les parcelles défrichées ; variations en grandes nappes douces, sous-bois et collines fondus, plus de vignettage aux bords.
+- Vitesse : 1× → 2× → 4× → 8× (jusqu'à 24 pas de simulation par image).
+- Plus de cubes de niveau au-dessus des bâtiments.
+- Gisements cliquables (forêt des bûcherons, carrière, filons de fer et d'or, gisements découverts) : nature du minerai, quantité restante / initiale, ouvriers, temps avant épuisement, total restant ; rappel du stock restant dans la fiche des mines, carrières et scieries.

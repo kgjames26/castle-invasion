@@ -28,8 +28,9 @@ export class FrontierView {
     for (const t of this.trees) t.oak = r() < oakP(t.x, t.z);
     // sol des forêts : sous-bois sombre (parcelles) ; un anneau signale les parcelles en cours de défrichage
     const pg = new THREE.PlaneGeometry(FRONTIER.cell, FRONTIER.cell); pg.rotateX(-Math.PI / 2);
+    const pxs = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true; return t; };   // prairie : même teinte que la carte
     const px = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };   // sol des parcelles : mêmes textures de détail (herbe mêlée de terre)
-    this.floor = new THREE.InstancedMesh(pg, groundMaterial(px(150, 172, 104), px(70, 0, 0)), frontier.patches.length); this.floor.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(frontier.patches.length * 3), 3); this.floor.receiveShadow = true; this.floor.frustumCulled = false; scene.add(this.floor);
+    this.floor = new THREE.InstancedMesh(pg, groundMaterial(pxs(110, 138, 69), px(0, 0, 0)), frontier.patches.length); this.floor.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(frontier.patches.length * 3), 3); this.floor.receiveShadow = true; this.floor.frustumCulled = false; scene.add(this.floor);
     const rg = new THREE.RingGeometry(FRONTIER.cell * 0.46, FRONTIER.cell * 0.5, 4, 1); rg.rotateX(-Math.PI / 2); rg.rotateY(Math.PI / 4);
     this.marks = new THREE.InstancedMesh(rg, new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.85, depthWrite: false }), frontier.patches.length); this.marks.frustumCulled = false; this.marks.count = 0; scene.add(this.marks);
     this.ver = -1; this.d = new THREE.Object3D(); this.c = new THREE.Color(); this.sel = -1;
@@ -48,7 +49,7 @@ export class FrontierView {
     if (this.ver !== F.version) {
       this.ver = F.version;
       // sol propre seulement sous les parcelles défrichées (prairie) ; sous la forêt, c'est le sol de sous-bois de la bordure
-      let nfl = 0; F.patches.forEach(p => { if (p.state !== 'open') return; d.position.set(p.x, 0.03, p.z); d.rotation.set(0, 0, 0); d.scale.setScalar(1); d.updateMatrix(); this.floor.setMatrixAt(nfl, d.matrix); this.floor.setColorAt(nfl, c.setScalar(0.92 + (p.seed || 0) * 0.12)); nfl++; });
+      let nfl = 0; F.patches.forEach(p => { if (p.state !== 'open') return; d.position.set(p.x, 0.03, p.z); d.rotation.set(0, 0, 0); d.scale.setScalar(1); d.updateMatrix(); this.floor.setMatrixAt(nfl, d.matrix); this.floor.setColorAt(nfl, c.setScalar(1)); nfl++; });
       this.floor.count = nfl;
       this.floor.instanceMatrix.needsUpdate = true; this.floor.instanceColor.needsUpdate = true;
     }

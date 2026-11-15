@@ -44,7 +44,7 @@ export class StructureView {
     if (!s.fixed || s.type === 'prison') { const m = makeModel(s.type, this.kit, s.id * 7 + (s.x | 0), s.level); v.hlv = s.level; v.model = m.g; v.top = m.top; v.inner.add(m.g); }
     else { v.top = 15.5; }
     // pastilles de niveau (dorées) au-dessus de l'entrée
-    const np = pipsFor(s.type); v.pips = [];
+    const np = 0; v.pips = [];   // (v3.3) plus de cubes de niveau au-dessus des bâtiments : le niveau se lit dans la fiche
     if (np) { const pg = new THREE.BoxGeometry(0.8, 0.8, 0.8), pm = mat(GOLD); for (let i = 0; i < np; i++) { const p = new THREE.Mesh(pg, pm); p.position.set((i - (np - 1) / 2) * 1.2, v.top + 1.4, 0); p.rotation.y = Math.PI / 4; v.g.add(p); v.pips.push(p); } }
     if (def.ico && s.type !== 'house' && s.type !== 'tower') { v.sign = signSprite(def.ico); v.sign.position.set(0, v.top + 3.8, 0); v.g.add(v.sign); }     // enseigne : l'icône du métier
     v.site = this.siteModel(def, s); v.inner.add(v.site);

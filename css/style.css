@@ -246,3 +246,4 @@ body.paused::after { content:'❚❚  Pause'; position:fixed; left:50%; top:96px
 @media (max-width:480px) { .launch { padding:5px 7px; font-size:11px; } .rchip i { font-size:12px; } .rchip { font-size:12px; gap:2px; } .rb { width:36px; height:36px; font-size:15px; } .tgroup .rb { width:34px; } }
 #b-pause { font-size:13px; letter-spacing:-2px; } #b-pause.on { letter-spacing:0; font-size:15px; }
 @media (max-width:480px) { .rline { gap:3px; } .rchip { font-size:11.5px; letter-spacing:-0.3px; padding:3px 2px; } .rchip i .ri { width:1.25em; height:1.25em; } .rchip.pop { flex:1.35; } }
+.rb .isvg.cam { width:22px; height:22px; vertical-align:middle; overflow:visible; }

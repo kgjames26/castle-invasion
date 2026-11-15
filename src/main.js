@@ -61,8 +61,8 @@ function frame(now) {
   if (!document.hidden) {
     acc += dt * sim.speed;
     let steps = 0;
-    while (acc >= TICK && steps < 8) { sim.tick(); acc -= TICK; steps++; autosave += TICK; }
-    if (steps === 8) acc = 0;
+    while (acc >= TICK && steps < 24) { sim.tick(); acc -= TICK; steps++; autosave += TICK; }   // jusqu'à ×8 même à 20 img/s
+    if (steps === 24) acc = 0;
     for (const e of sim.events.splice(0)) { ui.onEvent(e); audio.onEvent(e); if (e.type === 'waveEnd' || e.type === 'built') save(sim); if (e.type === 'gameOver') clearSave(); }
     if (autosave > 30) { autosave = 0; if (!sim.over) save(sim); }
     if (sim.over !== wasOver) { wasOver = sim.over; ui.showOver(sim.over); }

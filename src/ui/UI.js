@@ -33,7 +33,7 @@ export class UI {
     this.top.innerHTML = `
       <div class="rline">${RES.map(r => `<span class="rchip" id="r-${r}"><i>${RES_INFO[r].ico}</i><b>0</b></span>`).join('')}<span class="rchip pop" id="r-pop"><i>👥</i><b>0</b></span></div>
       <div class="wline"><div class="wave"><div class="wt"><b id="wave-title">Vague 1</b><span id="wave-phase" class="phase"></span></div><div class="cbar"><div class="bar thin" title="Avant la vague"><i id="calm-bar"></i></div><div class="bar" title="Château"><i id="castle-bar"></i></div></div><button id="b-skip" class="launch" title="Lancer la vague maintenant">⚔ Lancer</button></div>
-        <div class="tgroup"><button id="b-pause" class="rb" title="Pause / reprendre">❚❚</button><button id="b-speed" class="rb spd" title="Vitesse du jeu">1×</button></div><button id="b-turn" class="rb" title="Pivoter la vue (vers le sud / vers le nord)">🧭</button><button id="b-menu" class="rb">☰</button></div>`;
+        <div class="tgroup"><button id="b-pause" class="rb" title="Pause / reprendre">❚❚</button><button id="b-speed" class="rb spd" title="Vitesse du jeu">1×</button></div><button id="b-turn" class="rb" title="Pivoter la vue (vers le sud / vers le nord)"><svg class="isvg cam" viewBox="0 0 32 32" aria-hidden="true"><path d="M7 11h4l2-3h6l2 3h4a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="16" cy="17" r="3.6" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M4 7.5A13 13 0 0 1 16 2.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M13.2 0.8 16.6 2.6 14.2 5.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M28 26.5A13 13 0 0 1 16 31.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18.8 33.2 15.4 31.4 17.8 28.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><button id="b-menu" class="rb">☰</button></div>`;
     this.dock.innerHTML = Object.entries(SHEETS).map(([k, n]) => { const [ic, ...t] = n.split(' '); return `<button class="dk" data-sheet="${k}">${ic}<span>${t.join(' ')}</span></button>`; }).join('');
     this.badges = [];
     for (let s = 0; s < SECTORS; s++) {
@@ -42,10 +42,10 @@ export class UI {
       this.badgesEl.appendChild(b); this.badges.push(b);
     }
     $('#b-skip').addEventListener('click', () => sim.skipPrep());
-    // temps : un bouton pause/lecture, un bouton vitesse (1× → 2× → 3×) qui ne met jamais en pause
+    // temps : un bouton pause/lecture, un bouton vitesse (1× → 2× → 4× → 8×) qui ne met jamais en pause
     this.pace = 1;
     $('#b-pause').addEventListener('click', () => { if (this.deploy) return; sim.speed = sim.speed ? 0 : this.pace; this.syncTime(); });
-    $('#b-speed').addEventListener('click', () => { this.pace = this.pace >= 3 ? 1 : this.pace + 1; if (sim.speed) sim.speed = this.pace; this.syncTime(); });
+    $('#b-speed').addEventListener('click', () => { this.pace = this.pace >= 8 ? 1 : this.pace * 2; if (sim.speed) sim.speed = this.pace; this.syncTime(); });
     $('#b-menu').addEventListener('click', () => this.toggleSheet('menu'));
     $('#b-turn').addEventListener('click', e => { this.cam.turn(); this.buzz(10); e.currentTarget.classList.toggle('on', this.cam.facingSouth()); this.toast(this.cam.facingSouth() ? '🧭 Vue vers le sud : le village et le château' : '🧭 Vue vers le nord : la muraille et la horde', 'info'); });
     $('#over-btn').addEventListener('click', () => { this.showOver(false); this.openSheet('newgame'); });
@@ -116,12 +116,42 @@ export class UI {
     if (this.card?.kind === 'squad' && near && near !== this.card.id) { this.openSquad(near); return; }
     const s = this.pickStruct(x, z);
     if (s) { this.openCard({ kind: 'struct', id: s.id }); return; }
+    { const r = this.resAt(x, z); if (r) { this.openCard({ kind: 'res', t: r.t, si: r.si }); return; } }
     if (Math.hypot(x - CASTLE.x, z - CASTLE.z) < 22) { this.openCard({ kind: 'castle', id: 0 }); return; }
     if (near) { this.openSquad(near); return; }
     if (z > 70 && z < 168) { this.openCard({ kind: 'sector', id: Math.min(4, Math.max(0, (x / 40) | 0)) }); return; }
     this.closeCard(); if (this.sheet) this.closeSheet();
   }
   // parcelle de forêt vierge : défricher (si elle touche une terre ouverte), avancement, bois et minerai éventuel
+  // ——— gisements : toucher un filon / la forêt des bûcherons → ce qu'il reste à extraire ———
+  resSites() {
+    const E = this.sim.eco, out = [];
+    for (const t of ['wood', 'stone', 'iron', 'gold']) {
+      const T = TASKS[t]; if (T.deposit) out.push({ t, si: -1, x: T.site.x, z: T.site.z, r: t === 'wood' ? 15 : 8 });
+      (E.extra[t] || []).forEach((e, i) => out.push({ t, si: i, x: e.x, z: e.z, r: 7 }));
+    }
+    return out;
+  }
+  resAt(x, z) { let best = null, bd = Infinity; for (const o of this.resSites()) { const d = Math.hypot(x - o.x, z - o.z); if (d < o.r && d < bd) { bd = d; best = o; } } return best; }
+  resPos(c) { const o = this.resSites().find(q => q.t === c.t && q.si === c.si); return o || { x: 100, z: 250 }; }
+  resCard(c) {
+    const E = this.sim.eco, t = c.t, T = TASKS[t], R = RES_INFO[t], ex = c.si >= 0 ? E.extra[t][c.si] : null;
+    const left = Math.max(0, Math.round(c.si < 0 ? E.deposit[t] : ex.amount)), max = c.si < 0 ? T.deposit : ex.max, pct = max ? left / max : 0;
+    const INFO = {
+      wood: ['🌲 Forêt des bûcherons', 'Sapins et épicéas abattus par les bûcherons de la scierie. La forêt repousse d\'elle-même si on lui laisse le temps.'],
+      stone: ['🪨 Carrière de pierre', 'Grès gris taillé en blocs : murailles, réparations, tours et bâtiments.'],
+      iron: ['⛏ Filon de fer', 'Minerai rouge-brun (hématite) extrait par les mineurs : armes, armures, munitions des balistes.'],
+      gold: ['✨ Filon d\'or', 'Quartz veiné d\'or natif, rare : recrutement des troupes d\'élite, améliorations, magie.'],
+    }[t];
+    const workers = E.villagers.filter(v => v.task === t && (c.si < 0 ? v.si < 0 || v.si == null : v.si === c.si)).length, rate = workers * (T.rate || 1);
+    const eta = rate > 0 && left > 0 ? Math.ceil(left / rate / 60) : 0;
+    let h = `<div class="ptitle">${INFO[0]}<span class="lvl">${ex ? (ex.found ? 'découvert' : ex.start ? 'gisement' : 'prospecté') : 'principal'}</span></div>`;
+    h += `<div class="hint small">${INFO[1]}</div>`;
+    h += `<div class="hpline"><div class="bar big"><i style="width:${Math.round(pct * 100)}%"></i></div><span>${R.ico} <b>${fmt(left)}</b> / ${fmt(max)}</span></div>`;
+    h += `<div class="hint small">${left <= 0 ? '⚠ Épuisé' : workers ? `👷 ${workers} au travail · épuisé dans ~${eta} min` : 'Personne n\'y travaille en ce moment'}${t === 'wood' && T.regen ? ` · repousse +${T.regen}/s` : ''}</div>`;
+    h += `<div class="hint small">Total ${R.name.toLowerCase()} restant (tous gisements) : <b>${fmt(E.totalDeposit(t))}</b></div>`;
+    return h;
+  }
   patchCard(p) {
     const sim = this.sim, F = sim.frontier, E = sim.eco, can = F.canClear(p);
     let h = `<div class="ptitle">🌲 Forêt vierge<span class="lvl">${p.state === 'clearing' ? 'défrichage ' + Math.round(100 * (1 - p.wood / FRONTIER.wood)) + ' %' : p.state === 'open' ? 'défrichée' : 'intacte'}</span></div>`;
@@ -381,7 +411,7 @@ export class UI {
     const c = this.card; if (!c) return;
     let html = '';
     if (c.kind === 'struct') { const s = this.sim.build.get(c.id); if (!s) { this.closeCard(); return; } html = this.structCard(s); }
-    else if (c.kind === 'sector') html = this.sectorCard(c.id); else if (c.kind === 'squad') { const q = this.sim.squad(c.id); if (!q) { this.closeCard(); return; } html = this.squadCard(q); } else if (c.kind === 'patch') html = this.patchCard(this.sim.frontier.patches[c.id]); else html = this.castleCard();
+    else if (c.kind === 'sector') html = this.sectorCard(c.id); else if (c.kind === 'squad') { const q = this.sim.squad(c.id); if (!q) { this.closeCard(); return; } html = this.squadCard(q); } else if (c.kind === 'patch') html = this.patchCard(this.sim.frontier.patches[c.id]); else if (c.kind === 'res') html = this.resCard(c); else html = this.castleCard();
     html = `<button class="x" data-a="close">✕</button>` + html;
     this.setHtml('card', this.cardEl, html);
   }
@@ -435,7 +465,7 @@ export class UI {
     const c = this.card; if (!c) return;
     let a;
     if (c.kind === 'struct') { const s = this.sim.build.get(c.id); if (!s) return; a = this.rd.project(s.x, 4, s.z); }
-    else if (c.kind === 'sector') a = this.rd.project(c.id * 40 + 20, 6, 146 + wallOff(c.id * 40 + 20)); else if (c.kind === 'squad') { const q = this.sim.squad(c.id); if (!q) return; a = this.rd.project(q.x, 4, q.z); } else if (c.kind === 'patch') { const p = this.sim.frontier.patches[c.id]; a = this.rd.project(p.x, 5, p.z); } else a = this.rd.project(CASTLE.x, 14, CASTLE.z);
+    else if (c.kind === 'sector') a = this.rd.project(c.id * 40 + 20, 6, 146 + wallOff(c.id * 40 + 20)); else if (c.kind === 'squad') { const q = this.sim.squad(c.id); if (!q) return; a = this.rd.project(q.x, 4, q.z); } else if (c.kind === 'patch') { const p = this.sim.frontier.patches[c.id]; a = this.rd.project(p.x, 5, p.z); } else if (c.kind === 'res') { const o = this.resPos(c); a = this.rd.project(o.x, 3, o.z); } else a = this.rd.project(CASTLE.x, 14, CASTLE.z);
     const w = this.cardEl.offsetWidth, h = this.cardEl.offsetHeight, topMin = 96, botMax = vh - 90;
     let top = a.y - h - 26; if (top < topMin) top = Math.min(botMax - h, a.y + 30); if (top + h > botMax) top = Math.max(topMin, botMax - h);
     this.cardEl.style.left = Math.min(vw - w - 8, Math.max(8, a.x - w / 2)) + 'px'; this.cardEl.style.top = top + 'px';
@@ -466,6 +496,7 @@ export class UI {
     }
     if (s.type === 'tower') { const st = B.towerStats(s, sim); h += `<div class="hint">🏹 <b>${st.dmg.toFixed(0)}</b> dégâts · portée <b>${st.range.toFixed(0)} m</b> · <b>${(1 / st.rate).toFixed(1)}</b> tirs/s</div><div class="hint small">${s.fixed ? 'Tour de la muraille : défend seule, améliorable.' : def.info}</div>`; }
     else h += `<div class="hint small">${def.info}</div>`;
+    if (['mine', 'quarry', 'sawmill'].includes(s.type) && s.state === 'built') { const o = s.type === 'mine' ? this.resSites().filter(q => q.t !== 'stone' && q.t !== 'wood').sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))[0] : { t: s.type === 'quarry' ? 'stone' : 'wood' }; if (o) h += `<div class="hint small">${RES_INFO[o.t].ico} Reste à extraire : <b>${fmt(E.totalDeposit(o.t))}</b> ${RES_INFO[o.t].name.toLowerCase()} · touche un gisement pour le détail</div>`; }
     if (s.type === 'house') { const U = BUILD.houseUnits, here = Math.floor(ECON.popPerHouse * (U[s.level] || 0)), nx = s.level < 4 ? Math.floor(ECON.popPerHouse * U[s.level + 1]) : 0; h += `<div class="hint small">🏠 Loge <b>${here}</b> personnes${nx ? ` · niv. ${s.level + 1} : <b>${nx}</b>` : ''} · population ${E.population()}/${E.popCap()}</div>`; }
     for (const t of TB[s.type] || []) h += this.taskRow(t);
     if (TRAIN_BUILDINGS.includes(s.type) && s.level) h += this.productionHtml(s);
