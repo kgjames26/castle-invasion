@@ -17,6 +17,8 @@ export class Build {
     this.items.push(this.make('prison', QUARANTINE.x, QUARANTINE.z, 0, { fixed: true, wt: 100, level: 1, state: 'built', progress: 1 }));   // zone de quarantaine : fixe, à gauche de la placette
     this.syncLevels();
   }
+  // pendant une vague (alerte + assaut), les chantiers sont en pause
+  paused() { const p = this.sim.phase; return p === 'assault' || p === 'alert'; }
   make(type, x, z, rot, o = {}) {
     return { id: this.nextId++, type, x, z, rot, level: 0, state: 'site', progress: 0, work: 0, workers: 1, paid: null, fixed: false, wt: -1, cd: 0, born: 0, ...o };
   }
@@ -164,7 +166,7 @@ export class Build {
       crew.forEach((v, k) => { const [bx, bz] = this.builderSpot(s, k); v.bx = bx; v.bz = bz; });
       let n = 0; for (const v of crew) if (v.state === 'building') n++;
       s.crew = n;
-      if (n > 0) {
+      if (n > 0 && !this.paused()) {
         s.progress += dt * Math.pow(n, BUILD.workerExp) * (1 + UPGRADES.apprentice.per * (this.sim.eco.up.apprentice || 0)) / s.work;
         if (s.progress >= 1) this.finish(s);
       }

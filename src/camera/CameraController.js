@@ -12,7 +12,7 @@ export class CameraController {
     this.ptrs = new Map(); this.ray = new THREE.Raycaster(); this.plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     this.keys = new Set(); this.drag = null; this.pinch = null; this.moved = 0;
     dom.addEventListener('pointerdown', e => this.down(e)); dom.addEventListener('pointermove', e => this.move(e));
-    dom.addEventListener('pointerup', e => this.up(e)); dom.addEventListener('pointercancel', e => this.up(e, true));
+    dom.addEventListener('pointerup', e => this.up(e)); dom.addEventListener('pointercancel', e => this.up(e, true)); dom.addEventListener('lostpointercapture', e => { if (this.ptrs.has(e.pointerId)) this.up(e, true); });
     dom.addEventListener('wheel', e => { e.preventDefault(); this.setZoom(this.zoom * (e.deltaY > 0 ? 1.1 : 0.9)); }, { passive: false });
     addEventListener('keydown', e => { const k = e.key.toLowerCase(); if (k === 'r' && !e.repeat && e.target === document.body) this.turn(); this.keys.add(k); }); addEventListener('keyup', e => this.keys.delete(e.key.toLowerCase()));
   }
@@ -35,6 +35,8 @@ export class CameraController {
     this.ray.setFromCamera(ndc, this.cam); const p = new THREE.Vector3(); return this.ray.ray.intersectPlane(this.plane, p) ? p : null;
   }
   down(e) {
+    // souris : seul le bouton gauche agit, et un seul pointeur existe (un relâchement perdu — menu contextuel, sortie de fenêtre — laissait un pointeur fantôme qui faisait croire à un pincement : plus de clic possible)
+    if (e.pointerType === 'mouse') { if (e.button !== 0) return; this.ptrs.clear(); this.pinch = null; }
     this.dom.setPointerCapture(e.pointerId); this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); this.moved = 0; this.focus = null;
     if (this.ptrs.size === 1) { this.drag = this.worldAt(e.clientX, e.clientY); this.gdrag = !!(this.drag && this.ghostHit && this.ghostHit(this.drag.x, this.drag.z)); if (this.gdrag) this.drag = null; }
     else if (this.ptrs.size === 2) { const [a, b] = [...this.ptrs.values()]; this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: this.zoom }; this.drag = null; }

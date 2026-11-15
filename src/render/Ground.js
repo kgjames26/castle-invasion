@@ -65,7 +65,11 @@ export function groundMaterial(colorMap, splatMap, opts = {}) {
       .replace('#include <map_fragment>', `#include <map_fragment>
         {
           vec4 sp = texture2D( uSplat, vMapUv );
-          float wd = sp.r, wp = sp.g, wg = max( 0.0, 1.0 - wd - wp );
+          float wd = sp.r, wp = sp.g;
+          // lisière organique : un bruit déforme la limite herbe / autre sol (seulement là où les deux se mélangent)
+          float nz = texture2D( uDirt, vGW * 0.045 + 0.61 ).r - 0.5 + ( texture2D( uGrass, vGW * 0.19 ).r - 0.5 ) * 0.6;
+          float ng = clamp( wd + wp, 0.0, 1.0 ), ng2 = clamp( ng + nz * ng * ( 1.0 - ng ) * 5.0, 0.0, 1.0 ), kq = ng > 0.001 ? ng2 / ng : 0.0;
+          wd *= kq; wp *= kq; float wg = max( 0.0, 1.0 - wd - wp );
           float g1 = texture2D( uGrass, vGW * 0.42 ).r, g2 = texture2D( uGrass, vGW * 0.113 + 0.37 ).r;
           float d1 = texture2D( uDirt, vGW * 0.3 ).r, d2 = texture2D( uDirt, vGW * 0.071 + 0.19 ).r;
           float p1 = texture2D( uPave, vGW * 0.28 ).r;

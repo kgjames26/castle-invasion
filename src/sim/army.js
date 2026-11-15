@@ -1,16 +1,15 @@
 // Armée : réserve, archers de garnison (chemin de ronde), ESCOUADES avec formations (garnison ou sortie sur le champ de bataille),
 // files d'entraînement. Les escouades agissent comme une seule entité : points de vie en réserve commune, membres dessinés par formation.
 import { INFECTION, GRADES, gradeFor } from '../content/medieval.js';
-import { SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_XS, WALL_Z0, WALL_Z1, WALK_H, PLAZA, sectorOfX, wallOff } from './constants.js';
+import { STAIR_OFF, SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_XS, WALL_Z0, WALL_Z1, WALK_H, PLAZA, sectorOfX, wallOff } from './constants.js';
 import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN, RANKS, UPGRADES, INFIRMARY } from '../content/medieval.js';
 
 const tmp = new Int32Array(1024), tmp2 = new Int32Array(1024);
 export const MOVE_Z0 = WALL_Z1 + 4, MOVE_Z1 = 208;          // zone où l'on peut poster une escouade à l'intérieur (cour + placette)
-// secteur central : la grande porte (x 89-111) n'a pas de chemin de ronde au-dessus, les archers se placent de part et d'autre, en partant d'elle
-export const archerPos = (s, k) => { let x = s * SECTOR_W + ((k >> 1) + 0.5) * SECTOR_W / (ARCHER_SLOTS / 2); if (s === 2) { const j = k >> 1, half = ARCHER_SLOTS / 4, m = j >> 1; x = j % 2 ? 111 + (m + 0.5) * 8.6 / half : 89 - (m + 0.5) * 8.6 / half; } return { x, z: ARCHER_Z + wallOff(x) + (k & 1) * 2.4 - 1.2 }; };
+export const archerPos = (s, k) => { let x = s * SECTOR_W + ((k >> 1) + 0.5) * SECTOR_W / (ARCHER_SLOTS / 2); return { x, z: ARCHER_Z + wallOff(x) + (k & 1) * 2.4 - 1.2 }; };
 // ——— archers : montée par l'escalier le plus proche, puis marche sur le chemin de ronde jusqu'à leur créneau ———
 export const STAIR_Z0 = 159, STAIR_Z1 = 150.2, ARCHER_SPEED = 5;
-export const stairX = (s, k) => s * SECTOR_W + (archerPos(s, k).x < s * SECTOR_W + SECTOR_W / 2 ? 8 : 32);
+export const stairX = (s, k) => s * SECTOR_W + STAIR_OFF(s)[archerPos(s, k).x < s * SECTOR_W + SECTOR_W / 2 ? 0 : 1];
 const _ap = { x: 0, z: 0, y: 0, rot: Math.PI, len: 0 };
 // position de l'archer k du secteur s après avoir parcouru `prog` mètres (au-delà de la longueur : à son créneau, face au nord)
 export function archerPose(s, k, prog) {
@@ -75,6 +74,7 @@ export class Army {
   // rang d'un type d'unité = niveau de son bâtiment d'entraînement (1 à 5) ; coût de production multiplié en conséquence
   rank(sim, type) { return RANKS[Math.max(0, Math.min(RANKS.length, sim.eco.level[UNITS[type].from]) - 1)]; }
   unitCost(sim, type) { const k = this.rank(sim, type).cost, o = {}; for (const r in UNITS[type].cost) o[r] = Math.round(UNITS[type].cost[r] * k); return o; }
+  parallel(sim, b) { return TRAIN.parallel[Math.min(3, sim.eco.level[b] || 0)] || 1; }
   queueMax(sim, b) { return TRAIN.baseQueue + TRAIN.queuePerLevel * (sim.eco.level[b] - 1); }
   trainTime(sim, b, type) { return UNITS[type].train / (1 + TRAIN.speedPerLevel * (sim.eco.level[b] - 1)); }
   canTrain(sim, type) {
@@ -96,7 +96,12 @@ export class Army {
   }
   // la file attend tant que le bâtiment est bloqué (déplacé) ou en cours de construction
   trainTick(dt, sim) {
-    for (const b of TRAIN_BUILDINGS) { const q = this.queues[b]; if (!q.length || sim.eco.level[b] < 1) continue; q[0].t -= dt; if (q[0].t <= 0) { this.reserve[q[0].type]++; q.shift(); } }
+    for (const b of TRAIN_BUILDINGS) {
+      const q = this.queues[b], lv = sim.eco.level[b]; if (!q.length || lv < 1) continue;
+      const par = Math.min(q.length, TRAIN.parallel[Math.min(3, lv)] || 1);       // plusieurs recrues formées en même temps
+      for (let i = 0; i < par; i++) q[i].t -= dt;
+      for (let i = par - 1; i >= 0; i--) if (q[i].t <= 0) { this.reserve[q[i].type]++; q.splice(i, 1); }
+    }
   }
   // ——— recrues : chaque unité créée sort de son bâtiment et marche jusqu'au point de ralliement (placette par défaut) ———
   setRally(x, z) { this.rally.x = Math.min(196, Math.max(4, x)); this.rally.z = Math.min(310, Math.max(WALL_Z1 + 8, z)); }

@@ -216,3 +216,12 @@ h2,h3,.ptitle,.wave b,.tile b,.dk span { font-family:var(--serif); }
 @keyframes pglow { 50% { box-shadow:0 0 0 3px #f0d27a88; } }
 .bar.prog i { background:repeating-linear-gradient(-45deg,#3f7f45 0 8px,#5aa060 8px 16px); background-size:22px 22px; animation:pstripe 0.8s linear infinite; } @keyframes pstripe { to { background-position:22px 0; } }
 .rb.on { background:linear-gradient(180deg,#f0d27a,#cf9d38); }
+.minibars { display:grid; grid-template-columns:repeat(auto-fill,minmax(40px,1fr)); gap:3px; margin:4px 0; } .minibars .bar { height:6px; }
+
+#phase-banner { position: fixed; left: 50%; top: 22%; transform: translate(-50%, -12px); z-index: 40; pointer-events: none; opacity: 0; transition: opacity .35s, transform .35s; text-align: center; padding: 12px 28px; border-radius: 14px; background: rgba(20, 30, 18, .82); border: 1px solid rgba(160, 220, 140, .5); color: #eef6e6; box-shadow: 0 8px 30px rgba(0,0,0,.4); }
+#phase-banner.on { opacity: 1; transform: translate(-50%, 0); }
+#phase-banner b { display: block; font-size: 22px; letter-spacing: .5px; }
+#phase-banner small { display: block; font-size: 13px; opacity: .85; margin-top: 2px; }
+#phase-banner[data-p=alert], #phase-banner[data-p=assault] { background: rgba(48, 14, 12, .85); border-color: rgba(240, 120, 90, .6); }
+
+.isvg { width: 1.3em; height: 1.3em; vertical-align: -0.2em; display: inline-block; }

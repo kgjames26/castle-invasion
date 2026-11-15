@@ -5,12 +5,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { SEGS, SEG_W, SECTORS, SECTOR_W, WALK_H, GATE_SEGS, wallOff, wallSlope } from '../sim/constants.js';
+import { SEGS, SEG_W, SECTORS, SECTOR_W, WALK_H, GATE_SEGS, STAIR_OFF, wallOff, wallSlope } from '../sim/constants.js';
 import { STAIR_Z0, STAIR_Z1 } from '../sim/army.js';
 import { stoneMaterial } from './Stone.js';
 
 // GATE_HS : hauteur de chaque passage (la porte centrale, la grande porte, est plus haute) ; GATE_TH : hauteur des châtelets
-export const GATE_HS = [4.4, 8.6, 4.4], GATE_TH = [10.5, 16.5, 10.5];   // grande porte : passage 2× plus haut que la muraille n'en laisse aux autres
+export const GATE_HS = [4.4, 4.4, 4.4], GATE_TH = [10.5, 11.5, 10.5];   // même hauteur partout ; la grande porte est 2× plus LARGE (GATE_SEGS)
 export const WALL_H = 6.4, GATE_H = 4.4, Z_OUT = 143.5, Z_IN = 148.9, Z_MID = 146.2, THICK = 2.0, STEPS = 12;
 // muraille en ARC (v2.1) : un point exprimé dans le repère « muraille droite » (x le long du mur, z en profondeur) est reporté sur l'arc :
 // décalé vers le nord de wallOff(x) et tourné selon la pente locale, pour que chaque pièce suive la courbe.
@@ -20,7 +20,7 @@ export function arcPoint(x, z, out = {}) {
 }
 export function arcObject(o) { const p = arcPoint(o.position.x, o.position.z); o.position.x = p.x; o.position.z = p.z; o.rotation.y += p.ry; return o; }
 const _ap = {};
-export const STAIR_XS = Array.from({ length: SECTORS * 2 }, (_, i) => ((i / 2) | 0) * SECTOR_W + (i % 2 ? 32 : 8));
+export const STAIR_XS = Array.from({ length: SECTORS * 2 }, (_, i) => ((i / 2) | 0) * SECTOR_W + STAIR_OFF((i / 2) | 0)[i % 2]);
 
 export async function loadWall(url) {
   const g = await new GLTFLoader().loadAsync(url); let mesh = null; g.scene.updateMatrixWorld(true); g.scene.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
@@ -42,7 +42,7 @@ export class WallView {
     const bars = [], iron = (w, h, d, x, y, z) => { const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y, z); bars.push(g); };
     const GW = SEG_W * 2 - 0.4; for (let k = 0; k <= 8; k++) { const x = -GW / 2 + k * GW / 8; iron(0.16, GATE_H, 0.16, x, GATE_H / 2, 0); const c = new THREE.ConeGeometry(0.14, 0.4, 4); c.rotateX(Math.PI); c.translate(x, -0.15, 0); bars.push(c); }
     for (let k = 0; k < 5; k++) iron(GW, 0.14, 0.2, 0, 0.5 + k * (GATE_H - 0.8) / 4, 0);
-    this.portcullis = new THREE.InstancedMesh(mergeGeometries(bars.map(g => g.index ? g.toNonIndexed() : g), false), fog(new THREE.MeshLambertMaterial({ color: 0x3a3c42, flatShading: true })), GATE_SEGS.length); this.portcullis.frustumCulled = false; scene.add(this.portcullis);
+    this.portcullis = new THREE.InstancedMesh(mergeGeometries(bars.map(g => g.index ? g.toNonIndexed() : g), false), fog(new THREE.MeshLambertMaterial({ color: 0x3a3c42, flatShading: true })), GATE_SEGS.reduce((n, [a, b]) => n + (b - a + 1) / 2, 0)); this.portcullis.frustumCulled = false;   // une herse de 10 m par paire de tronçons (grande porte : 2 herses) scene.add(this.portcullis);
     // châtelets : tours, salle au-dessus du passage, créneaux, toits, bannières (statiques : construits une fois)
     this.gatehouse = new THREE.Group(); scene.add(this.gatehouse);
     const st = stoneMaterial(0xb0aca4), dark = stoneMaterial(0x6a6660), roof = fog(new THREE.MeshLambertMaterial({ color: 0x7a3a2a, flatShading: true })), wood = fog(new THREE.MeshLambertMaterial({ color: 0x4a3426, flatShading: true }));
@@ -96,10 +96,11 @@ export class WallView {
     }
     this.outer.count = n; this.core.count = n; this.inner.count = n - lintels; this.leaves.count = nl;
     // herses : montent dans le châtelet à l'ouverture ; disparaissent si la porte est détruite
-    this.gates.forEach((G, k) => {
-      const GH = GATE_HS[G.g], intact = wall.hp[G.segs[0]] > 0 || wall.hp[G.segs[1]] > 0, up = ease(gates[G.g]) * (GH - 0.3);
-      this.place(this.portcullis, k, (G.x0 + G.x1) / 2, intact ? up : -20, Z_OUT + 0.15, 0, 1, GH / GATE_H, 1.25);
-      const r = Math.min(wall.hp[G.segs[0]] / wall.segMax(G.segs[0]), wall.hp[G.segs[1]] / wall.segMax(G.segs[1])); this.portcullis.setColorAt(k, this.c.setRGB(1, 1, 1).lerp(this.c2, (1 - Math.max(0, r)) * 0.8));
+    let k = 0;
+    this.gates.forEach(G => {
+      const GH = GATE_HS[G.g], intact = wall.hp[G.segs[0]] > 0 || wall.hp[G.segs[1]] > 0, up = ease(gates[G.g]) * (GH - 0.3), nh = Math.round((G.x1 - G.x0) / 10);
+      const r = Math.min(wall.hp[G.segs[0]] / wall.segMax(G.segs[0]), wall.hp[G.segs[1]] / wall.segMax(G.segs[1]));
+      for (let h = 0; h < nh; h++, k++) { this.place(this.portcullis, k, G.x0 + 5 + h * 10, intact ? up : -20, Z_OUT + 0.15, 0, 1, GH / GATE_H, 1.25); this.portcullis.setColorAt(k, this.c.setRGB(1, 1, 1).lerp(this.c2, (1 - Math.max(0, r)) * 0.8)); }
     });
     this.portcullis.instanceMatrix.needsUpdate = true; if (this.portcullis.instanceColor) this.portcullis.instanceColor.needsUpdate = true;
     // créneaux (3 merlons par tronçon intact, plus hauts selon le niveau) et contreforts sur la face nord

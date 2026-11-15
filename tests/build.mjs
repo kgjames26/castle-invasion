@@ -3,7 +3,8 @@ import { Simulation } from '../src/sim/simulation.js';
 import { serialize, restore } from '../src/sim/save.js';
 const ok = (c, m) => { if (!c) { console.log('ÉCHEC :', m); process.exitCode = 1; } else console.log('ok  :', m); };
 const sim = new Simulation(), E = sim.eco, B = sim.build;
-const run = s => { for (let i = 0; i < s * 20; i++) sim.tick(); };
+let calm = true;   // les chantiers ne progressent qu'en temps calme : on le prolonge pour la partie construction
+const run = s => { for (let i = 0; i < s * 20; i++) { if (calm && sim.phase === 'prep') sim.timer = Math.max(sim.timer, 5); sim.tick(); } };
 ok(B.items.filter(s => s.type === 'tower' && s.fixed).length === 6 && B.items.some(s => s.type === 'prison' && s.fixed) && B.items.length === 7, '6 tours de muraille et la zone de quarantaine au départ');
 ok(Object.entries(E.level).every(([k, l]) => k === 'prison' ? l === 1 : l === 0) && E.houses === 0, 'aucun autre bâtiment au départ (château et quarantaine)');
 ok(E.idleCount() === 2, 'deux villageois libres au départ : ' + E.idleCount());

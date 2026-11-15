@@ -20,7 +20,10 @@ export const MAX_Z = 4000;                                       // capacité d'
 export const ARCHER_SLOTS = 40;                                 // archers par secteur (2 rangées sur le chemin de ronde)
 export const ARCHER_Z = 146, GARRISON_Z = 164;                  // disposition (nord → sud) : champ de bataille · muraille 142-150 · armée de garnison 160-185 · placette 188-208 · village
 // trois portes : gauche, centre, droite (tronçons de 5 m ; évitent les escaliers des archers)
-export const GATE_SEGS = [[3, 4], [19, 20], [35, 36]];
+// portes : 2 tronçons (10 m) sur les côtés ; la grande porte centrale est 2× plus large (4 tronçons, 20 m)
+export const GATE_SEGS = [[3, 4], [18, 21], [35, 36]];
+// escaliers d'accès au chemin de ronde (décalage dans le secteur) : au centre, écartés pour laisser la place à la grande porte et à ses tours
+export const STAIR_OFF = s => s === 2 ? [4, 36] : [8, 32];
 export const GATE_XS = GATE_SEGS.map(([a, b]) => (a + b + 1) * SEG_W / 2);
 export const WALK_H = 5.2;                                       // hauteur du chemin de ronde
 export const PLAZA = { x: 100, z: 198, hw: 28, hd: 10 };         // placette : point de ralliement par défaut des unités créées

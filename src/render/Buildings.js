@@ -14,13 +14,26 @@ const kitModel = (kit, name, sc, seed = 0) => { const g = new THREE.Group(), m =
 
 // Enseigne : médaillon rond sur un mât, avec l'icône du métier — se lit de loin, d'un coup d'œil.
 const signCache = new Map();
+// Caserne : écu rouge et épées croisées, dessinés (pas d'emoji)
+function drawBarracksSign(g) {
+  g.save(); g.translate(64, 66); const k = 2.6;
+  g.beginPath(); g.moveTo(0, -12 * k); g.lineTo(11 * k, -8 * k); g.lineTo(11 * k, 0); g.bezierCurveTo(11 * k, 7 * k, 6 * k, 11 * k, 0, 13 * k); g.bezierCurveTo(-6 * k, 11 * k, -11 * k, 7 * k, -11 * k, 0); g.lineTo(-11 * k, -8 * k); g.closePath();
+  g.fillStyle = '#8a2f2f'; g.fill(); g.lineWidth = 4; g.strokeStyle = '#3a1a10'; g.stroke();
+  g.beginPath(); g.moveTo(0, -9.6 * k); g.lineTo(9 * k, -6.4 * k); g.lineTo(9 * k, 0); g.bezierCurveTo(9 * k, 5.2 * k, 5 * k, 9 * k, 0, 10.8 * k); g.closePath(); g.fillStyle = '#a84040'; g.fill();
+  g.lineCap = 'round';
+  const sword = s => { g.save(); g.scale(s, 1); g.rotate(Math.PI / 4);
+    g.fillStyle = '#e8e8ee'; g.beginPath(); g.moveTo(0, -17 * k / 1.4); g.lineTo(2.2, -14 * k / 1.4); g.lineTo(2.2, 9 * k / 1.4); g.lineTo(-2.2, 9 * k / 1.4); g.lineTo(-2.2, -14 * k / 1.4); g.closePath(); g.fill(); g.strokeStyle = '#6a7080'; g.lineWidth = 1.2; g.stroke();
+    g.fillStyle = '#d9a63a'; g.fillRect(-8, 9 * k / 1.4, 16, 3.4); g.fillStyle = '#5a3a1c'; g.fillRect(-1.8, 9 * k / 1.4 + 3.4, 3.6, 9); g.fillStyle = '#d9a63a'; g.beginPath(); g.arc(0, 9 * k / 1.4 + 14, 3, 0, 7); g.fill(); g.restore(); };
+  sword(1); sword(-1); g.restore();
+}
 export function signSprite(ico) {
   let tex = signCache.get(ico);
   if (!tex) {
     const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
     g.fillStyle = '#3a2a1c'; g.beginPath(); g.arc(64, 64, 62, 0, 7); g.fill(); g.fillStyle = '#f4e4bc'; g.beginPath(); g.arc(64, 64, 55, 0, 7); g.fill();
     g.strokeStyle = '#b8924a'; g.lineWidth = 4; g.beginPath(); g.arc(64, 64, 49, 0, 7); g.stroke();
-    g.font = '66px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#000'; g.fillText(ico, 64, 70);
+    if (ico.startsWith('<svg')) drawBarracksSign(g);
+    else { g.font = '66px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#000'; g.fillText(ico, 64, 70); }
     tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; signCache.set(ico, tex);
   }
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false })); sp.scale.set(3.8, 3.8, 1); return sp;

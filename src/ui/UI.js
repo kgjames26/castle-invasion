@@ -2,7 +2,7 @@
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
 import { SECTORS, SECTOR_NAMES, SECTOR_AT, ARCHER_SLOTS, CASTLE, wallOff } from '../sim/constants.js';
-import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, INFECTION, GRADES, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP } from '../content/medieval.js';
+import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, INFECTION, GRADES, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP, BARRACKS_ICO } from '../content/medieval.js';
 import { MAGE_TIERS } from '../render/Heroes.js';
 import { FORMATS, idealFormat, quality } from '../render/config.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
@@ -50,10 +50,13 @@ export class UI {
     this.dock.addEventListener('pointerdown', e => { const b = e.target.closest('.dk'); if (b) b.classList.add('down'); });
     for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) this.dock.addEventListener(ev, () => this.dock.querySelectorAll('.down').forEach(b => b.classList.remove('down')));
     for (const el0 of [this.sheetEl, this.cardEl, this.placeEl]) {
-      el0.addEventListener('pointerdown', () => { this.pressing = true; });
+      el0.addEventListener('pointerdown', () => { this.pressing = true; this.pressEl = el0; });
       el0.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b && !b.disabled) { this.act(b.dataset.a); this.refresh(true); } });
     }
-    addEventListener('pointerup', () => { setTimeout(() => { this.pressing = false; }, 60); });
+    addEventListener('pointerup', () => { setTimeout(() => { this.pressing = false; this.pressEl = null; this.refresh(true); }, 60); });
+    // quitter la pose au clavier (Échap) ou au clic droit
+    addEventListener('keydown', e => { if (e.key === 'Escape') { if (this.mode !== 'idle') { this.cancelPlace(); this.refresh(true); } else if (this.card) this.closeCard(); else if (this.sheet) this.closeSheet(); } });
+    addEventListener('contextmenu', e => { if (this.mode !== 'idle') { e.preventDefault(); this.cancelPlace(); this.refresh(true); } });
     // glisser le fantôme de construction avec le doigt (au lieu de déplacer la caméra)
     this.cam.ghostHit = (x, z) => this.mode !== 'idle' && this.place && Math.abs(x - this.place.x) < this.halfW() + 4 && Math.abs(z - this.place.z) < this.halfD() + 4;
     this.cam.ghostMove = (x, z) => this.moveGhost(x, z);
@@ -260,6 +263,14 @@ export class UI {
     }
   }
   // toast : kind = 'info' | 'ok' | 'warn' | 'danger' (couleur et durée) ; les messages identiques consécutifs sont regroupés (×2, ×3…)
+  // Grand bandeau au changement de moment : calme (on bâtit) / vague (chantiers en pause).
+  phaseBanner(p) {
+    const T = { prep: ['🌿 Temps calme', 'Construis, recrute, prépare la défense'], alert: ['🔔 Alerte', 'La horde approche · chantiers en pause'], assault: ['⚔ Vague en cours', 'Défends la muraille · chantiers en pause'], calm: ['🕊 Vague repoussée', 'Les chantiers reprennent'] }[p];
+    if (!T) return; let el = document.getElementById('phase-banner');
+    if (!el) { el = document.createElement('div'); el.id = 'phase-banner'; document.body.appendChild(el); }
+    el.dataset.p = p; el.innerHTML = `<b>${T[0]}</b><small>${T[1]}</small>`; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
+    clearTimeout(this.pbT); this.pbT = setTimeout(() => el.classList.remove('on'), 3200);
+  }
   toast(msg, kind = 'info') {
     const last = this.toasts.lastElementChild;
     if (last && last.dataset.msg === msg && last.dataset.k === kind) { const n = (+last.dataset.n || 1) + 1; last.dataset.n = n; last.innerHTML = `${msg} <b class="tn">×${n}</b>`; clearTimeout(last._t); last._t = setTimeout(() => last.remove(), 3000); return; }
@@ -304,6 +315,7 @@ export class UI {
     $('#wave-title').textContent = `Vague ${sim.wave}` + (sim.phase === 'assault' ? ` · ${sim.zombies.n + (sim.spawn ? sim.spawn.left : 0)} 🧟` : '');
     const Lt = sim.night.light(), dn = Lt > 0.8 ? '☀' : Lt > 0.45 ? (sim.night.t < 0.5 || sim.night.t > 0.9 ? '🌅' : '🌇') : '🌙';
     $('#wave-phase').textContent = PHASES[sim.phase] + (sim.phase === 'assault' ? '' : ` · ${Math.ceil(sim.timer)} s`) + ` · ${dn}`;
+    if (this.lastPhase !== sim.phase) { if (this.lastPhase) this.phaseBanner(sim.phase); this.lastPhase = sim.phase; }
     $('#wave-phase').dataset.p = sim.phase; $('#b-skip').style.display = sim.phase === 'prep' ? '' : 'none';
     $('#castle-bar').style.width = (100 * sim.castleHp / CASTLE.hp) + '%';
     let alert = false;
@@ -323,7 +335,8 @@ export class UI {
     this.dock.style.display = this.mode === 'idle' ? '' : 'none';
     if (force || !this.pressing) { this.renderSheet(); this.renderCard(); this.renderPlace(); }
   }
-  setHtml(key, el0, html) { if (this.html[key] === html) return; const keep = el0.scrollTop; this.html[key] = html; el0.innerHTML = html; el0.scrollTop = keep; }
+  // pas de réécriture pendant un appui : sinon le bouton visé est remplacé entre pointerdown et click et le clic se perd (✖ / ✔ de la pose)
+  setHtml(key, el0, html) { if (this.html[key] === html || this.pressing && this.pressEl === el0) return; const keep = el0.scrollTop; this.html[key] = html; el0.innerHTML = html; el0.scrollTop = keep; }
   renderSheet() {
     if (!this.sheet) return;
     const body = this.sheet === 'newgame' ? this.newGameHtml() : this.sheet === 'menu' ? this.menuHtml() : this.sheet === 'build' ? this.buildSheet() : this.sheet === 'army' ? this.armyHtml() : this.sheet === 'folk' ? this.workHtml() : this.techHtml();
@@ -431,7 +444,7 @@ export class UI {
       let crew = 0; for (const v of E.villagers) if (v.job === s.id) crew++;
       const here = s.crew || 0, sec = Math.ceil((1 - s.progress) * s.work / Math.pow(Math.max(1, here), BUILD.workerExp)), free = E.idleCount();
       const what = s.state === 'site' ? 'Construction' : s.state === 'upgrading' ? `Amélioration → niv. ${s.level + 1}` : 'Remise en service (déplacé)';
-      h += `<div class="hpline"><div class="bar big"><i style="width:${Math.round(s.progress * 100)}%"></i></div><span>${Math.round(s.progress * 100)} %${here ? ` · ~${sec} s` : ''}</span></div><div class="hint small">${what}</div>
+      h += `<div class="hpline"><div class="bar big"><i style="width:${Math.round(s.progress * 100)}%"></i></div><span>${Math.round(s.progress * 100)} %${here && !this.sim.build.paused() ? ` · ~${sec} s` : ''}</span></div><div class="hint small">${what}</div>${this.sim.build.paused() ? '<div class="warn">⏸ Vague en cours : chantier en pause jusqu\'au retour du calme.</div>' : ''}
         <div class="row step"><span class="lab">👷 Ouvriers<small class="sub">${here} au travail · libres ${free}</small></span>${this.btn('−', '', `wk:${s.id}:-1`, s.workers <= 0, 'sq')}<b class="val">${s.workers}</b>${this.btn('+', '', `wk:${s.id}:1`, s.workers >= BUILD.maxWorkers || free <= 0 && crew >= s.workers, 'sq')}</div>`;
       if (s.workers > 0 && crew < s.workers && free <= 0) h += `<div class="warn">Aucun villageois libre : retire-en d'une tâche dans 👥.</div>`;
       else if (s.workers === 0) h += `<div class="warn">Aucun ouvrier : le chantier est à l'arrêt.</div>`;
@@ -487,17 +500,18 @@ export class UI {
   // production d'unités (fiche d'une caserne, d'une écurie, d'un champ de tir) : l'unité en cours passe par 4 étapes animées,
   // la file d'attente, et les boutons pour en commander d'autres ; dans la scène, les recrues s'entraînent devant le bâtiment
   productionHtml(s) {
-    const sim = this.sim, army = sim.army, E = sim.eco, q = army.queues[s.type], max = army.queueMax(sim, s.type), types = UNIT_ORDER.filter(t => UNITS[t].from === s.type);
+    const sim = this.sim, army = sim.army, E = sim.eco, q = army.queues[s.type], max = army.queueMax(sim, s.type), par = army.parallel(sim, s.type), types = UNIT_ORDER.filter(t => UNITS[t].from === s.type);
     const STEPS = { barracks: ['📜 Enrôlement', '🧥 Équipement', '⚔ Maniement de l\'épée', '✅ Prêt'], range: ['📜 Enrôlement', '🏹 Remise de l\'arc', '🎯 Tir sur cible', '✅ Prêt'], stable: ['📜 Enrôlement', '🐴 Choix du cheval', '🏇 Dressage', '✅ Prêt'] }[s.type];
     let h = '<div class="prod">';
     if (q.length) {
-      const it = q[0], f = 1 - it.t / it.full, st = Math.min(3, Math.floor(f * 4)), U = UNITS[it.type];
-      h += `<div class="pnow"><span class="pico">${U.ico}</span><div class="pbody"><b>${U.name} en formation</b><div class="psteps">${STEPS.map((x, i) => `<span class="${i < st ? 'done' : i === st ? 'cur' : ''}">${x}</span>`).join('')}</div>
-        <div class="bar big prog"><i style="width:${Math.round(f * 100)}%"></i></div><small>prêt dans ${Math.ceil(it.t)} s · il rejoindra la réserve${q.length > 1 ? ` · ensuite ${q.length - 1} en file` : ''}</small></div></div>`;
-      if (q.length > 1) h += `<div class="queue">${q.slice(1).map(x => `<span class="qi">${UNITS[x.type].ico}</span>`).join('')}</div>`;
+      const now = q.slice(0, par), f = now.reduce((a, it) => a + (1 - it.t / it.full), 0) / now.length, st = Math.min(3, Math.floor(f * 4)), U = UNITS[now[0].type], next = Math.min(...now.map(it => it.t));
+      h += `<div class="pnow"><span class="pico">${U.ico}</span><div class="pbody"><b>${now.length} ${U.name.toLowerCase()}${now.length > 1 ? 's' : ''} en formation en même temps</b><div class="psteps">${STEPS.map((x, i) => `<span class="${i < st ? 'done' : i === st ? 'cur' : ''}">${x}</span>`).join('')}</div>
+        <div class="minibars">${now.map(it => `<div class="bar prog"><i style="width:${Math.round((1 - it.t / it.full) * 100)}%"></i></div>`).join('')}</div><small>prochain prêt dans ${Math.ceil(next)} s · ${q.length - now.length} en attente</small></div></div>`;
+      if (q.length > par) h += `<div class="queue">${q.slice(par, par + 40).map(x => `<span class="qi">${UNITS[x.type].ico}</span>`).join('')}${q.length > par + 40 ? `<b>+${q.length - par - 40}</b>` : ''}</div>`;
     } else h += '<div class="hint small">Personne en formation. Commande des unités ci-dessous.</div>';
-    h += `<div class="row wrapr">${types.map(t => { const U = UNITS[t], uc = army.unitCost(sim, t), ok = army.canTrain(sim, t); return this.btn(`${U.ico} +1 ${U.name}`, ok ? `${this.cost(uc)} · 👥${U.pop}` : `niv. ${U.minLevel} requis`, `train:${t}:1`, !ok || !E.afford(uc) || E.popRoom() < U.pop || q.length >= max, 'act slim'); }).join('')}</div>`;
-    return h + `<div class="hint small">File : ${q.length}/${max} · réserve : ${types.map(t => `${UNITS[t].ico} ${army.reserve[t]}`).join(' · ')}</div></div>`;
+    for (const t of types) { const U = UNITS[t], uc = army.unitCost(sim, t), ok = army.canTrain(sim, t), room = max - q.length;
+      h += `<div class="row wrapr"><span class="lab">${U.ico} ${U.name}<small class="sub">${ok ? `${this.cost(uc)} · 👥${U.pop} chacun` : `niv. ${U.minLevel} requis`}</small></span>${[1, 5, 15].map(n => this.btn(`+${n}`, n === 15 ? 'une escouade' : '', `train:${t}:${n}`, !ok || !E.afford(uc) || E.popRoom() < U.pop || room <= 0, 'act slim' + (n === 1 ? '' : ' sec'))).join('')}</div>`; }
+    return h + `<div class="hint small">File : <b>${q.length}/${max}</b> · ${par} formé${par > 1 ? 's' : ''} à la fois (plus avec le niveau) · réserve : ${types.map(t => `${UNITS[t].ico} ${army.reserve[t]}`).join(' · ')}</div></div>`;
   }
   // nom d'une troupe selon son grade : « Peloton de fantassins »
   unitName(q) { const t = UNITS[q.type].name.toLowerCase(); return `${GRADES[q.grade || 'escouade'].name} de ${t}s`; }
@@ -580,13 +594,13 @@ export class UI {
   armyHtml() {
     const sim = this.sim, army = sim.army, E = sim.eco, nav = this.nav.army || '';
     if (nav.startsWith('sq.')) { const q = sim.squad(+nav.slice(3)); if (q) return this.back('army', 'Troupes', 'squads') + this.squadView(q); this.nav.army = 'squads'; }
-    const views = { squads: ['🛡 Troupes', () => this.squadsHtml()], newsq: ['➕ Nouvelle troupe', () => this.newSquadHtml()], train: ['🪖 Recruter', () => this.trainHtml()], ranks: ['⭐ Rangs', () => this.ranksHtml()], magic: ['🔮 Magie', () => this.mageHtml(false)], siege: ['🛠 Siège', () => this.siegeHtml()], forge: ['🔨 Forge', () => this.forgeHtml()] };
+    const views = { squads: ['🛡 Troupes', () => this.squadsHtml()], newsq: ['➕ Nouvelle troupe', () => this.newSquadHtml()], train: [BARRACKS_ICO + ' Recruter', () => this.trainHtml()], ranks: ['⭐ Rangs', () => this.ranksHtml()], magic: ['🔮 Magie', () => this.mageHtml(false)], siege: ['🛠 Siège', () => this.siegeHtml()], forge: ['🔨 Forge', () => this.forgeHtml()] };
     const v = views[nav];
     if (v) return this.back('army', v[0], nav === 'newsq' ? 'squads' : '') + this.bittenLine() + (nav === 'squads' || nav === 'train' ? this.popLine() : '') + v[1]();
     const field = army.squads.filter(q => q.mode === 'field').length, res = ['soldier', 'heavy', 'knight', 'cavalry'].reduce((a, t) => a + (army.reserve[t] || 0), 0), queue = TRAIN_BUILDINGS.reduce((a, b) => a + (army.queues[b] ? army.queues[b].length : 0), 0);
     return this.bittenLine() + this.popLine() + this.cats('army', [
       { k: 'squads', ico: '🛡', name: 'Troupes', sub: army.squads.length ? ['escadron', 'peloton', 'escouade'].map(g => { const c = army.squads.filter(q => q.grade === g).length; return c ? `${c} ${(c > 1 ? GRADES[g].plural : GRADES[g].name).toLowerCase()}` : ''; }).filter(Boolean).join(' · ') + (field ? ` · ${field} au combat` : '') : 'aucune : formes-en une', badge: res ? `${res} en réserve` : '', alert: army.squads.some(q => army.hpRatio(q) < 0.4) },
-      { k: 'train', ico: '🪖', name: 'Recruter', sub: 'entraîner des soldats', badge: queue ? `${queue} en file` : '' },
+      { k: 'train', ico: BARRACKS_ICO, name: 'Recruter', sub: 'entraîner des soldats', badge: queue ? `${queue} en file` : '' },
       { k: 'ranks', ico: '⭐', name: 'Rangs', sub: 'rendre les unités plus fortes' },
       { k: 'magic', ico: '🔮', name: 'Magie', sub: sim.mages.list.length ? 'magicien en jeu' : 'magicien autonome' },
       { k: 'siege', ico: '🛠', name: 'Siège', sub: 'balistes, catapultes, trébuchets' },
@@ -602,7 +616,7 @@ export class UI {
   // liste des escouades : une ligne par escouade (état, santé) → toucher = ses ordres
   squadsHtml() {
     const army = this.sim.army; let h = '';
-    if (!army.squads.length) h += '<div class="hint">Aucune escouade. Recrute des soldats (🪖 Recruter), puis forme une escouade avec ta réserve.</div>';
+    if (!army.squads.length) h += '<div class="hint">Aucune escouade. Recrute des soldats (Recruter), puis forme une escouade avec ta réserve.</div>';
     h += '<div class="blist">' + army.squads.map(q => {
       const U = UNITS[q.type], st = q.mode === 'field' ? (q.fight > 0 ? '⚔ au combat' : q.way.length ? '🚶 en route vers le front' : '⚔ sur le champ de bataille') : (q.way.length ? '🚶 en route' : q.custom ? '🛡 à son poste' : `🛡 garde ${SECTOR_AT[q.sector]}`), r = army.hpRatio(q);
       return `<button class="brow sqrow${r < 0.4 ? ' hurt' : ''}" data-a="nav:army:sq.${q.id}"><span class="ci">${U.ico}</span><div class="bt"><b>${this.unitName(q)}</b> <small class="cnt">${q.n}/${army.maxN(q.type, q)}</small> <span class="lvl">${st}</span> <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '⚜ autonome' : '📯 tes ordres'}</span><div class="bar"><i style="width:${Math.round(r * 100)}%"></i></div></div><span class="go">›</span></button>`;
@@ -784,7 +798,7 @@ export class UI {
   techFull() {
     const E = this.sim.eco; let h = '<div class="tgrp">Où améliorer quoi ?</div><div class="where">' + [
       ['forge', '🔨 Forge', 'attaque et défense de chaque type d\'unité (indépendantes du rang)'], ['university', '🎓 Université', 'outils, chariots, chemins pavés, charrue, maçonnerie, apprentissage, savoir-faire des allumeurs'], ['infirmary', '🏥 Infirmerie', 'soigne les escouades au repos, sauve des blessés'], ['publicworks', '🛤 Travaux publics', 'trace des routes ; niveau = qualité de toutes les routes (terre battue, gravier, pavés)'], ['wizard', '🔮 Maison du sorcier', 'invoque le magicien ; son niveau = puissance du magicien ; Arcanes'],
-      ['barracks', '🪖 Caserne · 🐎 Écurie · 🎯 Champ de tir', 'leur niveau = rang des unités (Recrue → Légende)'], ['workshop', '🛠 Atelier de siège', 'baliste, catapulte, trébuchet ; aspect des machines'],
+      ['barracks', BARRACKS_ICO + ' Caserne · 🐎 Écurie · 🎯 Champ de tir', 'leur niveau = rang des unités (Recrue → Légende)'], ['workshop', '🛠 Atelier de siège', 'baliste, catapulte, trébuchet ; aspect des machines'],
       ['sawmill', '🪚 Scierie · ⛏ Carrière · ⛓ Mine · 🌾 Ferme', 'niveau = places et rendement ; de nouvelles installations apparaissent'],
     ].map(([b, n, d]) => `<button class="wrow" data-a="goto:${b}"><b>${n}</b><small>${d}</small></button>`).join('') + '<div class="wrow"><b>🧱 Muraille</b><small>touche un secteur pour le renforcer · 🗼 touche une tour pour l\'améliorer</small></div></div>';
     h += '<div class="tgrp">Village</div><div class="hint small">Les améliorations rendent les villageois plus rapides, plus chargés et plus efficaces — et se voient : outils plus beaux, brouettes puis charrettes, chemins pavés.</div>';

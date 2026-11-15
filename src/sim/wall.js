@@ -1,6 +1,6 @@
 import { SEGS, SEGS_PER_SECTOR, SECTORS, GATE_SEGS } from './constants.js';
 import { WALL } from '../content/medieval.js';
-const GATE_FLAT = GATE_SEGS.flat();
+const GATE_FLAT = GATE_SEGS.flatMap(([a, b]) => Array.from({ length: b - a + 1 }, (_, k) => a + k));   // tous les tronçons de chaque porte
 
 export class Wall {
   constructor() {

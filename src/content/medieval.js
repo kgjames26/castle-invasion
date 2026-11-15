@@ -82,7 +82,8 @@ export const GRADES = {
 export const GRADE_ORDER = ['escouade', 'peloton', 'escadron'];
 export const gradeFor = n => n <= 15 ? 'escouade' : n <= 50 ? 'peloton' : 'escadron';
 export const SQUAD = { sortieZ: [58, 139], garrisonLeash: 16, intercept: 80, chargeRange: 28, aggro: 9, maxSquads: 40 };
-export const TRAIN = { baseQueue: 5, queuePerLevel: 5, speedPerLevel: 0.25 };
+// entraînement (v2.9) : grande file d'attente et plusieurs recrues formées EN MÊME TEMPS (parallel[niveau du bâtiment])
+export const TRAIN = { baseQueue: 30, queuePerLevel: 20, speedPerLevel: 0.25, parallel: [0, 3, 5, 8] };
 export const WALL = {
   segHp: 400, gateHp: 900,
   maxLevel: 5, levelHpBonus: 0.25, levelDmgCut: 0.10,
@@ -130,6 +131,8 @@ export const TASKS = {
   fire:   { name: 'Équipe des feux', ico: '🔥', building: null, slots: 12 },                                                         // allument et ravitaillent les braseros
 };
 // Bâtiments : niveau 0 = à construire. Coût du niveau N+1 = base × (N+1).
+// Symbole dessiné de la caserne : écu rouge et deux épées croisées (l'emoji casque s'affichait mal selon les appareils)
+export const BARRACKS_ICO = '<svg class="isvg" viewBox="0 0 32 32" aria-label="Caserne"><path d="M16 4 L27 8 V16 C27 22.5 22 27 16 29 C10 27 5 22.5 5 16 V8 Z" fill="#8a2f2f" stroke="#3a1a10" stroke-width="1.6"/><path d="M16 6.4 L25 9.6 V16 C25 21.2 21 25 16 26.8 Z" fill="#a84040"/><g stroke-linecap="round"><path d="M9.5 9.5 L22.5 22.5 M22.5 9.5 L9.5 22.5" stroke="#e8e8ee" stroke-width="2.4"/><path d="M9.5 9.5 L22.5 22.5 M22.5 9.5 L9.5 22.5" stroke="#9aa0ac" stroke-width="0.8"/><path d="M19.3 23.7 L23.7 19.3 M8.3 19.3 L12.7 23.7" stroke="#d9a63a" stroke-width="2.2"/></g><circle cx="23.6" cy="23.6" r="1.4" fill="#d9a63a"/><circle cx="8.4" cy="23.6" r="1.4" fill="#d9a63a"/></svg>';
 export const BUILDINGS = {   // group: 'eco' (onglet Village) ou 'army' (onglet Armée)
   sawmill:   { time: 25, base: 3, name: 'Scierie',   ico: '🪚', group: 'eco', start: 0, cost: { wood: 60 },             pos: { x: 40,  z: 262 }, size: [9, 5, 7],  color: 0x9b6a3a, info: 'Emplacements bûcherons · +15 % de rendement par niveau' },
   quarry:    { time: 25, base: 3, name: 'Carrière',  ico: '⛏', group: 'eco', start: 0, cost: { wood: 60 },             pos: { x: 160, z: 262 }, size: [9, 5, 7],  color: 0x8a8d92, info: 'Emplacements carriers · +15 % de rendement par niveau' },
@@ -141,7 +144,7 @@ export const BUILDINGS = {   // group: 'eco' (onglet Village) ou 'army' (onglet 
 };
 // Bâtiments militaires (onglet Armée) : le niveau accélère l'entraînement (+25 %/niveau) et agrandit la file.
 export const ARMY_BUILDINGS = {
-  barracks: { time: 45, base: 0, name: 'Caserne',      ico: '🪖', group: 'army', start: 0, cost: { wood: 100, stone: 50 }, max: 5, pos: { x: 36,  z: 224 }, size: [16, 5, 11], color: 0x8a4545, info: 'Fantassins · Lourds dès le niveau 2 · Chevaliers dès le niveau 3' },
+  barracks: { time: 45, base: 0, name: 'Caserne',      ico: BARRACKS_ICO, group: 'army', start: 0, cost: { wood: 100, stone: 50 }, max: 5, pos: { x: 36,  z: 224 }, size: [16, 5, 11], color: 0x8a4545, info: 'Fantassins · Lourds dès le niveau 2 · Chevaliers dès le niveau 3' },
   stable:   { time: 45, base: 0, name: 'Écurie',       ico: '🐎', group: 'army', start: 0, cost: { wood: 120, stone: 40 }, max: 5, pos: { x: 164, z: 224 }, size: [16, 5, 11], color: 0x7a5a3a, info: 'Cavaliers' },
   range:    { time: 35, base: 0, name: 'Champ de tir', ico: '🎯', group: 'army', start: 0, cost: { wood: 90, stone: 30 },  max: 5, pos: { x: 100, z: 224 }, size: [18, 3, 9],  color: 0x4a6f4a, info: 'Archers' },
   forge:    { time: 50, base: 0, name: 'Forge',        ico: '🔨', group: 'army', start: 0, max: 3, cost: { wood: 80, stone: 80, iron: 40 }, pos: { x: 66, z: 236 }, size: [10, 6, 8], color: 0x5a4f58, info: 'Attaque et défense de chaque type d\'unité, indépendamment de son rang · niveau = plafond (2/4/6)' },
@@ -243,8 +246,11 @@ export const UPGRADES = {
   archery: { name: 'Arcs longs',        ico: '🏹', group: 'army', req: 'forge', max: 3, cost: { wood: 60, iron: 30, gold: 30 }, per: 0.10, info: 'Archers : dégâts +10 %, portée +3 m par niveau' },
 };
 
-export const PHASES = { prep: 'Préparation', alert: 'Alerte', assault: 'Assaut', calm: 'Accalmie' };
-export const TIMING = { firstPrep: 60, prep: 30, alert: 10, calm: 15 };
+export const PHASES = { prep: 'Temps calme', alert: 'Alerte', assault: 'Vague en cours', calm: 'Accalmie' };
+// deux moments (v2.9) : le TEMPS CALME (préparation + accalmie) pour construire et s'organiser, plus long ; la VAGUE (alerte + assaut), chantiers en pause
+export const TIMING = { firstPrep: 120, prep: 75, alert: 10, calm: 20 };
+// zombies : ils traînent loin de la muraille, puis se ruent dessus d'un coup (approach : distance à la muraille où ils accélèrent)
+export const ZOMBIE_PACE = { far: 0.55, rush: 1.7, approach: 42 };
 
 // Composition d'une vague (indicatif, équilibrable sans toucher au moteur)
 // Colosses : à partir de la vague 6, une chance sur deux d'en voir un (un de plus toutes les 6 vagues)

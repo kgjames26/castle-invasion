@@ -248,3 +248,13 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Zone de quarantaine** (ex-geôle) : enclos grillagé (maille de fer, barbelés, portail, cabane et garde, panneau rouge et blanc), **fixe**, tout à gauche de la placette où attend la réserve, présente dès le début ; améliorable (4 places par niveau).
 - **Archers vigilants** : hors assaut, les 3 archers les plus proches tirent sur un soldat transformé en zombie ; pendant une vague, ils restent concentrés sur la horde.
 - Garde-fou : `node tools/check-comments.mjs` repère le code avalé par un commentaire.
+
+## Phase 30 — Temps calme / vague, château fort, file d'entraînement géante
+- **Deux moments** : *Temps calme* (on bâtit, recrute, prépare) puis *Alerte* et *Vague en cours* — les chantiers se mettent en **pause** pendant l'alerte et l'assaut. Bandeau à chaque changement de moment ; temps calme allongé (120 s au départ, 75 s ensuite).
+- **Zombies** : pas traînant au loin (×0,55), puis **course soudaine** (×1,7, corps penché) à moins de 42 m de la muraille ; l'animation suit la vitesse.
+- **Herse centrale** : passage de 20 m (deux herses), même hauteur que les autres portes.
+- **Caserne** : symbole dessiné (écu rouge, épées croisées) dans l'interface et sur l'enseigne.
+- **Pose de bâtiment** : Échap ou clic droit pour quitter ; correction du clic perdu (barre réécrite pendant l'appui) et du pointeur fantôme de la souris.
+- **Château fort** procédural : enceinte crénelée, quatre tours rondes à toits coniques, châtelet à herse, donjon à échauguettes, logis, puits.
+- **Lisières** : l'herbe déborde en touffes irrégulières sur la terre et les pavés ; bord déformé par un bruit dans le shader.
+- **Entraînement** : file de 30 (+20 par niveau), 3 / 5 / 8 unités formées **en même temps** selon le niveau, boutons +1 / +5 / +15.

@@ -1,9 +1,10 @@
 // Rendu Three.js : lit l'état de la simulation, ne le modifie jamais. Géométrie provisoire (low-poly basique).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { buildCastleFort } from './Castle.js';
 import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, GATE_SEGS, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT, PLAZA, WALK_H, wallOff, wallSlope } from '../sim/constants.js';
 import { T } from '../sim/terrain.js';
-import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO, INFECTION } from '../content/medieval.js';
+import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO, INFECTION, ZOMBIE_PACE } from '../content/medieval.js';
 import { archerPos, formationLayout, archerPose, rallySlot } from '../sim/army.js';
 import { applyNorthFog } from './fog.js';
 import { StructureView } from './Structures.js';
@@ -192,12 +193,38 @@ export class Renderer {
       sp.strokeStyle = 'rgba(255,0,0,.85)'; sp.lineWidth = w * 1.1 * ks; sp.lineCap = sp.lineJoin = 'round'; sp.globalCompositeOperation = 'lighter'; sp.beginPath(); pts.forEach(([x, z], i) => i ? sp.lineTo(S(x), S(z)) : sp.moveTo(S(x), S(z))); sp.stroke(); sp.globalCompositeOperation = 'source-over';
     };
     path([[100, PLAZA.z + PLAZA.hd + 1.5], [100, 284]], 9); path([[100, 238], [40, 255]], 5); path([[100, 238], [160, 255]], 5); path([[100, 262], [182, 243]], 4.5); path([[100, 262], [18, 238]], 4.5); path([[8, 205], [192, 205]], 4); path([[100, 60], [100, 141]], 7);
+    // ——— lisières : l'herbe déborde sur la terre et les pavés, en touffes irrégulières (pas de bord net entre deux textures) ———
+    {
+      const sd = sp.getImageData(0, 0, sv.width, sv.height).data, SW = sv.width, SH = sv.height, nonG = (px, py) => { if (px < 0 || py < 0 || px >= SW || py >= SH) return 0; const o = (py * SW + px) * 4; return Math.min(255, sd[o] + sd[o + 1]) / 255; };
+      const tufts = [], cd = g.getImageData(0, 0, cv.width, cv.height).data, grassAt = (x, z) => { const px = Math.max(0, Math.min(cv.width - 1, X(x) | 0)), py = Math.max(0, Math.min(cv.height - 1, X(z) | 0)), o = (py * cv.width + px) * 4; return `rgba(${cd[o]},${cd[o + 1]},${cd[o + 2]},A)`; };
+      for (let py = 4; py < SH - 4; py += 2) for (let px = 4; px < SW - 4; px += 2) {
+        const zm = py / ks; if (zm > WALL_Z0 + wallOff(px / ks) - 1 && zm < WALL_Z1 + wallOff(px / ks) + 3) continue;   // pas sur l'emprise de la muraille
+        const c = nonG(px, py); if (c < 0.5) continue;
+        let lo = 0, gx = 0, gz = 0; for (const [dx, dy] of [[5, 0], [-5, 0], [0, 5], [0, -5], [4, 4], [-4, -4], [4, -4], [-4, 4]]) if (nonG(px + dx, py + dy) < Math.min(0.5, c - 0.4)) { lo++; gx += dx; gz += dy; }
+        if (!lo) continue; const gl = Math.hypot(gx, gz) || 1;
+        tufts.push([px / ks + rr(-0.5, 0.5), py / ks + rr(-0.5, 0.5), gx / gl, gz / gl]);
+      }
+            sp.save();   // noir opaque par-dessus : R et G (terre, pavés) baissent sans toucher à l'alpha (le shader lit le RVB non prémultiplié)
+      const eat = (x, z, rad, a) => { const gr = sp.createRadialGradient(S(x), S(z), 0, S(x), S(z), S(rad)); gr.addColorStop(0, `rgba(0,0,0,${a})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); sp.fillStyle = gr; sp.fillRect(S(x - rad), S(z - rad), S(rad * 2), S(rad * 2)); };
+      const tuft = (x, z, rad, col, a) => { const gr = g.createRadialGradient(X(x), X(z), 0, X(x), X(z), X(rad)); gr.addColorStop(0, col.replace('A', a)); gr.addColorStop(0.55, col.replace('A', a * 0.9)); gr.addColorStop(1, col.replace('A', 0)); g.fillStyle = gr; g.fillRect(X(x - rad), X(z - rad), X(rad * 2), X(rad * 2)); };   // cœur plein, bord doux
+      for (const [x, z, ux, uz] of tufts) {
+        const col = grassAt(x + ux * 3.2, z + uz * 3.2);   // la teinte de l'herbe voisine : la touffe prolonge le pré
+        const n = 2 + (r() * 4 | 0), reach = rr(0.3, 2.6);       // jusqu'où l'herbe mord sur l'autre sol, varie le long du bord
+        for (let j = 0; j < n; j++) {
+          const t = rr(-0.25, 1) * reach - 1.4, bx = x - ux * t + uz * rr(-1.2, 1.2), bz = z - uz * t - ux * rr(-1.2, 1.2),   // mesuré depuis la lisière (≈ 1,4 m côté herbe)
+            rad = rr(0.4, 1.4), a = rr(0.6, 0.95);
+          tuft(bx, bz, rad, col, a); eat(bx, bz, rad, a);
+        }
+        if (r() < 0.25) { const sx = x - ux * rr(1, 4) + rr(-1.5, 1.5), sz = z - uz * rr(1, 4) + rr(-1.5, 1.5), rad = rr(0.18, 0.45); tuft(sx, sz, rad, col, 0.85); eat(sx, sz, rad, 0.85); }   // brin isolé entre deux pavés
+      }
+      sp.restore();
+    }
     // vignettage des bords du monde
     for (const [x0, x1] of [[0, 12], [W, W - 12]]) { const gr = g.createLinearGradient(X(x0), 0, X(x1), 0); gr.addColorStop(0, 'rgba(20,30,20,.3)'); gr.addColorStop(1, 'rgba(20,30,20,0)'); g.fillStyle = gr; g.fillRect(Math.min(X(x0), X(x1)), 0, X(12), cv.height); }
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const stex = new THREE.CanvasTexture(sv); stex.colorSpace = THREE.NoColorSpace; stex.magFilter = THREE.LinearFilter;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, D), groundMaterial(tex, stex));
-    m.rotation.x = -Math.PI / 2; m.position.set(W / 2, 0, D / 2); m.receiveShadow = true; this.scene.add(m); this.groundMesh = m;
+    m.rotation.x = -Math.PI / 2; m.position.set(W / 2, 0, D / 2); m.receiveShadow = true; this.scene.add(m); this.groundMesh = m; this.groundSplat = sv;
   }
   buildTerrainProps() {
     const type = this.sim.terrain.type, rock = [], tree = [];
@@ -284,10 +311,8 @@ export class Renderer {
     if (quality.shadows) for (const v of this.struct.map.values()) if (!v.g.userData.sh) { v.g.userData.sh = 1; this.shadowize(v.g); }
   }
   buildCastle() {
-    const g = new THREE.Group(), m = lam(0xa49d8e);
-    const keep = new THREE.Mesh(new THREE.BoxGeometry(34, 16, 18), m); keep.position.set(CASTLE.x, 8, CASTLE.z); g.add(keep);
-    for (const [dx, dz] of [[-19, -10], [19, -10], [-19, 10], [19, 10]]) { const t = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 5, 22, 8), lam(0x8d877b)); t.position.set(CASTLE.x + dx, 11, CASTLE.z + dz); g.add(t); }
-    this.scene.add(g); this.keepBoxes = g;
+    // château fort procédural (v3.0), dans le style de la muraille ; le château du kit n'est plus utilisé
+    const g = buildCastleFort(CASTLE.x, CASTLE.z); this.scene.add(g); this.keepBoxes = g; this.castleFort = g;
   }
   buildEconomy() {
     this.struct = new StructureView(this.scene, this.sim, this.camera);   // toutes les structures (chantiers, bâtiments, fantôme)
@@ -605,7 +630,7 @@ export class Renderer {
     const mk = (name, cap) => { const im = new THREE.InstancedMesh(geo[name], kit.material, cap); im.frustumCulled = false; im.count = 0; this.scene.add(im); return im; };
     const put = (im, i, x, z, ry, sx, sy, sz, y = 0) => { d.position.set(x, y, z); d.rotation.set(0, ry, 0); d.scale.set(sx, sy, sz); d.updateMatrix(); im.setMatrixAt(i, d.matrix); };
     // muraille : variantes de tronçons (la porte utilise le tronçon à escalier), 5 m de long, épaisseur 6 m
-    this.wallMesh.visible = false; this.towers.visible = false; this.keepBoxes.visible = false;
+    this.wallMesh.visible = false; this.towers.visible = false;
     this.kw = { Wall1: mk('Wall1', SEGS), Wall2: mk('Wall2', SEGS), Wall3: mk('Wall3', SEGS), Wall4: mk('Wall4', 4) };
     this.kitWalls = true; this.put = put; if (this.wv) for (const k in this.kw) this.kw[k].visible = false;
     const tw = [mk('Tower1', 2), mk('Tower2', 6)]; for (const t of tw) t.material = kitMaterial(kit.material.map, 0x4a5f80, 0xb8b2a6);
@@ -613,9 +638,6 @@ export class Renderer {
     for (let i = 0; i <= SECTORS; i++) { const x = Math.min(W - 3, Math.max(3, i * SECTOR_W)); if (i === 0 || i === SECTORS) put(tw[0], a++, x, 146 + wallOff(x), -Math.atan(wallSlope(x)), 1.15, 1.15, 1.15); else put(tw[1], b++, x, 146 + wallOff(x), -Math.atan(wallSlope(x)), 1.1, 1.1, 1.1); }
     tw[0].count = a; tw[1].count = b; for (const t of tw) { t.instanceMatrix.needsUpdate = true; this.shadowize(t); }
     for (const k in this.kw) this.shadowize(this.kw[k]);
-    // château (orientation : façade vers le sud, côté village)
-    // château : +20 % (échelle 0,96) et pierre grise procédurale, à la place du blanc neige du kit
-    const castle = new THREE.Mesh(geo.Castle, stoneMaterial(0xffffff, true)); castle.position.set(CASTLE.x, 0, CASTLE.z); castle.scale.setScalar(0.96); castle.rotation.y = Math.PI / 2; this.scene.add(castle); this.castleKit = castle; this.shadowize(castle);
     this.struct.setKit(kit);   // maisons, tours, moulin, entrepôt, grenier : modèles du kit
     // monuments et décor du village
     const one = (name, x, z, ry, sc) => { const m = new THREE.Mesh(geo[name], kitMaterial(kit.material.map, 0x7a3f2a, 0xe2d6bc)); m.position.set(x, 0, z); m.rotation.y = ry; m.scale.setScalar(sc); this.scene.add(m); return m; };
@@ -743,7 +765,7 @@ export class Renderer {
       const zr = this.zRot || (this.zRot = new Float32Array(MAX_Z)), moving = dx * dx + dz * dz > 4e-6; if (moving) zr[i] = Math.atan2(dx, dz);
       const rot = moving || Z.bite[i] > 0 ? zr[i] : 0, c = Math.cos(rot), s2 = Math.sin(rot), sc = Zt.size * HUMAN_H / 1.6, o = k * 16, m = im.instanceMatrix.array;
       // morsures (v2.4) : 1 morsure debout (se penche et happe), 2 plongeon (se jette à l'horizontale), 3 déchirement (géant : se cabre, puis boit), 4 coup (lourd)
-      let pitch = 0, fwd = 0, y = 0; const bk = Z.biteK[i], bt = Z.bite[i];
+      let pitch = Z.rush[i] && Z.state[i] !== 1 && WALL_Z0 + wallOff(x) - z > -2 && WALL_Z0 + wallOff(x) - z < ZOMBIE_PACE.approach ? 0.28 : 0, fwd = 0, y = 0; const bk = Z.biteK[i], bt = Z.bite[i];   // en course : penché en avant
       if (bt > 0) {
         if (bk === 1) { const f = 1 - bt / 0.75, e = Math.sin(Math.PI * Math.min(1, f * 1.3)); pitch = 0.55 * e; fwd = 0.45 * e; }
         else if (bk === 2) { const f = 1 - bt / 1.1; pitch = f < 0.35 ? 1.4 * (f / 0.35) : 1.4; fwd = Math.min(1, f / 0.35) * 1.3; y = f < 0.35 ? 0.35 * Math.sin(Math.PI * f / 0.35) : 0.05; }
@@ -752,7 +774,8 @@ export class Renderer {
       }
       const cp = Math.cos(pitch), sp = Math.sin(pitch), px0 = x + s2 * fwd, pz0 = z + c * fwd;
       m[o] = c * sc; m[o + 1] = 0; m[o + 2] = -s2 * sc; m[o + 3] = 0; m[o + 4] = s2 * sp * sc; m[o + 5] = cp * sc; m[o + 6] = c * sp * sc; m[o + 7] = 0; m[o + 8] = s2 * cp * sc; m[o + 9] = -sp * sc; m[o + 10] = c * cp * sc; m[o + 11] = 0; m[o + 12] = px0; m[o + 13] = y; m[o + 14] = pz0; m[o + 15] = 1;
-      const cps = Z.state[i] === 1 ? 1.3 : Math.max(0.25, Zt.speed * (Z.slow[i] > 0 ? 0.4 : 1) / (1.6 * sc));
+      const dwz = WALL_Z0 + wallOff(x) - z, pace = dwz > ZOMBIE_PACE.approach ? ZOMBIE_PACE.far : dwz > -2 ? ZOMBIE_PACE.rush : 1;   // pas traînant au loin, course près du mur
+      const cps = Z.state[i] === 1 ? 1.3 : Math.max(0.25, Zt.speed * pace * (Z.slow[i] > 0 ? 0.4 : 1) / (1.6 * sc));
       im.anim.array[k] = ((clock * cps + Z.phase[i] / 6.2832) % 1) * 16;
       const hurt = Z.hp[i] / Zt.hp < 0.5 ? 0.72 : 1, tt = Z.turned[i] ? this.turnTint || (this.turnTint = new THREE.Color(0x8fa0b8)) : this.zTint[t], ca = im.instanceColor.array;   // ancien soldat : teinte de sa tunique
       if (Z.slow[i] > 0) { ca[k * 3] = 0.6; ca[k * 3 + 1] = 0.85; ca[k * 3 + 2] = 1.3; } else { ca[k * 3] = tt.r * hurt + (1 - hurt) * 0.5; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt; }   // gelé : bleuté   // blessé : plus sombre, rougeâtre
