@@ -326,3 +326,9 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Flèches au bord de l'écran vers les secteurs attaqués, percés ou visés hors champ (clic → la caméra y va et ouvre la fiche).
 - Raccourcis clavier : Espace pause, 1-4 vitesse, B bâtir, T armée, V villageois, K savoir, H aide.
 - Le tutoriel se cache pendant l'alerte et la vague.
+
+## Phase 44 — Cour du rempart et nuits lisibles
+- Cour intérieure vivante au pied de la muraille : tonneaux, caisses, bottes de foin, râteliers de lances et boucliers, piles de bûches (jamais devant les escaliers ni les portes).
+- Grandes bannières bleues et or sur la face intérieure du mur.
+- Braseros de part et d'autre des portes : flamme qui vacille et halo doux au sol la nuit.
+- Nuit au clair de lune : lumière bleutée plus présente, le champ de bataille reste lisible.

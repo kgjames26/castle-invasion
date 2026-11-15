@@ -9,6 +9,7 @@ import { palZ, moatBand } from '../sim/extras.js';
 import { applyNorthFog, patchNorthFog, fogUniforms, applyWindFog } from './fog.js';
 import { FadeRig, Rig, villagerParts, VILLAGER_STYLES, footParts, PALETTES } from './Troops.js';
 import { golemParts } from './Heroes.js';
+import { Bailey } from './Bailey.js';
 
 const lam = (c, o = {}) => applyNorthFog(new THREE.MeshLambertMaterial({ color: c, flatShading: true, ...o }));
 // ——— particules : un nuage de points (taille, couleur, opacité par particule) ———
@@ -71,7 +72,7 @@ export class ExtrasView {
     this.rd = rd; const scene = this.scene = rd.scene, sim = this.sim = rd.sim; this.d = new THREE.Object3D(); this.c = new THREE.Color(); this.t = 0;
     this.dust = new Particles(scene, 700); this.smoke = new Particles(scene, 500); this.fx = new Particles(scene, 300, THREE.AdditiveBlending);
     this.decals = new Decals(scene, 260); this.water = waterMaterial();
-    this.buildCastleMoat();
+    this.buildCastleMoat(); this.bailey = new Bailey(scene);
     // douves défensives (une bande d'eau ou de terre par secteur, suivant l'arc de la muraille)
     this.moatMeshes = [];
     // pièges
@@ -189,6 +190,7 @@ export class ExtrasView {
   }
   update(dt, alpha) {
     const sim = this.sim, X = sim.extras, Z = sim.zombies, d = this.d, c = this.c; this.t += dt; const t = this.t;
+    this.bailey.update(dt, sim.night.light());
     this.water.userData.n.offset.set(t * 0.02, t * 0.013); if (this.natWater) this.natWater.userData.n.offset.set(t * 0.012, -t * 0.009); if (this.streamWater) this.streamWater.userData.n.offset.set(0, -t * 0.35);   // le ruisseau coule
     // poussière des hordes qui chargent + traces au sol
     // (v4.1) poussière très discrète : un zombie sur cinq, rarement, voile léger

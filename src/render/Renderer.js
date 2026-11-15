@@ -339,11 +339,11 @@ export class Renderer {
     if (this.grassTime) this.grassTime.value = this.clock;
     // jour / nuit : soleil et ciel baissent progressivement ; la nuit est bleutée ; braseros, torches et feux prennent le relais
     const L = this.sim.night.light(), dusk = Math.max(0, 1 - Math.abs(L - 0.55) / 0.3);
-    this.sun.intensity = ATMOS.sunIntensity * (0.06 + 0.94 * L); this.sun.color.setHex(ATMOS.sunColor).lerp(this._dusk || (this._dusk = new THREE.Color(0xff8a4a)), dusk * 0.7);
-    this.hemi.intensity = ATMOS.hemiIntensity * (0.28 + 0.72 * L); this.hemi.color.setHex(ATMOS.hemiSky).lerp(this._nightSky || (this._nightSky = new THREE.Color(0x3a4f8a)), 1 - L);
+    this.sun.intensity = ATMOS.sunIntensity * (0.15 + 0.85 * L); this.sun.color.setHex(ATMOS.sunColor).lerp(this._dusk || (this._dusk = new THREE.Color(0xff8a4a)), dusk * 0.7);
+    this.hemi.intensity = ATMOS.hemiIntensity * (0.42 + 0.58 * L); this.hemi.color.setHex(ATMOS.hemiSky).lerp(this._nightSky || (this._nightSky = new THREE.Color(0x3a4f8a)), 1 - L);
     this.dark = 1 - L;
     // (v4.0) lumière de fin de journée : le soleil baisse et tourne vers l'ouest au crépuscule (ombres longues) ; fenêtres éclairées la nuit
-    { const A = ATMOS.shadowArea, h = 32 + 88 * L, az = -2.25 - (1 - L) * 0.8; this.sun.position.set(A.x + Math.cos(az) * 120, h, A.z + Math.sin(az) * 70 + 60); this.sun.color.lerp(this._gold || (this._gold = new THREE.Color(0xffb060)), Math.max(0, 0.55 - Math.abs(L - 0.62)) * 0.9); }
+    { const A = ATMOS.shadowArea, h = 32 + 88 * L, az = -2.25 - (1 - L) * 0.8; this.sun.position.set(A.x + Math.cos(az) * 120, h, A.z + Math.sin(az) * 70 + 60); this.sun.color.lerp(this._gold || (this._gold = new THREE.Color(0xffb060)), Math.max(0, 0.55 - Math.abs(L - 0.62)) * 0.9); this.sun.color.lerp(this._moon || (this._moon = new THREE.Color(0x8fa8e8)), Math.max(0, 0.4 - L) / 0.4 * 0.85); }   /* (v4.3) clair de lune : la nuit reste lisible */
     { const g = Math.max(0, this.dark - 0.25) * 1.3; for (const k of ['3820122', '3030610']) { const m = mats.get(k); if (m) m.emissive.setRGB(1.0 * g, 0.62 * g, 0.28 * g); } if (this.castleSlit) this.castleSlit.color.setRGB(0.09 + 0.9 * g, 0.07 + 0.55 * g, 0.05 + 0.2 * g); }
     const sim = this.sim, a = sim.phase === 'assault' || sim.phase === 'alert' ? 1 : 0; this.fogA = (this.fogA || 0) + (a - (this.fogA || 0)) * Math.min(1, dt * 0.5);
     const wx = sim.extras ? sim.extras.weather : 'clear'; this.wxF = (this.wxF || 0) + ((wx === 'fog' ? 1 : 0) - (this.wxF || 0)) * Math.min(1, dt * 0.3); this.wxR = (this.wxR || 0) + ((wx === 'rain' || wx === 'snow' ? 1 : 0) - (this.wxR || 0)) * Math.min(1, dt * 0.3);   // météo (v4.0) : brouillard plus proche, ciel couvert sous la pluie
