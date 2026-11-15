@@ -106,6 +106,9 @@ export class ExtrasView {
     this.deer = Array.from({ length: 10 }, (_, k) => { const left = k % 2 === 0, x = left ? -12 - (k % 3) * 6 : W + 12 + (k % 3) * 6, z = 40 + k * 15; return { x, z, hx: x, hz: z, ry: left ? Math.PI / 2 : -Math.PI / 2, run: 0, ph: k }; });
     // météo : pluie (traits) et neige (flocons) qui suivent la caméra
     this.rain = new Particles(scene, 900); this.weatherT = 0;
+    // (v7.0) pluie en traits : 1400 gouttes en segments inclinés qui tombent autour de la vue (les points étaient invisibles)
+    { const N = 1400, g = new THREE.BufferGeometry(); this.dropP = new Float32Array(N * 6); this.drops = Array.from({ length: N }, () => ({ x: (Math.random() - 0.5) * 150, y: Math.random() * 40, z: (Math.random() - 0.5) * 120, v: 34 + Math.random() * 12 }));
+      g.setAttribute('position', new THREE.BufferAttribute(this.dropP, 3)); this.rainL = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xb8c8de, transparent: true, opacity: 0, depthWrite: false })); this.rainL.frustumCulled = false; this.rainL.renderOrder = 6; scene.add(this.rainL); this.rainK = 0; }
     // crachats d'acide
     this.spitM = mk(new THREE.SphereGeometry(0.28, 6, 4), new THREE.MeshBasicMaterial({ color: 0xa8ff4a }), 40); this.spitM.castShadow = false;
     this.lastN = new Map();
@@ -247,7 +250,11 @@ export class ExtrasView {
       this.spitM.count = n; this.spitM.instanceMatrix.needsUpdate = true; }
     // météo : particules autour de la cible de caméra
     const wx = X.weather, cam = this.rd.camera.position, cx = this.rd.camCenter ? this.rd.camCenter.x : cam.x, cz = this.rd.camCenter ? this.rd.camCenter.z : cam.z - 40;
-    if (wx === 'rain' || wx === 'snow') { const k = wx === 'rain' ? 60 : 30; for (let q = 0; q < k * dt * 10; q++) this.rain.add(wx === 'rain' ? { x: cx + (Math.random() - 0.5) * 140, y: 30 + Math.random() * 20, z: cz + (Math.random() - 0.5) * 110, vx: 2, vy: -38, vz: 4, t: 0, life: 1.2, a: 0.45, r: 0.75, gr: 0.82, b: 0.95, s: 0.35 } : { x: cx + (Math.random() - 0.5) * 140, y: 25 + Math.random() * 15, z: cz + (Math.random() - 0.5) * 110, vx: 1.2 + Math.sin(t + q) * 0.6, vy: -3.2, vz: 0.6, t: 0, life: 9, a: 0.9, r: 1, gr: 1, b: 1, s: 0.6 }); }
+    this.rainK += ((wx === 'rain' ? 1 : 0) - this.rainK) * Math.min(1, dt * 0.6); this.rainL.visible = this.rainK > 0.01; this.rainL.material.opacity = 0.42 * this.rainK;
+    if (this.rainL.visible) { const P = this.dropP, wxd = 0.06, wzd = 0.1; this.drops.forEach((q, i) => { q.y -= q.v * dt; if (q.y < 0) { if (Math.random() < 0.25 && this.rainK > 0.5) this.fx.add({ x: cx + q.x, y: 0.1, z: cz + q.z, vx: 0, vy: 1.2, vz: 0, t: 0, life: 0.25, a: 0.35, r: 0.8, gr: 0.85, b: 0.95, s: 0.35, g: 6 }); q.y += 40; q.x = (Math.random() - 0.5) * 150; q.z = (Math.random() - 0.5) * 120; }
+        const x = cx + q.x + q.y * wxd, z = cz + q.z + q.y * wzd, o = i * 6; P[o] = x; P[o + 1] = q.y; P[o + 2] = z; P[o + 3] = x - 1.6 * wxd * 10 * 0.12; P[o + 4] = q.y + 1.7; P[o + 5] = z - 1.6 * wzd * 10 * 0.12; });
+      this.rainL.geometry.attributes.position.needsUpdate = true; }
+    if (wx === 'snow') { const k = 30; for (let q = 0; q < k * dt * 10; q++) this.rain.add(wx === 'rain' ? { x: cx + (Math.random() - 0.5) * 140, y: 30 + Math.random() * 20, z: cz + (Math.random() - 0.5) * 110, vx: 2, vy: -38, vz: 4, t: 0, life: 1.2, a: 0.45, r: 0.75, gr: 0.82, b: 0.95, s: 0.35 } : { x: cx + (Math.random() - 0.5) * 140, y: 25 + Math.random() * 15, z: cz + (Math.random() - 0.5) * 110, vx: 1.2 + Math.sin(t + q) * 0.6, vy: -3.2, vz: 0.6, t: 0, life: 9, a: 0.9, r: 1, gr: 1, b: 1, s: 0.6 }); }
     for (const p of [this.dust, this.smoke, this.fx, this.rain]) p.update(dt); this.decals.update(dt);
   }
 }
