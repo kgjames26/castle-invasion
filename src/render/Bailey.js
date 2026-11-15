@@ -3,7 +3,7 @@
 // et grandes bannières bleues accrochées à la face intérieure du mur. Tout est fusionné en quelques maillages.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { SECTORS, SECTOR_W, WALK_H } from '../sim/constants.js';
+import { SECTORS, SECTOR_W, SEG_W, WALK_H } from '../sim/constants.js';
 import { GATE_XS } from '../sim/constants.js';
 import { arcPoint, STAIR_XS, Z_IN } from './WallView.js';
 import { applyNorthFog, applyFlutterFog } from './fog.js';
@@ -15,7 +15,8 @@ function flameTex() { const c = document.createElement('canvas'); c.width = 8; c
 function glowTex() { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), r = g.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.35, 'rgba(255,255,255,.45)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 64, 64); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
 
 export class Bailey {
-  constructor(scene) {
+  constructor(scene, sim) {
+    this.sim = sim;
     this.scene = scene; let sd = 911; const rn = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
     const wood = [], dark = [], hay = [], metal = [], cloth = [], gold = [], flames = [], stone = [];
     // place une géométrie dans le repère « muraille droite » (x le long du mur, z en profondeur) → suit l'arc
@@ -33,8 +34,8 @@ export class Bailey {
     const brazier = (x, z) => { put(metal, new THREE.CylinderGeometry(0.05, 0.05, 1.0, 5).translate(0, 0.5, 0), x, 0, z); put(metal, new THREE.CylinderGeometry(0.45, 0.25, 0.35, 9, 1, true).translate(0, 1.15, 0), x, 0, z); put(stone, new THREE.CylinderGeometry(0.5, 0.55, 0.1, 9).translate(0, 0.05, 0), x, 0, z);
       const p = arcPoint(x, z, _p); this.flames.push({ x: p.x, z: p.z, y: 1.2, ph: rn() * 6 }); };
     // torches du chemin de ronde (allumées la nuit seulement) : poteau + coupelle côté cour du parapet
-    const torch = (x, z) => { put(metal, new THREE.CylinderGeometry(0.04, 0.05, 1.3, 5).translate(0, WALK_H + 0.65, 0), x, 0, z); put(metal, new THREE.CylinderGeometry(0.2, 0.1, 0.22, 7, 1, true).translate(0, WALK_H + 1.38, 0), x, 0, z);
-      const p = arcPoint(x, z, _p); this.flames.push({ x: p.x, z: p.z, y: WALK_H + 1.42, ph: rn() * 6, night: true, s: 0.55 }); };
+    const mounts = this.mounts = [];   // objets fixés au mur : disparaissent si leur tronçon est abattu (v7.0)
+    const torch = (x, z) => { const p = arcPoint(x, z, _p), seg = Math.floor(x / SEG_W); mounts.push({ kind: 'torch', x: p.x, z: p.z, ry: p.ry, seg }); this.flames.push({ x: p.x, z: p.z, y: WALK_H + 1.42, ph: rn() * 6, night: true, s: 0.55, seg }); };
     // une vignette différente entre chaque paire d'escaliers / porte
     const KINDS = ['barrels', 'crates', 'hay', 'rack', 'logs', 'mix'];
     let kk = 0;
@@ -52,12 +53,17 @@ export class Bailey {
     for (let x = 6; x < SECTORS * SECTOR_W - 4; x += 12.5) if (GATE_XS.every(g => Math.abs(x - g) > 6) && STAIR_XS.every(st => Math.abs(x - st) > 2)) torch(x, FACE - 1.1);
     // bannières sur la face intérieure du mur, au milieu de chaque tronçon libre
     for (let s = 0; s < SECTORS; s++) for (const f of [0.3, 0.7]) { const x = s * SECTOR_W + f * SECTOR_W; if (!free(x)) continue;
-      put(cloth, new THREE.PlaneGeometry(1.7, 2.8, 1, 4).translate(0, 3.2, 0), x, 0, FACE + 0.12);
-      put(gold, new THREE.BoxGeometry(1.9, 0.12, 0.12).translate(0, 4.65, 0), x, 0, FACE + 0.16);
-      put(gold, new THREE.BoxGeometry(0.55, 0.55, 0.04).rotateZ(Math.PI / 4).translate(0, 3.4, 0), x, 0, FACE + 0.18); }
+      const p = arcPoint(x, FACE, _p); mounts.push({ kind: 'banner', x: p.x, z: p.z, ry: p.ry, seg: Math.floor(x / SEG_W) }); }
     const mesh = (list, m, cast = true) => { if (!list.length) return null; const mm = new THREE.Mesh(mergeGeometries(list.map(g => { for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); return g; })), m); mm.castShadow = cast; mm.receiveShadow = true; scene.add(mm); return mm; };
     mesh(wood, lam(0x8a5a32)); mesh(dark, lam(0x4a3220)); mesh(hay, lam(0xd8b45a)); mesh(metal, lam(0x4a4c52)); mesh(stone, lam(0x7d7a72)); mesh(gold, lam(0xf2c94a));
     mesh(cloth, applyFlutterFog(new THREE.MeshLambertMaterial({ color: 0x2f5fb0, side: THREE.DoubleSide }), 0.05), false);
+    // objets fixés au mur, en instances (bannière : toile + ferrures dorées ; torche : hampe + coupelle)
+    const nB = mounts.filter(m => m.kind === 'banner').length, nT = mounts.length - nB, strip = g => { for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); return g.index ? g.toNonIndexed() : g; };
+    const im = (geo, mat, n, cast) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, n)); m.castShadow = cast; m.receiveShadow = true; scene.add(m); return m; };
+    this.bCloth = im(new THREE.PlaneGeometry(1.7, 2.8, 1, 4).translate(0, 3.2, 0.12), applyFlutterFog(new THREE.MeshLambertMaterial({ color: 0x2f5fb0, side: THREE.DoubleSide }), 0.05), nB, false);
+    this.bGold = im(mergeGeometries([new THREE.BoxGeometry(1.9, 0.12, 0.12).translate(0, 4.65, 0.16), new THREE.BoxGeometry(0.55, 0.55, 0.04).rotateZ(Math.PI / 4).translate(0, 3.4, 0.18)].map(strip)), lam(0xf2c94a), nB, true);
+    this.tPole = im(mergeGeometries([new THREE.CylinderGeometry(0.04, 0.05, 1.3, 5).translate(0, WALK_H + 0.65, 0), new THREE.CylinderGeometry(0.2, 0.1, 0.22, 7, 1, true).translate(0, WALK_H + 1.38, 0)].map(strip)), lam(0x4a4c52), nT, true);
+    this.mountKey = '';
     // flammes des braseros : petites pyramides lumineuses qui vacillent
     // flamme : trois langues croisées (dégradé vertical, mélange additif) + un cœur jaune vif
     const tongue = (r, h, a) => new THREE.ConeGeometry(r, h, 5, 1, true).translate(0, h / 2, 0).rotateY(a), fl = mergeGeometries([tongue(0.34, 0.95, 0), tongue(0.26, 1.15, 1.1).translate(0.06, 0, 0.04), tongue(0.22, 0.8, 2.2).translate(-0.07, 0, -0.03)]);
@@ -67,9 +73,18 @@ export class Bailey {
     this.glow = new THREE.InstancedMesh(new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff9a40, map: glowTex(), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }), this.flames.length); scene.add(this.glow);
     this.d = new THREE.Object3D(); this.t = 0;
   }
+  // bannières et torches : visibles tant que leur tronçon de muraille tient debout
+  updateMounts() {
+    const hp = this.sim ? this.sim.wall.hp : null; if (!hp) return; const key = this.mounts.map(m => hp[m.seg] > 0 ? 1 : 0).join(''); if (key === this.mountKey) return; this.mountKey = key;
+    const d = this.d; let b = 0, t = 0;
+    for (const m of this.mounts) { const up = hp[m.seg] > 0; d.position.set(m.x, 0, m.z); d.rotation.set(0, m.ry, 0); d.scale.setScalar(up ? 1 : 1e-4); d.updateMatrix();
+      if (m.kind === 'banner') { this.bCloth.setMatrixAt(b, d.matrix); this.bGold.setMatrixAt(b, d.matrix); b++; } else { this.tPole.setMatrixAt(t, d.matrix); t++; } }
+    for (const im of [this.bCloth, this.bGold, this.tPole]) im.instanceMatrix.needsUpdate = true;
+  }
   update(dt, light = 1) {
+    this.updateMounts();
     this.t += dt; const d = this.d, night = Math.max(0, Math.min(1, (0.8 - light) / 0.5));
-    this.flames.forEach((f, i) => { const on = f.night ? Math.min(1, night * 1.6) : 1, sc = (f.s || 1) * on, k = (0.85 + 0.25 * Math.sin(this.t * 9 + f.ph) + 0.1 * Math.sin(this.t * 23 + f.ph * 2));
+    const hp = this.sim ? this.sim.wall.hp : null; this.flames.forEach((f, i) => { const on = (f.night ? Math.min(1, night * 1.6) : 1) * (f.seg != null && hp && hp[f.seg] <= 0 ? 0 : 1), sc = (f.s || 1) * on, k = (0.85 + 0.25 * Math.sin(this.t * 9 + f.ph) + 0.1 * Math.sin(this.t * 23 + f.ph * 2));
       d.position.set(f.x, f.y, f.z); d.rotation.set(0.06 * Math.sin(this.t * 5 + f.ph), this.t * 1.5 + f.ph, 0.06 * Math.cos(this.t * 6 + f.ph)); d.scale.set(sc, k * sc, sc); d.updateMatrix(); this.flameM.setMatrixAt(i, d.matrix); d.scale.set(sc, (0.8 + 0.3 * k) * sc, sc); d.updateMatrix(); this.coreM.setMatrixAt(i, d.matrix);
       d.position.set(f.x, f.night ? WALK_H + 0.06 : 0.04, f.z); d.rotation.set(0, 0, 0); d.scale.setScalar((0.9 + 0.1 * k) * (f.night ? 0.45 * on + 1e-3 : 1)); d.updateMatrix(); this.glow.setMatrixAt(i, d.matrix); });
     this.flameM.instanceMatrix.needsUpdate = true; this.coreM.instanceMatrix.needsUpdate = true; this.glow.instanceMatrix.needsUpdate = true; this.glow.material.opacity = 0.03 + 0.55 * night;

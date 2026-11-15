@@ -73,7 +73,7 @@ export class ExtrasView {
     this.rd = rd; const scene = this.scene = rd.scene, sim = this.sim = rd.sim; this.d = new THREE.Object3D(); this.c = new THREE.Color(); this.t = 0;
     this.dust = new Particles(scene, 700); this.smoke = new Particles(scene, 500); this.fx = new Particles(scene, 300, THREE.AdditiveBlending);
     this.decals = new Decals(scene, 260); this.water = waterMaterial();
-    this.buildCastleMoat(); this.bailey = new Bailey(scene); this.field = new Battlefield(scene, sim);
+    this.buildCastleMoat(); this.bailey = new Bailey(scene, sim); this.field = new Battlefield(scene, sim);
     // douves défensives (une bande d'eau ou de terre par secteur, suivant l'arc de la muraille)
     this.moatMeshes = [];
     // pièges
