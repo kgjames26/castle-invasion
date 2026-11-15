@@ -153,12 +153,20 @@ export class ExtrasView {
     const bridge = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.32, bw), lam(0x6b4a2c)); bridge.position.set(x0, 0.36, bz); bridge.castShadow = bridge.receiveShadow = true; scene.add(bridge);
     for (let k = -4; k <= 4; k++) { const pl = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, bw), lam(0x4a3220)); pl.position.set(x0 + k * 0.5, 0.53, bz); scene.add(pl); }
     for (const sx of [-1, 1]) { const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 6, 4), lam(0x3a3c42)); ch.position.set(x0 + sx * 2, 3, z0 + S.ri + 0.8); ch.rotation.x = 0.55; scene.add(ch); for (const e of [-1, 1]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 1.2, 6), lam(0x5a3a24)); post.position.set(x0 + sx * 2.4, 0.4, bz + e * bw / 2); scene.add(post); } }
+    // (v8.0) canards qui glissent sur les douves : corps + tête + bec, petit sillage
+    this.moatPath = (u, f) => { const i = ((Math.floor(u * N) % N) + N) % N, R = ring[i], R2 = ring[i + 1], k = u * N - Math.floor(u * N), ri = R.ri + (R2.ri - R.ri) * k, ro = R.ro + (R2.ro - R.ro) * k, th = R.th + (R2.th - R.th) * k; return at(th, ri + (ro - ri) * f); };
+    { const body = new THREE.SphereGeometry(0.28, 8, 6).scale(1, 0.6, 1.5).translate(0, 0.12, 0), head = new THREE.SphereGeometry(0.15, 7, 5).translate(0, 0.38, 0.32), beak = new THREE.ConeGeometry(0.06, 0.16, 5).rotateX(Math.PI / 2).translate(0, 0.36, 0.5), tail = new THREE.ConeGeometry(0.1, 0.2, 4).rotateX(-Math.PI / 2 - 0.5).translate(0, 0.2, -0.42);
+      const g = mergeGeometries([body, head, tail].map(x => x.toNonIndexed())), cols = []; const pc = g.attributes.position.count, bc = body.toNonIndexed().attributes.position.count, hc = head.toNonIndexed().attributes.position.count;
+      for (let k = 0; k < pc; k++) { const c = k < bc ? [0.38, 0.28, 0.18] : k < bc + hc ? [0.12, 0.4, 0.2] : [0.4, 0.33, 0.24]; cols.push(...c); } g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+      this.duckM = new THREE.InstancedMesh(g, applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })), 7); this.duckM.castShadow = true; scene.add(this.duckM);
+      this.beakM = new THREE.InstancedMesh(beak, lam(0xe8a030), 7); scene.add(this.beakM);
+      this.ducks = Array.from({ length: 7 }, (_, k) => ({ u: k < 4 ? 0.02 + k * 0.012 : 0.42 + (k - 4) * 0.03, f: 0.45 + (k % 3) * 0.06, sp: (k < 4 ? 0.0028 : 0.0022) * (k >= 4 ? -1 : 1), ph: k * 1.7, sc: k < 4 && k > 0 ? 0.7 : 1 })); }
     // ruisseau : part de la douve vers l'est, serpente jusqu'à la lisière
     this.buildStream(at(0, ring[0].ro - 0.5), rn);
   }
   naturalWater() {
     const n = this.water.userData.n.clone(); n.needsUpdate = true; n.repeat.set(1, 1); n.wrapS = n.wrapT = THREE.RepeatWrapping;
-    const m = new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0x343c44, shininess: 50, normalMap: n, normalScale: new THREE.Vector2(0.3, 0.3), transparent: true, opacity: 0.93, depthWrite: false });
+    const m = new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0x343c44, shininess: 50, normalMap: n, normalScale: new THREE.Vector2(0.3, 0.3), transparent: false, opacity: 1, depthWrite: true });
     m.onBeforeCompile = sh => { patchNorthFog(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <opaque_fragment>', `
       { float fr = pow( 1.0 - clamp( abs( dot( normalize( normal ), normalize( vViewPosition ) ) ), 0.0, 1.0 ), 3.0 );   // reflet du ciel en incidence rasante
         outgoingLight = mix( outgoingLight, uHazeColor * 0.85, fr * 0.65 ); }
@@ -195,6 +203,9 @@ export class ExtrasView {
   update(dt, alpha) {
     const sim = this.sim, X = sim.extras, Z = sim.zombies, d = this.d, c = this.c; this.t += dt; const t = this.t;
     this.bailey.update(dt, sim.night.light()); this.field.update(dt);
+    if (this.ducks) { this.ducks.forEach((q, i) => { q.u = (q.u + q.sp * dt + 1) % 1; const [x, z] = this.moatPath(q.u, q.f + 0.06 * Math.sin(t * 0.3 + q.ph)), [x2, z2] = this.moatPath((q.u + Math.sign(q.sp) * 0.004 + 1) % 1, q.f);
+        d.position.set(x, 0.06 + 0.03 * Math.sin(t * 2.2 + q.ph), z); d.rotation.set(0, Math.atan2(x2 - x, z2 - z), 0.06 * Math.sin(t * 1.7 + q.ph)); d.scale.setScalar(q.sc); d.updateMatrix(); this.duckM.setMatrixAt(i, d.matrix); this.beakM.setMatrixAt(i, d.matrix); });
+      this.duckM.instanceMatrix.needsUpdate = true; this.beakM.instanceMatrix.needsUpdate = true; }
     this.water.userData.n.offset.set(t * 0.02, t * 0.013); if (this.natWater) this.natWater.userData.n.offset.set(t * 0.012, -t * 0.009); if (this.streamWater) this.streamWater.userData.n.offset.set(0, -t * 0.35);   // le ruisseau coule
     // poussière des hordes qui chargent + traces au sol
     // (v4.1) poussière très discrète : un zombie sur cinq, rarement, voile léger
