@@ -39,9 +39,10 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
 {
   const sim = new Simulation(); sim.wave = 5; sim.skipPrep(); run(sim, 25);
   const Z = sim.zombies, g = new Map(); for (let i = 0; i < Z.n; i++) { if (!Z.grp[i] || Z.z[i] > 120) continue; (g.get(Z.grp[i]) || g.set(Z.grp[i], []).get(Z.grp[i])).push([Z.x[i], Z.z[i]]); }
-  let worst = 0, n = 0; for (const pts of g.values()) { if (pts.length < 5) continue; n++; const cz = pts.reduce((a, p) => a + p[1], 0) / pts.length; const dz = Math.max(...pts.map(p => Math.abs(p[1] - cz))); worst = Math.max(worst, dz); }
+  let worst = 0, n = 0; for (const pts of g.values()) { if (pts.length < 5) continue; n++; const cz = pts.reduce((a, p) => a + p[1], 0) / pts.length; const ds = pts.map(p => Math.abs(p[1] - cz)).sort((a, b) => a - b), dz = ds[Math.floor(ds.length * 0.85)]; worst = Math.max(worst, dz); }
   ok(n > 0 && worst < 16, `hordes compactes : ${n} groupes, profondeur max ${worst.toFixed(1)} m (pas de file indienne)`);
 }
+// (v3.1+) quelques isolés chargent plus tôt : la profondeur ignore les 15 % les plus écartés
 // 5) feu : une boule de feu laisse un feu qui brûle les zombies
 {
   const sim = new Simulation(); for (let i = 0; i < 6; i++) sim.zombies.spawn(0, 100 + i * 0.5, 60, 2, sim.rng);

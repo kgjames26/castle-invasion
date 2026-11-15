@@ -297,3 +297,16 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Dôme de ciel en dégradé (jour / nuit), brume du nord bleu ardoise, perspective aérienne (le lointain pâlit vers l'horizon) ; brumes appliquées avant la tonalité.
 - Vent : balancement des sapins de bordure, de la forêt des bûcherons et des forêts vierges (en plus de l'herbe).
 - Post-traitement maison (qualité Haute, option « Relief et halo ») : occlusion ambiante SSAO demi-résolution lissée + halo (bloom) plus fort la nuit ; composition ACES + sRGB identique au rendu direct.
+
+## Phase 40 — Grand lot v4.0 (36 points)
+- **Rendu** : douves en eau autour du château (pont-levis) et douves défensives ; poussière et traces des hordes qui chargent ; bannières qui flottent, fumées de cheminées ; lumière de fin de journée (soleil rasant) et fenêtres éclairées la nuit ; taches de sang qui s'effacent.
+- **Vie** : soldats et géants qui tombent puis s'effacent ; villageois assis sur la placette, enfants qui jouent, charrettes sur les routes pavées ; oiseaux qui s'envolent à l'approche des hordes, cerfs qui fuient.
+- **Jeu** : événements entre les vagues (marchand, caravane et mercenaires, réfugiés — dont un mordu parfois —, incendie) ; boss « Seigneur pourri » toutes les 10 vagues ; bilan de fin de vague ; 13 succès.
+- **Confort** : mini-carte (cliquable), 3 emplacements de sauvegarde + reprise au début de la vague, tutoriel guidé en 6 étapes.
+- **Défense** : pièges (fosse à pieux, chausse-trappes, baril de poix), huile bouillante par secteur, douves (fossé → eau → pieux), palissade de première ligne, météo (pluie, brouillard, neige) aux effets réels.
+- **Zombies** : grimpeur, cracheur d'acide, gonflé (explose), chiens en meute ; hordes qui visent le secteur le plus faible, plus nombreuses la nuit ; zombie dans le village = villageois mordus.
+- **Économie** : saisons (récoltes, hiver et bois de chauffage), moral (production, chantiers, fêtes), métiers spécialisés (charpentier, boulanger, forgeron).
+- **Progression** : capitaine nommé (niveaux, cri de ralliement, mort définitive), recherches (Alchimie, Ingénierie, Poudre noire → canon), médailles d'escouade après 10 vagues.
+- **Modes** : survie (classement), défi du jour (2 modificateurs tirés de la date), campagne en 3 missions.
+- **Immersion** : musique dynamique (luth au calme, tambours à l'alerte, tambours + cuivres pendant la vague), cloche d'alarme, gémissements selon la horde, cris des capitaines, vue à la première personne depuis un archer.
+- Demandes en cours de route : niveaux graphiques Faible / Moyen / Élevé (réglages avancés repliés) ; transitions d'herbe et de touffes encore plus douces ; nuit ≈ 1/10e du cycle ; trajets des hordes variés (dérive par horde, serpentement par zombie).

@@ -6,6 +6,7 @@ import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS,
 import { MAGE_TIERS } from '../render/Heroes.js';
 import { FORMATS, idealFormat, quality } from '../render/config.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
+import { installExtrasUI } from './ExtrasUI.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
@@ -65,7 +66,8 @@ export class UI {
     this.cam.ghostMove = (x, z) => this.moveGhost(x, z);
     this.prefs = { difficulty: 'normal', autoRepair: true, shake: true, fx: true, ...loadPrefs() }; this.applyPrefs(true);
     this.refresh(true);
-    this.startTutorial();
+    this.buildMinimap(); this.startTuto();   // (v4.0) mini-carte et tutoriel guidé
+    { const fx = document.createElement('button'); fx.id = 'fpvx'; fx.textContent = '✕ Quitter la vue'; fx.addEventListener('click', () => { this.act('x:fpvx'); }); document.getElementById('app').appendChild(fx); }
   }
   // réglages persistants (difficulté, réparation auto, secousses, effets) : appliqués à la partie et au rendu
   applyPrefs(init) {
@@ -91,6 +93,7 @@ export class UI {
   onMapTap(x, z) {
     const sim = this.sim;
     if (this.mode !== 'idle') { this.moveGhost(x, z); return; }
+    if (this.trapMode) { this.trapTap(x, z); return; }
     if (this.rallying) { sim.army.setRally(x, z); this.rallying = false; this.toast && this.toast('📍 Point de ralliement placé'); this.refresh(true); return; }
     // tracé de route (Travaux publics) : 1er toucher = départ, 2e = arrivée
     if (this.roadMode) {
@@ -230,10 +233,12 @@ export class UI {
     const [v, x, y] = a.split(':'), sim = this.sim, s = this.sel;
     switch (v) {
       case 'sheet': this.openSheet(x, y); break;
+      case 'x': this.extrasAct(x, y); break;   // systèmes v4.0 (ExtrasUI.js)
       case 'quality': this.rd.setQuality(x); this.html.sheet = ''; this.refresh(true); break;
       case 'newgame': this.openSheet('newgame'); break;
-      case 'start': if (this.sim.over || confirm('Commencer une nouvelle partie ? La partie en cours sera perdue.')) { this.prefs.difficulty = this.newDiff || this.prefs.difficulty; this.closeSheet(); this.hooks.newGame(x); this.applyPrefs(); } break;
+      case 'start': if (this.sim.over || confirm('Commencer une nouvelle partie ? La partie en cours sera perdue.')) { this.prefs.difficulty = this.newDiff || this.prefs.difficulty; this.closeSheet(); this.hooks.newGame(x, this.newMode); this.applyPrefs(); if (this.newMode?.intro) this.toast('📜 ' + this.newMode.intro, 'info'); } break;
       case 'ndiff': this.newDiff = x; this.html.sheet = ''; break;
+      case 'gfxadv': this.gfxAdv = true; this.html.sheet = ''; break;
       case 'rally': this.rallying = !this.rallying; if (this.rallying) { const r = this.sim.army.rally; this.cam.focusOn(r.x, r.z); } break;
       case 'close': this.card ? this.closeCard() : this.closeSheet(); break;
       case 'bld': this.startPlace(x); break;
@@ -320,7 +325,7 @@ export class UI {
   }
   buzz(p) { if (UI_FLAGS.haptics && navigator.vibrate) try { navigator.vibrate(p); } catch { /* non supporté */ } }
   onEvent(e) {
-    const sim = this.sim;
+    const sim = this.sim; this.extrasEvent(e);
     if (e.type === 'bitten') { if (!this.lastBite || performance.now() - this.lastBite > 2500) { this.lastBite = performance.now(); this.toast(`🧟 ${UNITS[e.unit].name} mordu${e.tackle ? ', plaqué au sol' : ''} ! ${this.sim.infection.prison(this.sim) ? 'Il doit rejoindre la zone de quarantaine' : 'La quarantaine est pleine : il erre près de la placette…'}`, 'warn'); } }
     else if (e.type === 'cured') this.toast(`⛪ Le prêtre a guéri un ${UNITS[e.unit].name.toLowerCase()} mordu : il retourne en réserve`, 'ok');
     else if (e.type === 'turned') { this.toast(`☠ Un ${UNITS[e.unit].name.toLowerCase()} mordu s'est transformé en zombie !`, 'danger'); this.buzz([60, 40, 60]); }
@@ -353,7 +358,7 @@ export class UI {
     const pop = $('#r-pop'); pop.querySelector('b').textContent = `${E.population()}/${E.popCap()}`; pop.classList.toggle('max', E.popRoom() <= 0);
     $('#wave-title').textContent = `Vague ${sim.wave}`;
     const zl = sim.zombies.n + (sim.spawn ? sim.spawn.left : 0);
-    $('#wave-phase').textContent = sim.phase === 'assault' ? `⚔ ${zl} zombies` : sim.phase === 'alert' ? '🔔 Ils arrivent' : sim.phase === 'calm' ? '🕊 Répit' : '🌿 Calme';
+    $('#wave-phase').textContent = `${sim.extras.season().ico}${{ clear: '', rain: '🌧', fog: '🌫', snow: '❄' }[sim.extras.weather]} ` + (sim.phase === 'assault' ? `⚔ ${zl} zombies` : sim.phase === 'alert' ? '🔔 Ils arrivent' : sim.phase === 'calm' ? '🕊 Répit' : '🌿 Calme');
     if (this.lastPhase !== sim.phase) { if (this.lastPhase) this.phaseBanner(sim.phase); this.lastPhase = sim.phase; }
     $('#wave-phase').dataset.p = sim.phase; $('#b-skip').style.display = sim.phase === 'prep' ? '' : 'none';
     { const tot = sim.phase === 'prep' ? (sim.wave === 1 ? TIMING.firstPrep : TIMING.prep) : sim.phase === 'alert' ? TIMING.alert : sim.phase === 'calm' ? TIMING.calm : 0, cb = $('#calm-bar');
@@ -389,7 +394,7 @@ export class UI {
   // nouvelle partie : format proposé selon l'appareil (réglages graphiques ajustables ensuite dans ☰) + difficulté
   newGameHtml() {
     const ideal = idealFormat(), d = this.newDiff || this.prefs.difficulty;
-    return `<div class="hint">Choisis le <b>format</b> de la partie. Celui qui convient le mieux à ton appareil est recommandé ; tu pourras l'ajuster ensuite à tout moment dans ☰ Paramètres → Graphismes.</div>
+    return this.modesHtml() + `<div class="hint">Choisis le <b>niveau graphique</b> : celui qui convient le mieux à ton appareil est recommandé ; modifiable à tout moment dans ☰ Paramètres.</div>
       <div class="fmts">${Object.entries(FORMATS).map(([k, F]) => `<button class="fmt ${k === ideal ? 'rec' : ''}" data-a="start:${k}"><span class="fi">${F.ico}</span><b>${F.name}</b>${k === ideal ? '<em>recommandé</em>' : ''}<small>${F.info}</small></button>`).join('')}</div>
       <div class="hint small"><b>Difficulté</b></div><div class="row">${Object.keys(DIFFICULTY).map(k => this.btn(DIFFICULTY[k].name, '', 'ndiff:' + k, false, 'act slim' + (k === d ? '' : ' sec'))).join('')}</div>`;
   }
@@ -400,12 +405,12 @@ export class UI {
     const cq = this.hooks.rd.qualityName ? this.hooks.rd.qualityName() : '';
     const fmt = this.sim.format || 'tablet', q = quality, gt = (k, on, l, sub) => this.btn(`${on ? '✅' : '⬜'} ${l}`, sub, 'gfx:' + k, false, 'act slim' + (on ? '' : ' sec'));
     const qual = `<div class="vols"><div class="hint small"><b>Graphismes</b> — préréglage, puis ajuste à ton goût (enregistré avec la partie)</div>
-      <div class="row">${Object.entries(FORMATS).map(([k, F]) => this.btn(`${F.ico} ${F.name}`, k === fmt && !this.sim.gfx ? 'actuel' : k === fmt ? 'actuel, modifié' : '', 'gfx:fmt:' + k, false, 'act slim' + (k === fmt ? '' : ' sec'))).join('')}</div>
-      <div class="row wrapr">${gt('shadows', q.shadows, 'Ombres', 'plus joli, plus lourd')}${gt('glow', q.glow, 'Lueurs', 'torches, feux, impacts')}${gt('grass', q.grass >= 0.7, 'Herbe dense', '')}${gt('res', q.pixelRatio >= 1.5, 'Haute résolution', 'image plus nette')}${gt('post', !!q.post, 'Relief et halo', 'occlusion ambiante, halo des feux')}</div></div>`;
+      <div class="row">${[['phone', 'Faible', 'fluide partout'], ['tablet', 'Moyen', 'ombres, lueurs'], ['desktop', 'Élevé', 'tout, relief et halo']].map(([k, n, sub]) => this.btn(n, k === fmt ? (this.sim.gfx ? 'actuel, modifié' : 'actuel') : sub, 'gfx:fmt:' + k, false, 'act' + (k === fmt ? '' : ' sec'))).join('')}</div>
+      ${this.gfxAdv ? '' : `<div class="row">${this.btn('⚙ Réglages avancés', '', 'gfxadv', false, 'act slim sec')}</div>`}<div class="row wrapr" style="${this.gfxAdv ? '' : 'display:none'}">${gt('shadows', q.shadows, 'Ombres', 'plus joli, plus lourd')}${gt('glow', q.glow, 'Lueurs', 'torches, feux, impacts')}${gt('grass', q.grass >= 0.7, 'Herbe dense', '')}${gt('res', q.pixelRatio >= 1.5, 'Haute résolution', 'image plus nette')}${gt('post', !!q.post, 'Relief et halo', 'occlusion ambiante, halo des feux')}</div></div>`;
     const p = this.prefs, tog = (k, l, sub) => this.btn(`${p[k] ? '✅' : '⬜'} ${l}`, sub, 'pref:' + k, false, 'act slim' + (p[k] ? '' : ' sec'));
     const game = `<div class="vols"><div class="hint small"><b>Difficulté</b> (vagues suivantes)</div><div class="row">${Object.keys(DIFFICULTY).map(k => this.btn(DIFFICULTY[k].name, k === 'easy' ? '−25 % zombies' : k === 'hard' ? '+30 % zombies, +15 % PV' : '', 'pref:difficulty:' + k, false, 'act slim' + (k === p.difficulty ? '' : ' sec'))).join('')}</div>
       <div class="row wrapr">${tog('autoRepair', 'Réparation auto', 'emprunte 2 villageois')}${tog('shake', 'Secousses', 'explosions')}${tog('fx', 'Effets', 'particules, feu')}</div></div>`;
-    return `<div class="hint">Castle Invasion · <b>v${VERSION}</b></div>${game}${audio}${qual}<div class="row">${this.btn('🔄 Nouvelle partie', 'la partie en cours sera perdue', 'newgame', false, 'act warnb')}</div>`;
+    return `<div class="hint">Castle Invasion · <b>v${VERSION}</b></div>${game}${this.savesHtml()}${audio}${qual}${this.achHtml()}<div class="row">${this.btn('🔄 Nouvelle partie', 'la partie en cours sera perdue', 'newgame', false, 'act warnb')}</div>`;
   }
   renderCard() {
     const c = this.card; if (!c) return;
@@ -456,7 +461,7 @@ export class UI {
   }
   tick(dt) {
     this.watchSquads();
-    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.watchRepairs(); this.refresh(false); }
+    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.watchRepairs(); this.refresh(false); this.drawMinimap(); this.renderEvent(false); this.tickTuto(); if ((this.achT = (this.achT || 0) + 1) % 10 === 0) this.checkAch(); }
     const vw = innerWidth, vh = innerHeight;
     for (let s = 0; s < SECTORS; s++) {
       const p = this.rd.project(s * 40 + 20, 8, 143 + wallOff(s * 40 + 20)), b = this.badges[s];
@@ -510,7 +515,8 @@ export class UI {
         + (I.list.length ? `<div class="hint small">${[...J, ...W].map(b => `${UNITS[b.type].ico} ${b.state === 'jailed' ? 'en quarantaine' : b.state === 'down' ? 'à terre !' : 'en route'} · ${Math.max(0, Math.ceil(b.t))} s`).join('<br>')}</div>` : '') + `<div class="hint small">Bilan : ${I.cured} guéri${I.cured > 1 ? 's' : ''} · ${I.turned} transformé${I.turned > 1 ? 's' : ''} · ${I.devoured} dévoré${I.devoured > 1 ? 's' : ''}</div>`; }
     if (s.type === 'publicworks' && s.level) { const R = this.sim.roads, q = R.quality(this.sim), pend = R.list.filter(r => r.built < 1).length; h += `<div class="rank">🛤 Routes : <b>${ROADWORKS.names[q]}</b> — villageois +${Math.round(ROADWORKS.speed[q] * 100)} % de vitesse sur les routes${q < 3 ? ` · niveau ${s.level + 1} : ${ROADWORKS.names[q + 1]}` : ''}${pend ? ` · ${pend} chantier${pend > 1 ? 's' : ''} de route` : ''}<small>Le réseau relie seul chaque nouveau bâtiment ; trace en plus tes propres routes (bois et pierre au mètre).</small></div>` + this.btn('🛤 Tracer une route', `${ROADWORKS.costPerM.wood} ${RES_INFO.wood.ico} + ${ROADWORKS.costPerM.stone} ${RES_INFO.stone.ico} par mètre`, 'road', false, 'act'); }
     if (s.type === 'infirmary' && s.level) h += `<div class="rank">🏥 Soins : <b>${(INFIRMARY.heal[s.level] * 100).toFixed(1)} %</b> des PV par seconde aux escouades en garnison hors combat · <b>${INFIRMARY.save[s.level] * 100} %</b> des combattants tombés sont sauvés (retour en réserve)${this.sim.army.saved ? ` · ${this.sim.army.saved} sauvés` : ''}</div>`;
-    if (s.type === 'university' && s.level) h += this.btn('🎓 Améliorations des villageois', '', 'sheet:tech', false, 'act sec');
+    if (s.type === 'university' && s.level) h += this.btn('🎓 Améliorations des villageois', '', 'sheet:tech', false, 'act sec') + this.researchHtml();
+    if (s.type === 'barracks' && s.level) h += this.heroHtml();
     if (s.type === 'forge' && s.level) h += `<div class="hint small">Plafond attaque/défense : ${this.sim.eco.smithMax()}</div>`;
     if (RANK_BUILDINGS.includes(s.type)) { const t = UNIT_ORDER.filter(u => UNITS[u].from === s.type), r = RANKS[Math.max(0, s.level - 1)], nx = RANKS[s.level]; h += `<div class="rank">⭐ Rang <b>${r.name}</b>${nx ? ` → <b>${nx.name}</b> au niv. ${s.level + 1} : force ×${nx.force}, résistance ×${nx.res}, tenue plus riche` : ' — rang maximum'}<small>${t.map(u => UNITS[u].ico).join(' ')} toutes les unités de ce bâtiment</small></div>`; }
     const uc = B.upCost(s), canMove = !s.fixed;
@@ -553,7 +559,7 @@ export class UI {
     return `<div class="ptitle">🏰 Château<span class="lvl">${fmt(sim.castleHp)} PV</span></div><div class="hpline"><div class="bar big"><i style="width:${100 * sim.castleHp / CASTLE.hp}%"></i></div></div>
       <div class="hint">👥 Population <b>${pop}</b>/${cap} · villageois ${E.villagers.length} (libres ${free})</div>
       <div class="hint small">Les villageois rapportent tout au château. Construis des 🏠 maisons pour agrandir la population.</div>
-      <div class="row">${this.btn('+ Villageois', this.cost(ECON.villagerCost), 'vil', pop >= cap || !E.afford(ECON.villagerCost))}${this.btn('🏠 Maison', this.cost(sim.build.newCost('house')), 'bld:house', false, 'act sec')}</div>`;
+      <div class="row">${this.btn('+ Villageois', this.cost(ECON.villagerCost), 'vil', pop >= cap || !E.afford(ECON.villagerCost))}${this.btn('🏠 Maison', this.cost(sim.build.newCost('house')), 'bld:house', false, 'act sec')}</div>${this.castleExtras()}${this.heroHtml()}`;
   }
   sectorCard(s) {
     const sim = this.sim, w = sim.wall, army = sim.army, E = sim.eco;
@@ -568,7 +574,7 @@ export class UI {
       <div class="row step"><span class="lab">🏹 Archers<small class="sub">réserve ${army.reserve.archer} · ${army.autoArchers ? '⚜ placés seuls' : '📯 placement manuel'}</small></span>${this.btn('−', '', 'ua:archer:-1', an <= 0, 'sq')}<b class="val">${an}<small>/${ARCHER_SLOTS}</small></b>${this.btn('+', '', 'ua:archer:1', army.reserve.archer <= 0 || an >= ARCHER_SLOTS, 'sq')}${this.btn('+5', '', 'ua:archer:5', army.reserve.archer <= 0 || an >= ARCHER_SLOTS, 'sq wide')}</div>
       ${squadsHere.map(q => sqRow(q, false)).join('')}${others.length ? `<div class="hint small">Envoyer ici :</div>${others.map(q => sqRow(q, true)).join('')}` : ''}
       ${sim.siege.weapons.some(x => x.sector === s) ? `<div class="hint small">🛠 Siège : ${sim.siege.weapons.filter(x => x.sector === s).map(x => SIEGE[x.type].ico).join(' ')}</div>` : ''}
-      <div class="hint small">🔧 ${crew ? `${crew} villageois réparent la muraille` : 'Aucun réparateur'} (menu 👥).</div>`;
+      <div class="hint small">🔧 ${crew ? `${crew} villageois réparent la muraille` : 'Aucun réparateur'} (menu 👥).</div>${this.sectorExtras(s)}`;
   }
   // ——— feuille BÂTIR ———
   // production d'unités (fiche d'une caserne, d'une écurie, d'un champ de tir) : l'unité en cours passe par 4 étapes animées,
@@ -588,7 +594,7 @@ export class UI {
     return h + `<div class="hint small">File : <b>${q.length}/${max}</b> · ${par} formé${par > 1 ? 's' : ''} à la fois (plus avec le niveau) · réserve : ${types.map(t => `${UNITS[t].ico} ${army.reserve[t]}`).join(' · ')}</div></div>`;
   }
   // nom d'une troupe selon son grade : « Peloton de fantassins »
-  unitName(q) { const t = UNITS[q.type].name.toLowerCase(); return `${GRADES[q.grade || 'escouade'].name} de ${t}s`; }
+  unitName(q) { const t = UNITS[q.type].name.toLowerCase(); return q.medal ? `🎖 ${q.medal[0].toUpperCase() + q.medal.slice(1)}` : `${GRADES[q.grade || 'escouade'].name} de ${t}s`; }
   // ——— navigation en deux temps (v2.5), utilisée partout : d'abord une grille de CATÉGORIES, puis le sous-menu choisi ———
   cats(sheet, items) {
     return `<div class="cats">${items.map(it => `<button class="cat${it.alert ? ' alert' : ''}${it.off ? ' off' : ''}" data-a="nav:${sheet}:${it.k}"><span class="ci">${it.ico}</span><b>${it.name}</b><small>${it.sub || ''}</small>${it.badge ? `<em>${it.badge}</em>` : ''}</button>`).join('')}</div>`;
@@ -668,7 +674,7 @@ export class UI {
   armyHtml() {
     const sim = this.sim, army = sim.army, E = sim.eco, nav = this.nav.army || '';
     if (nav.startsWith('sq.')) { const q = sim.squad(+nav.slice(3)); if (q) return this.back('army', 'Troupes', 'squads') + this.squadView(q); this.nav.army = 'squads'; }
-    const views = { squads: ['🛡 Troupes', () => this.squadsHtml()], newsq: ['➕ Nouvelle troupe', () => this.newSquadHtml()], train: [BARRACKS_ICO + ' Recruter', () => this.trainHtml()], ranks: ['⭐ Rangs', () => this.ranksHtml()], magic: ['🔮 Magie', () => this.mageHtml(false)], siege: ['🛠 Siège', () => this.siegeHtml()], forge: ['🔨 Forge', () => this.forgeHtml()] };
+    const views = { traps: ['🪤 Pièges', () => this.trapsHtml()], hero: ['⭐ Héros', () => this.heroHtml()], squads: ['🛡 Troupes', () => this.squadsHtml()], newsq: ['➕ Nouvelle troupe', () => this.newSquadHtml()], train: [BARRACKS_ICO + ' Recruter', () => this.trainHtml()], ranks: ['⭐ Rangs', () => this.ranksHtml()], magic: ['🔮 Magie', () => this.mageHtml(false)], siege: ['🛠 Siège', () => this.siegeHtml()], forge: ['🔨 Forge', () => this.forgeHtml()] };
     const v = views[nav];
     if (v) return this.back('army', v[0], nav === 'newsq' ? 'squads' : '') + this.bittenLine() + (nav === 'squads' || nav === 'train' ? this.popLine() : '') + v[1]();
     const field = army.squads.filter(q => q.mode === 'field').length, res = ['soldier', 'heavy', 'knight', 'cavalry'].reduce((a, t) => a + (army.reserve[t] || 0), 0), queue = TRAIN_BUILDINGS.reduce((a, b) => a + (army.queues[b] ? army.queues[b].length : 0), 0);
@@ -679,6 +685,8 @@ export class UI {
       { k: 'magic', ico: '🔮', name: 'Magie', sub: sim.mages.list.length ? 'magicien en jeu' : 'magicien autonome' },
       { k: 'siege', ico: '🛠', name: 'Siège', sub: 'balistes, catapultes, trébuchets' },
       { k: 'forge', ico: '🔨', name: 'Forge', sub: 'attaque et défense par type' },
+      { k: 'traps', ico: '🪤', name: 'Pièges', sub: 'fosses, chausse-trappes, poix' },
+      { k: 'hero', ico: '⭐', name: 'Héros', sub: sim.extras.hero ? 'capitaine ' + sim.extras.hero.name : 'engager un capitaine' },
     ]);
   }
   // mordus : rappel de ce qu'il faut (place en quarantaine, église pour que le prêtre les guérisse)
@@ -890,3 +898,5 @@ export class UI {
     if (on) $('#over-stats').textContent = `Vague ${this.sim.wave} · ${this.sim.zombies.kills} zombies abattus · ${this.sim.stats.breaches} brèche(s)`;
   }
 }
+
+installExtrasUI(UI);

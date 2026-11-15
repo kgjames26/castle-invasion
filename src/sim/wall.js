@@ -11,7 +11,7 @@ export class Wall {
   reset() { this.level.fill(1); for (let i = 0; i < SEGS; i++) this.hp[i] = this.segMax(i); }
   isGate(seg) { return GATE_FLAT.includes(seg); }
   sectorOf(seg) { return (seg / SEGS_PER_SECTOR) | 0; }
-  segMax(seg) { return (this.isGate(seg) ? WALL.gateHp : WALL.segHp) * (1 + WALL.levelHpBonus * (this.level[this.sectorOf(seg)] - 1)); }
+  segMax(seg) { return (this.isGate(seg) ? WALL.gateHp : WALL.segHp) * (1 + WALL.levelHpBonus * (this.level[this.sectorOf(seg)] - 1)) * (this.hpMult || 1); }   // hpMult : Ingénierie (v4.0)
   sectorHp(s) { let t = 0; for (let k = 0; k < SEGS_PER_SECTOR; k++) t += this.hp[s * SEGS_PER_SECTOR + k]; return t; }
   sectorMax(s) { let t = 0; for (let k = 0; k < SEGS_PER_SECTOR; k++) t += this.segMax(s * SEGS_PER_SECTOR + k); return t; }
   breaches(s) { let n = 0; for (let k = 0; k < SEGS_PER_SECTOR; k++) if (this.hp[s * SEGS_PER_SECTOR + k] <= 0) n++; return n; }

@@ -43,6 +43,7 @@ export class CameraController {
   }
   move(e) {
     const p = this.ptrs.get(e.pointerId); if (!p) return;
+    if (this.fpv) { this.fpvYaw = Math.max(-1.1, Math.min(1.1, (this.fpvYaw || 0) + (e.clientX - p.x) * 0.004)); p.x = e.clientX; p.y = e.clientY; return; }
     this.moved += Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y); p.x = e.clientX; p.y = e.clientY;
     if (this.gdrag && this.ptrs.size === 1) { const w = this.worldAt(e.clientX, e.clientY); if (w && this.moved > 4) this.ghostMove(w.x, w.z); return; }   // on glisse le fantôme de construction, pas la caméra
     if (this.ptrs.size === 2 && this.pinch) { const [a, b] = [...this.ptrs.values()]; this.setZoom(this.pinch.zoom * this.pinch.d / (Math.hypot(a.x - b.x, a.y - b.y) || 1)); }
@@ -64,6 +65,8 @@ export class CameraController {
     this.tx = Math.min(x1 - hw, Math.max(x0 + hw, this.tx)); this.tz = Math.min(D - 20, Math.max(20, this.tz));
   }
   update(dt) {
+    // (v4.0) vue à la première personne : la caméra suit un archer sur le chemin de ronde, regard vers la horde
+    if (this.fpv) { const p = this.fpv(); if (p) { this.cam.position.set(p.x, p.y + 1.7, p.z + 1.2); this.cam.lookAt(p.x + Math.sin(this.fpvYaw || 0) * 30, p.y - 4, p.z - 30); this.cam.updateMatrixWorld(); return; } this.fpv = null; }
     const sp = 90 * this.zoom * dt;
     if (this.keys.size) {
       const sg = Math.cos(this.yaw) >= 0 ? 1 : -1;   // vue retournée : gauche/droite et haut/bas inversés dans le monde

@@ -9,6 +9,12 @@ export const ZOMBIES = [
   { id: 4, name: 'Briseur',     hp: 150, speed: 1.8, wall: 45, unit: 8,  size: 1.25, color: 0xd9822b },
   { id: 5, name: 'Colosse',     hp: 1400, speed: 1.2, wall: 40, unit: 40, size: 4.4, color: 0x9a6f5c },   // géant : au moins 4× la taille d'un zombie normal, apparaît « parfois »
   { id: 6, name: 'Golem',       hp: 850, speed: 1.4, wall: 22, unit: 30, size: 2.4, color: 0x7d7a74 },    // golem de pierre : ses coups font trembler la muraille et tomber les archers
+  // v4.0
+  { id: 7, name: 'Seigneur pourri', hp: 7000, speed: 1.0, wall: 90, unit: 60, size: 3.6, color: 0x7a2a2a, boss: true },   // boss toutes les 10 vagues
+  { id: 8, name: 'Grimpeur',    hp: 55,  speed: 2.8, wall: 1,  unit: 6,  size: 0.95, color: 0x9a8f6a },   // escalade la muraille
+  { id: 9, name: 'Cracheur',    hp: 70,  speed: 2.0, wall: 14, unit: 4,  size: 1.0, color: 0x9fd84a },    // acide à distance sur la pierre
+  { id: 10, name: 'Gonflé',     hp: 90,  speed: 1.5, wall: 2,  unit: 6,  size: 1.35, color: 0x6f8f3a },   // explose contre la muraille
+  { id: 11, name: 'Chien',      hp: 22,  speed: 5.2, wall: 1,  unit: 7,  size: 0.7, color: 0x5a4a3a },    // meute rapide
 ];
 // ——— Carte étendue (v2.0) : forêts vierges à gauche et à droite du village, à défricher parcelle par parcelle ———
 export const FRONTIER = { left: [-200, 0], right: [200, 400], z0: 212, z1: 312, cell: 20, wood: 160, oreChance: 0.38, oreAmount: { stone: 4000, iron: 3000, gold: 2200 } };
@@ -16,7 +22,7 @@ export const FRONTIER = { left: [-200, 0], right: [200, 400], z0: 212, z1: 312, 
 export const ROADS_BASE = [[[[100, 150], [100, 200], [100, 284]], 9], [[[100, 238], [40, 255]], 5], [[[100, 238], [160, 255]], 5], [[[100, 262], [182, 243]], 4.5], [[[100, 262], [18, 238]], 4.5], [[[8, 205], [192, 205]], 4]];
 export const ROADWORKS = { speed: [0, 0.15, 0.3, 0.45], names: ['Sentier', 'Terre battue', 'Gravier', 'Pavés'], costPerM: { wood: 0.6, stone: 0.8 }, buildSpeed: 3, maxLen: 160 };
 // ——— Jour et nuit (v2.0) : un cycle complet dure `length` secondes ; la nuit réduit la portée des tireurs sans feux ———
-export const DAY = { length: 420, start: 0.12, dusk: [0.5, 0.62], dawn: [0.9, 0.99] };
+export const DAY = { length: 600, start: 0.1, dusk: [0.82, 0.88], dawn: [0.95, 0.995] };   // (v4.0) la nuit ne dure qu'environ 1/10e du cycle
 export const GATE_XS_LIST = [20, 100, 180];
 // braseros : sur la muraille (2 par secteur), grands feux de bois dans la plaine (bûchers préparés entre les vagues), dans la cour et au village
 export const BRAZIERS = [
@@ -182,7 +188,7 @@ export const QUARANTINE = { x: 13, z: 199 };
 //  frenzy : rayon d'attraction d'un mordu à terre · devour : zombies au contact pour le dévorer (guard : vitesse si son escouade est à côté) · blood : un escouade blessée attire de plus loin (×)
 //  surprise : chance qu'un mordu transformé morde un voisin avant que l'escouade réagisse · cells : places par niveau de la quarantaine
 //  biters : types de zombies qui mordent ; killers : types qui tuent sans mordre ; tearers : géants qui déchirent leur proie et boivent son sang
-export const INFECTION = { bite: 0.4, turn: 45, tackle: 0.4, down: 3.2, frenzy: 16, devour: 3, devourTime: 3.5, guard: 0.25, blood: 1.7, surprise: 0.5, cells: 4, prisonSlow: 0.3, heal: 4, biters: [0, 1, 2, 4], killers: [3, 6], tearers: [5] };
+export const INFECTION = { bite: 0.4, turn: 45, tackle: 0.4, down: 3.2, frenzy: 16, devour: 3, devourTime: 3.5, guard: 0.25, blood: 1.7, surprise: 0.5, cells: 4, prisonSlow: 0.3, heal: 4, biters: [0, 1, 2, 4], killers: [3, 6, 7], tearers: [5] };
 Object.assign(BUILDINGS, ARMY_BUILDINGS);
 // ——— Phase 6 : construction libre ———
 // Structures multiples (placées où l'on veut) : maisons et tours de défense. Les autres bâtiments existent en un seul exemplaire (niveaux).
@@ -218,7 +224,7 @@ export const BUILD = {
   refund: 0.8, moveWork: 6, workerExp: 0.85, maxWorkers: 4, upgradeTime: 0.7,
   houseUnits: [0, 1, 2.5, 4.5, 7], houseUpCost: lv => ({ wood: 60 + 70 * lv, stone: 30 + 60 * lv, ...(lv >= 2 ? { gold: 25 * lv } : {}) }),
   maxTowers: 14, houseCost: n => ({ wood: 40 + 4 * n, stone: 8 + 2 * n }), towerUpCost: lv => ({ wood: 50 * lv, stone: 90 * lv }),
-  blockers: [{ x: 100, z: 298, r: 24 }, { x: 162, z: 292, r: 6.5 }],
+  blockers: [{ x: 100, z: 298, r: 30 }, { x: 75, z: 276, r: 4 }, { x: 125, z: 276, r: 4 }, { x: 75, z: 318, r: 4 }, { x: 125, z: 318, r: 4 }, { x: 162, z: 292, r: 6.5 }],
   oreR: 6.5, oreSnap: 16,      // gisements : seules les mines s'y posent (centrées dessus) ; aucun autre bâtiment ne peut les recouvrir
 };
 // Tours de défense : tirent seules ; les 6 tours de la muraille existent dès le départ.
@@ -226,11 +232,12 @@ export const TOWER = { range: 44, rangePerLevel: 3, dmg: 22, dmgPerLevel: 0.4, r
 // Armes de siège (reprises de l'ancien jeu) : fixes, derrière la muraille. Munitions prélevées dans les stocks.
 // range/minRange en mètres depuis l'arme ; aoe = rayon d'impact ; speed = m/s du projectile ; crew = places de population.
 export const SIEGE = {
+  cannon:    { name: 'Canon',     ico: '💣', range: 90, minRange: 10, dmg: 260, aoe: 5.5, reload: 7.0, speed: 70, ammo: { iron: 3, gold: 1 }, cost: { wood: 150, iron: 220, gold: 120 }, time: 45, level: 3, crew: 3, color: 0x3a3c42, size: 1.4, tech: 'powder', info: 'Poudre noire : 260 dégâts de zone, portée 90 m' },
   ballista:  { name: 'Baliste',   ico: '🎯', range: 46, minRange: 4,  dmg: 85,  aoe: 2.2, reload: 3.0, speed: 55, ammo: { iron: 1 },  cost: { wood: 80, iron: 30 },                       time: 18, level: 1, crew: 2, color: 0x8a6a3a, size: 1.0, info: 'Tir tendu, 85 dégâts : excellente contre les gros zombies' },
   catapult:  { name: 'Catapulte', ico: '☄', range: 60, minRange: 14, dmg: 60,  aoe: 4.5, reload: 5.0, speed: 26, ammo: { stone: 2 }, cost: { wood: 120, stone: 60, iron: 20 },          time: 25, level: 2, crew: 2, color: 0x7a5a30, size: 1.3, info: 'Tir en cloche, dégâts de zone 4,5 m' },
   trebuchet: { name: 'Trébuchet', ico: '🏰', range: 82, minRange: 24, dmg: 150, aoe: 6.5, reload: 9.0, speed: 32, ammo: { stone: 5 }, cost: { wood: 200, stone: 120, iron: 60, gold: 50 }, time: 40, level: 3, crew: 3, color: 0x5a4020, size: 1.7, info: 'Portée immense, 150 dégâts de zone 6,5 m, rechargement lent' },
 };
-export const SIEGE_ORDER = ['ballista', 'catapult', 'trebuchet'];
+export const SIEGE_ORDER = ['ballista', 'catapult', 'trebuchet', 'cannon'];
 export const SIEGE_RULES = { perLevel: 2, slotsPerSector: 3, queueMax: 4, speedPerLevel: 0.25, refund: 0.5 };
 // Améliorations : effets mesurables, coût du niveau N+1 = base × (N+1).
 export const UPGRADES = {
@@ -260,6 +267,31 @@ export const ZOMBIE_PACE = { farMin: 0.42, farMax: 0.75, rushMin: 1.3, rushMax: 
 // Colosses : à partir de la vague 6, une chance sur deux d'en voir un (un de plus toutes les 6 vagues)
 export const giantsFor = (v, r) => v >= 6 && r < 0.55 ? 1 + ((v - 6) / 6 | 0) : 0;
 export const PACK = { base: 5, perWave: 1.6, jitter: 6, spread: 0.9 };
+// ——— v4.0 : systèmes additionnels ———
+export const EXTRA = {
+  seasonWaves: 3,
+  seasons: [ { name: 'Printemps', ico: '🌸', food: 1.1 }, { name: 'Été', ico: '☀', food: 1.25 }, { name: 'Automne', ico: '🍂', food: 1.0 }, { name: 'Hiver', ico: '❄', food: 0.45 } ],
+  winterWood: 0.004,                                                     // bois de chauffage par habitant et par seconde en hiver
+  moraleWin: 8, moraleLoss: 0.35, medalWaves: 10,
+  festival: { cost: { food: 150, gold: 50 }, gain: 25 },
+  traps: { spikes: { name: 'Fosse à pieux', ico: '🪤', r: 2.2, dmg: 90, uses: 14, cost: { wood: 40 } },
+           caltrops: { name: 'Chausse-trappes', ico: '✳', r: 3.2, slow: 0.45, uses: 1e9, cost: { iron: 15 } },
+           pitch: { name: 'Baril de poix', ico: '🛢', r: 3.0, aoe: 6, dmg: 70, uses: 1, cost: { wood: 30, gold: 10 } } },
+  trapZ: [92, 140], maxTraps: 40,
+  oil: { cost: { wood: 25 }, cd: 40, dmg: 140 },
+  moat: { far: 9, near: 3, slow: [1, 0.6, 0.42, 0.42], dps: 8, cost: [null, { wood: 60, stone: 30 }, { stone: 80 }, { wood: 120, iron: 20 }], time: [0, 30, 25, 25], names: ['', 'Fossé', 'Douves en eau', 'Douves à pieux'] },
+  palisade: { dist: 26, hp: 900, cost: { wood: 160 }, repair: { wood: 70 }, time: 20 },
+  hero: { cost: { gold: 150, food: 60 }, rallyTime: 15, rallyCd: 60, xp: [0, 60, 160, 320, 560] },
+  tech: { alchemy: { name: 'Alchimie', ico: '⚗', info: 'Flèches enflammées : archers +20 % de dégâts', uni: 1, cost: { gold: 150, food: 100 }, time: 60 },
+          engineering: { name: 'Ingénierie', ico: '📐', info: 'Murailles +25 % de PV', uni: 2, cost: { gold: 220, stone: 300 }, time: 90 },
+          powder: { name: 'Poudre noire', ico: '💥', info: 'Débloque le canon à l\'atelier de siège', uni: 3, cost: { gold: 400, iron: 200 }, time: 120 } },
+  eventChance: 0.55, caravanEvery: 3, refugeeBite: 0.2, fire: { time: 45 },
+  merchant: [ [{ give: { wood: 150 }, get: { gold: 60 } }, { give: { food: 120 }, get: { iron: 50 } }],
+              [{ give: { stone: 150 }, get: { gold: 55 } }, { give: { gold: 40 }, get: { food: 160 } }],
+              [{ give: { iron: 60 }, get: { gold: 70 } }, { give: { gold: 50 }, get: { wood: 200 } }] ],
+  caravan: [ { give: { gold: 120 }, units: { soldier: 6 } }, { give: { gold: 110 }, units: { archer: 6 } }, { give: { wood: 200 }, get: { stone: 160 } } ],
+  bossEvery: 10, bossReward: { gold: 400, iron: 200, stone: 200 },
+};
 export function waveSpec(v) {
   const n = Math.round(30 * Math.pow(1.18, Math.min(v, 6) - 1) * Math.pow(1.1, Math.max(0, v - 6)));
   const frac = [0, 0, 0, 0, 0];
@@ -269,5 +301,7 @@ export function waveSpec(v) {
   frac[3] = v >= 5 ? Math.min(0.05, 0.02 * (v - 4)) : 0;
   frac[0] = 1 - frac[1] - frac[2] - frac[3] - frac[4];
   const sectors = 1 + Math.min(4, Math.floor(v / 3));
-  return { n, frac, sectors, duration: Math.min(60, 20 + n / 14), reward: { gold: 30 + 10 * v, stone: 20 + 5 * v, iron: 10 + 3 * v } };
+  // (v4.0) nouveaux types : chiens dès la vague 4, cracheurs dès 6, gonflés dès 7, grimpeurs dès 8 (indices 8 à 11)
+  const extra = { 11: v >= 4 ? Math.min(0.12, 0.03 * (v - 3)) : 0, 9: v >= 6 ? Math.min(0.06, 0.015 * (v - 5)) : 0, 10: v >= 7 ? Math.min(0.05, 0.012 * (v - 6)) : 0, 8: v >= 8 ? Math.min(0.06, 0.015 * (v - 7)) : 0 };
+  return { n, frac, extra, sectors, boss: v % EXTRA.bossEvery === 0 ? 1 : 0, duration: Math.min(60, 20 + n / 14), reward: { gold: 30 + 10 * v, stone: 20 + 5 * v, iron: 10 + 3 * v } };
 }

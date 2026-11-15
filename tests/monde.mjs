@@ -30,7 +30,7 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
 }
 { // nuit, braseros, allumeurs, zombies qui éteignent
   const sim = new Simulation(), N = sim.night, E = sim.eco; rich(sim); for (let i = 0; i < 12; i++) E.addVillager();
-  N.t = 0.08; ok(N.light() > 0.95, 'plein jour'); N.t = 0.75; ok(N.light() < 0.2, 'pleine nuit');
+  N.t = 0.08; ok(N.light() > 0.95, 'plein jour'); N.t = 0.92; ok(N.light() < 0.2, 'pleine nuit');
   ok(N.rangeMult(2) < 0.75, `de nuit sans feu, les archers voient moins loin (×${N.rangeMult(2).toFixed(2)})`);
   E.setAssign('fire', 10); run(sim, 90); const lit = N.fires.filter(f => f.lit); ok(lit.length >= 8, `braseros allumés par les allumeurs (${lit.length})`);
   const wf = N.fires.find(f => f.zone === 'wall' && f.lit); ok(!wf || N.rangeMult(Math.floor(wf.x / 40)) > N.rangeMult(-1 + 0) - 1, 'secteur éclairé');
@@ -47,7 +47,7 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
   ok(carried, 'l\'équipe des feux porte le bois jusqu\'à la plaine'); ok(sumA > 1, `bûchers en préparation (${sumA.toFixed(2)} bûchers de bois empilés, ${P.ready} prêts)`);
   ok(!N.fires.some(f => f.zone === 'plain' && f.lit), 'de jour, les bûchers ne sont pas allumés');
   for (const f of N.fires) if (f.zone === 'plain') f.pile = 1;
-  N.t = 0.47; run(sim, 70); const lit = N.fires.filter(f => f.zone === 'plain' && f.lit).length; ok(lit >= 4, `la nuit approche : bûchers allumés (${lit}/8)`);
+  N.t = 0.79; run(sim, 70); const lit = N.fires.filter(f => f.zone === 'plain' && f.lit).length; ok(lit >= 4, `la nuit approche : bûchers allumés (${lit}/8)`);
   ok(N.rangeMult(2) > 0.85 || N.light() > 0.9, 'la plaine éclairée aide les tireurs');
   const fast = camp(3); run(fast, 100); const sumB = fast.night.fires.reduce((a, f) => a + (f.pile || 0), 0); ok(sumB > sumA * 1.3, `savoir-faire niv. 3 : bûchers plus vite (${sumB.toFixed(2)} contre ${sumA.toFixed(2)})`);
   const st = JSON.parse(JSON.stringify(serialize(fast))), s2 = new Simulation(); restore(s2, st); ok(Math.abs(s2.night.fires.reduce((a, f) => a + f.pile, 0) - sumB) < 0.05, 'sauvegarde : bûchers');

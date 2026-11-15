@@ -1,7 +1,7 @@
 import { AudioManager } from './audio/Audio.js';
 import { Simulation } from './sim/simulation.js';
 import { TICK } from './sim/constants.js';
-import { save, load, clearSave } from './sim/save.js';
+import { save, load, clearSave, restore } from './sim/save.js';
 import { Renderer } from './render/Renderer.js';
 import { FORMATS, idealFormat } from './render/config.js';
 import { loadKit } from './render/Kit.js';
@@ -36,7 +36,8 @@ addEventListener('pointerdown', () => audio.unlock()); addEventListener('keydown
 const hooks = {
   rd, cam, audio, resumed,
   setGfx: (fmt, over) => { if (fmt) { sim.format = fmt; sim.gfx = null; } if (over) sim.gfx = { ...(sim.gfx || {}), ...over }; applyFormat(); save(sim); },   // réglages graphiques en cours de partie
-  newGame: (fmt) => { clearSave(); sim.newGame(); sim.format = fmt || idealFormat(); sim.gfx = null; applyFormat(); ui.sel = -1; ui.cancelPlace(); ui.closeCard(); ui.closeSheet(); ui.showOver(false); ui.refresh(true); save(sim); },
+  loadState: (st) => { restore(sim, st); ui.sel = -1; ui.cancelPlace(); ui.closeCard(); ui.refresh(true); save(sim); },   // (v4.0) emplacements, reprise de vague
+  newGame: (fmt, mode) => { clearSave(); sim.newGame(); sim.setMode(mode); sim.format = fmt || idealFormat(); sim.gfx = null; applyFormat(); ui.sel = -1; ui.cancelPlace(); ui.closeCard(); ui.closeSheet(); ui.showOver(false); ui.refresh(true); save(sim); },
 };
 ui = new UI(sim, hooks);
 { const v = document.createElement('div'); v.className = 'vtag'; v.textContent = 'v' + VERSION; document.getElementById('app').appendChild(v); const sp = document.getElementById('splash'); document.getElementById('sp-v').textContent = 'v' + VERSION; setTimeout(() => sp.classList.add('off'), 1800); setTimeout(() => sp.remove(), 2700); }

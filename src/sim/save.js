@@ -43,7 +43,7 @@ export function serialize(sim) {
   for (let i = 0; i < Z.n; i++) zs.push([+Z.x[i].toFixed(2), +Z.z[i].toFixed(2), Math.round(Z.hp[i]), Z.type[i], Z.sector[i]]);
   return {
     seed: sim.seed, rng: sim.rng.state(), time: sim.time, wave: sim.wave, phase: sim.phase, timer: sim.timer, targets: sim.targets, lanes: sim.lanes || null,
-    eco: sim.eco.serialize(), build: sim.build.serialize(), castleHp: sim.castleHp, kills: Z.kills, stats: { ...sim.stats },
+    extras: sim.extras ? sim.extras.serialize() : null, eco: sim.eco.serialize(), build: sim.build.serialize(), castleHp: sim.castleHp, kills: Z.kills, stats: { ...sim.stats },
     spawn: sim.spawn ? { ...sim.spawn, counts: [...sim.spawn.counts] } : null, assaultTime: sim.assaultTime,
     wall: { hp: Array.from(sim.wall.hp), level: Array.from(sim.wall.level) },
     army: sim.army.serialize(),
@@ -56,6 +56,7 @@ export function restore(sim, st) {
   sim.rng.setState(st.rng); sim.time = st.time; sim.wave = st.wave; sim.phase = st.phase; sim.timer = st.timer; sim.targets = st.targets || []; sim.lanes = st.lanes || null;
   sim.castleHp = st.castleHp; sim.stats = { ...st.stats }; sim.over = false;
   sim.spawn = st.spawn; sim.assaultTime = st.assaultTime || 0;
+  if (sim.extras) sim.extras.restore(st.extras); if (sim.extras) sim.wall.hpMult = sim.extras.wallHpMult();
   if (st.eco) sim.eco.restore(st.eco); else { sim.eco.reset(); if (st.legacyRes) { sim.eco.res.gold = st.legacyRes.gold; sim.eco.res.stone = st.legacyRes.stone; } }
   sim.build.restore(st.build);
   sim.wall.hp.set(st.wall.hp); sim.wall.level.set(st.wall.level);

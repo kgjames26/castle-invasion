@@ -16,7 +16,7 @@ export class Siege {
   inSector(s) { let n = 0; for (const w of this.weapons) if (w.sector === s) n++; for (const q of this.queue) if (q.sector === s) n++; return n; }
   canBuild(sim, type, s) {
     const D = SIEGE[type], lv = sim.eco.level.workshop;
-    return lv >= D.level && this.deployed() < this.cap(sim) && this.queue.length < SIEGE_RULES.queueMax
+    return lv >= D.level && (!D.tech || (sim.extras && sim.extras.tech[D.tech])) && this.deployed() < this.cap(sim) && this.queue.length < SIEGE_RULES.queueMax
       && this.inSector(s) < SIEGE_RULES.slotsPerSector && sim.eco.popRoom() >= D.crew;
   }
   build(sim, type, s) {

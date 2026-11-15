@@ -8,6 +8,7 @@ import { Wall } from './wall.js';
 import { ZombieSwarm } from './zombies.js';
 import { Army, archerPos } from './army.js';
 import { Siege } from './siege.js';
+import { Extras } from './extras.js';
 import { START, UNITS, TIMING, waveSpec, giantsFor, golemsFor, GOLEM, PACK, FIRE, DIFFICULTY } from '../content/medieval.js';
 import { Mages } from './mage.js';
 import { Priest } from './priest.js';
@@ -46,7 +47,8 @@ export class Simulation {
     for (let s = 0; s < SECTORS; s++) { this.army.reserve.archer += START.perSector.archer; this.army.assignArchers(s, START.perSector.archer); }
     for (const o of START.squads) { this.army.reserve[o.type] += o.n; this.army.formSquad(o.type, o.n, o.sector); }
     this.castleHp = CASTLE.hp; this.over = false; this.time = 0;
-    this.wave = 1; this.phase = 'prep'; this.timer = TIMING.firstPrep; this.targets = [];
+    this.wave = 1; this.phase = 'prep'; this.timer = TIMING.firstPrep; this.targets = []; this.fallenUnits = [];
+    if (!this.extras) this.extras = new Extras(this); else this.extras.reset();
     this.spawn = null; this.assaultTime = 0; this.stats = { breaches: 0 };
     this.flow.rebuildAll();
   }
@@ -54,7 +56,15 @@ export class Simulation {
   // ——— commandes (appelées par l'interface) ———
   get res() { return this.eco.res; }
   // ——— armée ———
-  train(type, n = 1) { return this.army.enqueue(this, type, n); }
+  train(type, n = 1) { if (type === 'archer' && this.extras?.mode.mods?.includes('noArchers')) return false; return this.army.enqueue(this, type, n); }
+  // (v4.0) mode de partie : classique, survie infinie, défi du jour (modificateurs), campagne (objectif de vagues, départ imposé)
+  setMode(mode) {
+    this.extras.mode = mode || { kind: 'classic' }; const m = this.extras.mode;
+    if (m.seed) { this.seed = m.seed; this.rng = makeRng(m.seed); }
+    if (m.mods?.includes('poor')) for (const r in this.eco.res) this.eco.res[r] = Math.round(this.eco.res[r] * 0.5);
+    if (m.start) for (const r in m.start) this.eco.res[r] = m.start[r];
+    if (m.wave) this.wave = m.wave;
+  }
   cancelTrain(b) { return this.army.cancel(this, b); }
   assignArchers(s, delta) { this.army.autoArchers = false; return this.army.assignArchers(s, delta); }   // placement manuel : l'IA laisse faire le joueur
   setAutoArchers(on) { this.army.autoArchers = !!on; }
@@ -118,7 +128,7 @@ export class Simulation {
   golemSlams(dt) {
     const Z = this.zombies;
     for (const sl of Z.slams) {
-      for (let d = -GOLEM.reach; d <= GOLEM.reach; d++) { const k = sl.seg + d; if (k < 0 || k >= SEGS || this.wall.hp[k] <= 0) continue; if (this.wall.damage(k, GOLEM.quake * (d ? 0.45 : 1))) this.onBreach(k); }
+      for (let d = -GOLEM.reach; d <= GOLEM.reach; d++) { const k = sl.seg + d; if (k < 0 || k >= SEGS || this.wall.hp[k] <= 0) continue; if (this.wall.damage(k, GOLEM.quake * (d ? 0.45 : 1) * (sl.boss ? 2.2 : 1))) this.onBreach(k); }
       const s = sectorOfX(sl.x), a = this.army.archers[s]; let fell = 0, dead = 0;
       const n = Math.min(a.n, 1 + ((this.rng() * GOLEM.fall) | 0));
       for (let q = 0; q < n; q++) {
@@ -149,21 +159,27 @@ export class Simulation {
   pickTargets() {
     const spec = waveSpec(this.wave), rng = this.rng, n = Math.max(2, Math.min(6, spec.sectors + 1 + ((rng() * 2) | 0)));
     this.lanes = [];
-    for (let k = 0; k < n; k++) this.lanes.push(rng() < 0.3 ? W / 2 + (rng() - 0.5) * 44 : 8 + rng() * (W - 16));
+    // (v4.0) hordes plus malignes : dès la vague 5, une partie des couloirs vise le secteur de muraille le plus faible
+    let weak = 0, wv = Infinity; for (let s = 0; s < SECTORS; s++) { const r = this.wall.sectorHp(s) / this.wall.sectorMax(s); if (r < wv) { wv = r; weak = s; } }
+    for (let k = 0; k < n; k++) { const smart = this.wave >= 5 && rng() < 0.4; this.lanes.push(smart ? weak * SECTOR_W + SECTOR_W / 2 + (rng() - 0.5) * 20 : rng() < 0.3 ? W / 2 + (rng() - 0.5) * 44 : 8 + rng() * (W - 16)); }
     this.targets = [...new Set(this.lanes.map(x => sectorOfX(x)))].sort();
   }
   startAssault() {
     const spec = waveSpec(this.wave), D = DIFFICULTY[this.difficulty] || DIFFICULTY.normal; spec.n = Math.round(spec.n * D.n); this.zombies.hpMult = D.hp;
     const counts = spec.frac.map(f => Math.round(f * spec.n));
     counts[0] += spec.n - counts.reduce((a, b) => a + b, 0);
-    const giants = giantsFor(this.wave, this.rng()), golems = golemsFor(this.wave); counts[5] = giants; counts[6] = golems;
-    this.spawn = { counts, left: spec.n + giants + golems, total: spec.n + giants + golems, rate: spec.n / spec.duration, acc: 0, next: this.packSize(spec.n) };
+    const giants = giantsFor(this.wave, this.rng()), golems = golemsFor(this.wave); counts[5] = giants; counts[6] = golems; counts[7] = spec.boss || 0; if (this.extras.mode.mods?.includes('giants')) counts[5] = Math.max(1, counts[5]);
+    for (const k in spec.extra) { const c = Math.round(spec.extra[k] * spec.n); counts[+k] = c; counts[0] = Math.max(0, counts[0] - c); }   // (v4.0) nouveaux types pris sur les classiques
+    for (let k = 0; k < 12; k++) counts[k] ||= 0;
+    if (this.night && this.night.isNight && this.night.isNight()) counts[0] = Math.round(counts[0] * 1.15);   // les hordes de nuit sont plus nombreuses
+    const totalN = counts.reduce((a, b) => a + b, 0);
+    this.spawn = { counts, left: totalN, total: totalN, rate: spec.n / spec.duration, acc: 0, next: this.packSize(spec.n) };
     this.assaultTime = 0; this.events.push({ type: 'waveStart', wave: this.wave });
   }
   updateWaves(dt) {
     this.timer -= dt;
     if (this.phase === 'prep' && this.timer <= 0) { this.phase = 'alert'; this.timer = TIMING.alert; this.pickTargets(); }
-    else if (this.phase === 'alert' && this.timer <= 0) { this.phase = 'assault'; this.startAssault(); }
+    else if (this.phase === 'alert' && this.timer <= 0) { this.phase = 'assault'; this.extras.waveStart(); this.startAssault(); }
     else if (this.phase === 'assault') {
       this.assaultTime += dt;
       const sp = this.spawn;
@@ -175,12 +191,12 @@ export class Simulation {
         }
       } else if (this.zombies.n === 0) {
         const spec = waveSpec(this.wave);
-        for (const r in spec.reward) this.eco.add(r, spec.reward[r]);
+        for (const r in spec.reward) this.eco.add(r, spec.reward[r]); this.extras.waveEnd(spec.reward);
         this.events.push({ type: 'waveEnd', wave: this.wave, reward: spec.reward });
         { const r = this.army.autoForm(this); if (r.formed || r.filled || r.merged) this.events.push({ type: 'autoFormed', formed: r.formed, filled: r.filled, merged: r.merged }); }   // les troupes disponibles forment des escouades
         this.phase = 'calm'; this.timer = TIMING.calm; this.spawn = null;
       }
-    } else if (this.phase === 'calm' && this.timer <= 0) { this.wave++; this.phase = 'prep'; this.timer = TIMING.prep; this.targets = []; }
+    } else if (this.phase === 'calm' && this.timer <= 0) { this.wave++; this.phase = 'prep'; this.timer = TIMING.prep; this.targets = []; this.extras.prepStart(); }
   }
   packSize(n) { return Math.max(4, Math.round(PACK.base + this.wave * PACK.perWave + this.rng() * PACK.jitter)); }
   // Un groupe : même secteur cible, même type dominant (ils avancent à la même allure), placés en masse serrée
@@ -192,8 +208,9 @@ export class Simulation {
     let primary = this.pickType(sp), done = 0; if (primary < 0) return 0;
     const grp = this.nextGroup = (this.nextGroup || 0) % 1000000 + 1;
     for (let i = 0; i < size && sp.left > 0; i++) {
-      const big = primary >= 5;      // colosse ou golem : il mène une horde de zombies ordinaires
+      const big = primary >= 5 && primary <= 7;      // colosse ou golem : il mène une horde de zombies ordinaires
       let t = i === 0 && big ? primary : (big ? 0 : (rng() < 0.2 ? this.pickType(sp) : primary));
+      if (t === 11 && primary !== 11 && sp.counts[primary] > 0) t = primary;   // les chiens forment leur propre meute (ils distanceraient la horde)
       if (t < 0 || sp.counts[t] <= 0) t = this.pickType(sp); if (t < 0) break;
       // horde en front large (plus large que profonde) : elle arrive sur plusieurs tronçons à la fois
       const r = rad * Math.sqrt(rng()), a = rng() * Math.PI * 2, ox = Math.cos(a) * r * 1.5, oz = Math.sin(a) * r * 0.6, x = Math.min(W - 1, Math.max(1, gx + ox)), z = Math.max(1, gz + oz);
@@ -222,7 +239,7 @@ export class Simulation {
     this.golemSlams(dt);
     this.castleGuard(dt);
     this.burn(dt);
-    this.build.update(dt);
+    this.build.update(dt); this.extras.update(dt);
     this.eco.update(dt);
     this.zombies.compact();
     for (let i = this.blasts.length - 1; i >= 0; i--) { this.blasts[i].t += dt; if (this.blasts[i].t > 2.5) this.blasts.splice(i, 1); }

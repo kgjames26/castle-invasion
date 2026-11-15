@@ -8,6 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SEGS, SEG_W, SECTORS, SECTOR_W, WALK_H, GATE_SEGS, STAIR_OFF, wallOff, wallSlope } from '../sim/constants.js';
 import { STAIR_Z0, STAIR_Z1 } from '../sim/army.js';
 import { stoneMaterial } from './Stone.js';
+import { applyFlutterFog } from './fog.js';
 
 // GATE_HS : hauteur de chaque passage (la porte centrale, la grande porte, est plus haute) ; GATE_TH : hauteur des châtelets
 export const GATE_HS = [4.4, 4.4, 4.4], GATE_TH = [6.4, 6.4, 6.4];   // v3.1 : les portes ne dépassent plus la muraille — seule la herse levée en sort
@@ -101,7 +102,7 @@ export class WallView {
       for (let i = 0; i < Math.round((x1 - x0) / 2.5); i++) add(new THREE.BoxGeometry(0.9, 0.9, 0.6), st, x0 + 1.25 + i * 2.5, TH + 0.45, Z_OUT - 0.4);   // créneaux au-dessus du passage
       for (const gx of [x0 + 0.25, x1 - 0.25]) add(new THREE.BoxGeometry(0.22, TH + 2.6, 0.3), fog(new THREE.MeshLambertMaterial({ color: 0x3a3c42, flatShading: true })), gx, (TH + 2.6) / 2, Z_OUT + 0.15);   // rails de la herse : seuls à dépasser
       // bannières suspendues de part et d'autre du passage
-      for (const bx of [gc - 3.4, gc + 3.4]) { add(new THREE.BoxGeometry(1.5, 2.0, 0.08), fog(new THREE.MeshLambertMaterial({ color: 0x2f5fb0, side: THREE.DoubleSide })), bx, RY0 + 1.15, Z_OUT - 1.62); add(new THREE.BoxGeometry(1.55, 0.18, 0.1), fog(new THREE.MeshLambertMaterial({ color: 0xf2c94a })), bx, RY0 + 0.1, Z_OUT - 1.64); add(new THREE.BoxGeometry(0.5, 0.5, 0.1), fog(new THREE.MeshLambertMaterial({ color: 0xf2c94a })), bx, RY0 + 1.3, Z_OUT - 1.67, Math.PI / 4); }
+      for (const bx of [gc - 3.4, gc + 3.4]) { add(new THREE.BoxGeometry(1.5, 2.0, 0.08), applyFlutterFog(new THREE.MeshLambertMaterial({ color: 0x2f5fb0, side: THREE.DoubleSide }), 0.06), bx, RY0 + 1.15, Z_OUT - 1.62); add(new THREE.BoxGeometry(1.55, 0.18, 0.1), fog(new THREE.MeshLambertMaterial({ color: 0xf2c94a })), bx, RY0 + 0.1, Z_OUT - 1.64); add(new THREE.BoxGeometry(0.5, 0.5, 0.1), fog(new THREE.MeshLambertMaterial({ color: 0xf2c94a })), bx, RY0 + 1.3, Z_OUT - 1.67, Math.PI / 4); }
     });
     // portes : une par passage (gauche, centre, droite) ; chacune a ses deux battants et son linteau
     this.gates = GATE_SEGS.map(([a, b], g) => ({ g, segs: [a, b], x0: a * SEG_W, x1: (b + 1) * SEG_W }));

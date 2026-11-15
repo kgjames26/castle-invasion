@@ -15,6 +15,8 @@ import { Effects, EFFECTS } from './Effects.js';
 import { ATMOS, CAMERA, quality, setQualityName } from './config.js';
 import { fogUniforms, patchNorthFog, applyWindFog } from './fog.js';
 import { Post } from './Post.js';
+import { ExtrasView } from './ExtrasView.js';
+import { mats } from './Military.js';
 import { buildTroopRigs, buildVillagerRigs, throwAngle, toolGeometry, hatGeometry, troopRig, siegeRig, bx, BLOBS } from './Troops.js';
 import { buildKnightRigs, makeMage, makePriest, poseMage, knightRig, golemRig } from './Heroes.js';
 import { carrierGeometry, TOOL_TINT } from './Village.js';
@@ -23,7 +25,7 @@ import { groundMaterial, groundDetails } from './Ground.js';
 import { LOADS, buildLoadMeshes, backToolMatrix } from './Loads.js';
 import { FrontierView, RoadView, BrazierView } from './World.js';
 import { RANKS } from '../content/medieval.js';
-const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1], [1]];      // le golem (6) a son propre modèle articulé ; [1] ne sert que de repli
+const ZVAR = [[0, 3, 5], [2, 4], [1, 5], [1], [0, 4], [1], [1], [1], [0, 3], [2], [0], [1]];   // 7 boss (rig du géant) · 8 grimpeur · 9 cracheur · 10 gonflé · 11 chien      // le golem (6) a son propre modèle articulé ; [1] ne sert que de repli
 const _v1 = [];      // variantes de modèle par type de zombie
 const VTINT = { wood: 0xd9b27a, stone: 0xc3c8cd, iron: 0xa6b4d6, gold: 0xf2d65e, food: 0xb9e08c, repair: 0xff9a4a };
 
@@ -57,6 +59,7 @@ export class Renderer {
     this.frontierV = new FrontierView(this.scene, sim.frontier); this.roadV = new RoadView(this.scene); this.braziers = new BrazierView(this.scene, sim.night, quality.glow ? 6 : 0);
     this.applyQuality();
     this.buildTorches(); this.buildRangeIndicator();
+    this.xv = new ExtrasView(this);   // systèmes v4.0 (eau, poussière, fumées, sang, faune, météo, pièges, palissade…)
     this.fx = new Effects(this.scene, { enabled: EFFECTS.enabled });   // particules (flèches, zombies, muraille, siège) : vue seule
     this.selected = -1; this.clock = 0; this.selSquad = 0; this.targetMode = false; this.tmpC2 = new THREE.Color(); this.white = new THREE.Color(1, 1, 1);
   }
@@ -89,10 +92,14 @@ export class Renderer {
     const cols = { south: [[0.32, 0.5, 0.22], [0.42, 0.55, 0.26], [0.55, 0.55, 0.28]], north: [[0.66, 0.66, 0.6], [0.58, 0.6, 0.55], [0.74, 0.74, 0.7]] };   // herbe givrée, claire sur la neige
     while (n < MAXN && tries++ < MAXN * 8) {
       const south = r() < 0.86, z = south ? 206 + r() * 106 : 30 + r() * 108, x = 2 + r() * 196;
-      if (Math.hypot((x - CASTLE.x) / 38, (z - CASTLE.z) / 28) < 1) continue;                                        // pas sur les pavés du château
-      if (Math.abs(x - PLAZA.x) < PLAZA.hw + 2 && Math.abs(z - PLAZA.z) < PLAZA.hd + 2) continue;                       // ni sur la placette
+      // (v4.0) densité qui décroît en douceur près des pavés, des chemins et des rochers (plus de bord net)
+      let p = 1; const ec = Math.hypot((x - CASTLE.x) / 38, (z - CASTLE.z) / 28); if (ec < 1) continue; if (ec < 1.4) p *= (ec - 1) / 0.4;
+      const dpx = Math.max(0, Math.abs(x - PLAZA.x) - PLAZA.hw - 1), dpz = Math.max(0, Math.abs(z - PLAZA.z) - PLAZA.hd - 1), dpl = Math.hypot(dpx, dpz); if (!dpx && !dpz) continue; if (dpl < 5) p *= dpl / 5;
       const t = type[((z / CELL) | 0) * GW + ((x / CELL) | 0)]; if (t === T.ROAD || t === T.ROCK) continue;
-      const k = 0.7 + r() * 0.6, pal = south ? cols.south : cols.north, col = pal[(r() * pal.length) | 0], v = 1.45 + r() * 0.5;
+      for (const [ox, oz] of [[CELL, 0], [-CELL, 0], [0, CELL], [0, -CELL]]) { const tt = type[Math.max(0, Math.min(GD - 1, ((z + oz) / CELL) | 0)) * GW + Math.max(0, Math.min(GW - 1, ((x + ox) / CELL) | 0))]; if (tt === T.ROAD || tt === T.ROCK) p *= 0.6; }
+      if (r() > p) continue;
+      const frost = Math.max(0, Math.min(1, (175 - z) / 110)), ia = (r() * 3) | 0, cs = cols.south[ia], cn = cols.north[ia], col = [cs[0] + (cn[0] - cs[0]) * frost, cs[1] + (cn[1] - cs[1]) * frost, cs[2] + (cn[2] - cs[2]) * frost];   // givre progressif vers le nord
+      const k = (0.7 + r() * 0.6) * (0.6 + 0.4 * p), v = 1.45 + r() * 0.5;
       d.position.set(x, 0, z); d.rotation.set(0, r() * 6.28, 0); d.scale.set(k, k * (0.8 + r() * 0.5), k); d.updateMatrix(); im.setMatrixAt(n, d.matrix); im.setColorAt(n, c.setRGB(col[0] * v, col[1] * v, col[2] * v)); n++;
     }
     im.userData.max = n; im.count = n; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; this.scene.add(im); this.grass = im;
@@ -229,6 +236,8 @@ export class Renderer {
       sp.restore();
     }
     // (v3.3) plus de vignettage aux bords : le sol au-delà prolonge exactement la même prairie
+    // (v4.0) transitions encore plus douces : on superpose une version très floutée de la carte (réduction / agrandissement lissés)
+    for (const [c0, ctx, f, a] of [[cv, g, 8, 0.38], [sv, sp, 4, 0.7]]) { const tm = document.createElement('canvas'); tm.width = Math.max(1, c0.width / f | 0); tm.height = Math.max(1, c0.height / f | 0); const tg = tm.getContext('2d'); tg.imageSmoothingQuality = 'high'; tg.drawImage(c0, 0, 0, tm.width, tm.height); ctx.save(); ctx.globalAlpha = a; ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(tm, 0, 0, c0.width, c0.height); ctx.restore(); }
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const stex = new THREE.CanvasTexture(sv); stex.colorSpace = THREE.NoColorSpace; stex.magFilter = THREE.LinearFilter;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(W, D), groundMaterial(tex, stex));
@@ -322,15 +331,19 @@ export class Renderer {
     this.sun.intensity = ATMOS.sunIntensity * (0.06 + 0.94 * L); this.sun.color.setHex(ATMOS.sunColor).lerp(this._dusk || (this._dusk = new THREE.Color(0xff8a4a)), dusk * 0.7);
     this.hemi.intensity = ATMOS.hemiIntensity * (0.28 + 0.72 * L); this.hemi.color.setHex(ATMOS.hemiSky).lerp(this._nightSky || (this._nightSky = new THREE.Color(0x3a4f8a)), 1 - L);
     this.dark = 1 - L;
+    // (v4.0) lumière de fin de journée : le soleil baisse et tourne vers l'ouest au crépuscule (ombres longues) ; fenêtres éclairées la nuit
+    { const A = ATMOS.shadowArea, h = 32 + 88 * L, az = -2.25 - (1 - L) * 0.8; this.sun.position.set(A.x + Math.cos(az) * 120, h, A.z + Math.sin(az) * 70 + 60); this.sun.color.lerp(this._gold || (this._gold = new THREE.Color(0xffb060)), Math.max(0, 0.55 - Math.abs(L - 0.62)) * 0.9); }
+    { const g = Math.max(0, this.dark - 0.25) * 1.3; for (const k of ['3820122', '3030610']) { const m = mats.get(k); if (m) m.emissive.setRGB(1.0 * g, 0.62 * g, 0.28 * g); } if (this.castleSlit) this.castleSlit.color.setRGB(0.09 + 0.9 * g, 0.07 + 0.55 * g, 0.05 + 0.2 * g); }
     const sim = this.sim, a = sim.phase === 'assault' || sim.phase === 'alert' ? 1 : 0; this.fogA = (this.fogA || 0) + (a - (this.fogA || 0)) * Math.min(1, dt * 0.5);
-    const near = ATMOS.fogNear - ATMOS.fogAssault * this.fogA + ATMOS.fogBreath * Math.sin(this.clock * ATMOS.fogBreathSpeed);
+    const wx = sim.extras ? sim.extras.weather : 'clear'; this.wxF = (this.wxF || 0) + ((wx === 'fog' ? 1 : 0) - (this.wxF || 0)) * Math.min(1, dt * 0.3); this.wxR = (this.wxR || 0) + ((wx === 'rain' || wx === 'snow' ? 1 : 0) - (this.wxR || 0)) * Math.min(1, dt * 0.3);   // météo (v4.0) : brouillard plus proche, ciel couvert sous la pluie
+    const near = ATMOS.fogNear - ATMOS.fogAssault * this.fogA + ATMOS.fogBreath * Math.sin(this.clock * ATMOS.fogBreathSpeed) + 30 * this.wxF; this.sun.intensity *= 1 - 0.35 * this.wxR; fogUniforms.uHazeRange.value.z = ATMOS.hazeMax + 0.3 * this.wxF + 0.12 * this.wxR;
     fogUniforms.uNFogRange.value.set(near, ATMOS.fogFar);
     if (this.rangeRing.visible) { const p = 0.75 + 0.25 * Math.sin(this.clock * 4); this.rangeRing.material.opacity = p; }
     if (quality.shadows) for (const v of this.struct.map.values()) if (!v.g.userData.sh) { v.g.userData.sh = 1; this.shadowize(v.g); }
   }
   buildCastle() {
     // château fort procédural (v3.0), dans le style de la muraille ; le château du kit n'est plus utilisé
-    const g = buildCastleFort(CASTLE.x, CASTLE.z); this.scene.add(g); this.keepBoxes = g; this.castleFort = g;
+    const g = buildCastleFort(CASTLE.x, CASTLE.z); this.scene.add(g); this.keepBoxes = g; this.castleFort = g; this.castleSlit = g.children.map(m => m.material).find(m => m.isMeshBasicMaterial && m.color.getHex() === 0x18120e);
   }
   buildEconomy() {
     this.struct = new StructureView(this.scene, this.sim, this.camera);   // toutes les structures (chantiers, bâtiments, fantôme)
@@ -429,7 +442,7 @@ export class Renderer {
     this.renderMachines(S);
     n = 0;
     for (const p of S.shots) {
-      if (n >= 64) break; const f = Math.min(1, p.t / p.dur), x = p.x0 + (p.x1 - p.x0) * f, z = p.z0 + (p.z1 - p.z0) * f, arc = p.type === 'ballista' ? 3 : 14;
+      if (n >= 64) break; const f = Math.min(1, p.t / p.dur), x = p.x0 + (p.x1 - p.x0) * f, z = p.z0 + (p.z1 - p.z0) * f, arc = p.type === 'ballista' ? 3 : p.type === 'cannon' ? 6 : 14;
       d.position.set(x, 3 + arc * Math.sin(Math.PI * f), z); const k = p.type === 'trebuchet' ? 1.8 : p.type === 'catapult' ? 1.3 : 0.7; d.scale.set(k, k, k); d.rotation.set(0, 0, 0); d.updateMatrix(); this.pMesh.setMatrixAt(n, d.matrix);
       this.pMesh.setColorAt(n, c.setHex(p.type === 'ballista' ? 0xf5e6b0 : 0x6d6d70)); n++;
     }
@@ -563,7 +576,7 @@ export class Renderer {
     const sim = this.sim, tierOf = t => RANKS.indexOf(sim.army.rank(sim, t));
     for (const t of ['soldier', 'heavy', 'cavalry']) { const k = tierOf(t); this.swapRig(t, k, () => troopRig(this.scene, t, k)); }
     const kk = tierOf('knight') + (this.knightGlb ? 10 : 0); this.swapRig('knight', kk, () => knightRig(this.scene, kk % 10)); this.rigs.knightGold = this.rigs.knight;
-    const w = Math.max(1, sim.eco.level.workshop || 1); for (const t of ['ballista', 'catapult', 'trebuchet']) this.swapRig(t, w, () => siegeRig(this.scene, t, w));
+    const w = Math.max(1, sim.eco.level.workshop || 1); for (const t of ['ballista', 'catapult', 'trebuchet', 'cannon']) this.swapRig(t, w, () => siegeRig(this.scene, t, w));
   }
   useKnight() { this.knightGlb = true; this.rigTier.knight = -1; }
   useItems() {
@@ -612,15 +625,17 @@ export class Renderer {
   }
   // ——— machines de siège : le bras de lancer suit le cycle de tir (armé → détente → remontée) ———
   renderMachines(S) {
-    const R = this.rigs, d = this.dummy, tint = this.tmpColor, SC = { ballista: 1.0, catapult: 1.1, trebuchet: 1.0 };
-    for (const k of ['ballista', 'catapult', 'trebuchet']) R[k].begin();
+    const R = this.rigs, d = this.dummy, tint = this.tmpColor, SC = { ballista: 1.0, catapult: 1.1, trebuchet: 1.0, cannon: 1.15 };
+    for (const k of ['ballista', 'catapult', 'trebuchet', 'cannon']) if (R[k]) R[k].begin();
     for (const w of S.weapons) {
       const D = SIEGE[w.type], sc = SC[w.type], e = D.reload - w.cd; d.position.set(w.x, 0, w.z); d.scale.set(sc, sc, sc); d.rotation.set(0, 0, 0); d.updateMatrix();
       if (w.noAmmo) tint.setRGB(1.6, 0.6, 0.55); else tint.setRGB(1, 1, 1);
-      if (w.type === 'ballista') R.ballista.push(d.matrix, tint, [0, w.rec > 0 ? -1.2 * (1 - w.rec / 0.35) : 0.7 * Math.min(1, Math.max(0, e - 0.3))]);
+      if (!R[w.type]) continue;
+      if (w.type === 'cannon') R.cannon.push(d.matrix, tint, [0, w.rec > 0 ? 0.7 * (w.rec / 0.35) : 0]);
+      else if (w.type === 'ballista') R.ballista.push(d.matrix, tint, [0, w.rec > 0 ? -1.2 * (1 - w.rec / 0.35) : 0.7 * Math.min(1, Math.max(0, e - 0.3))]);
       else R[w.type].push(d.matrix, tint, [0, throwAngle(w.type, e, D.reload, w.noAmmo)]);
     }
-    for (const k of ['ballista', 'catapult', 'trebuchet']) R[k].end();
+    for (const k of ['ballista', 'catapult', 'trebuchet', 'cannon']) if (R[k]) R[k].end();
   }
   buildHighlight() {
     this.hl = new THREE.Mesh(new THREE.PlaneGeometry(SECTOR_W, 60), new THREE.MeshBasicMaterial({ color: 0xffd23f, transparent: true, opacity: 0.16, depthWrite: false }));
@@ -772,16 +787,16 @@ export class Renderer {
     const Z = this.sim.zombies, n = Z.n, cnt = this.zvCount.fill(0), clock = this.clock, tc = this.tmpColor;
     const G = this.golems || (this.golems = golemRig(this.scene)), d = this.dummy; G.begin();
     for (let i = 0; i < n; i++) {
-      if (Z.type[i] === 6) {     // golem : géant zombie à la masse — lève la masse au-dessus de la tête puis l'abat (muraille ou troupes)
+      if (Z.type[i] === 6 || Z.type[i] === 7) {     // golem / boss : géant zombie à la masse — lève la masse au-dessus de la tête puis l'abat (muraille ou troupes)
         const x = Z.px[i] + (Z.x[i] - Z.px[i]) * alpha, z = Z.pz[i] + (Z.z[i] - Z.pz[i]) * alpha, dx = Z.x[i] - Z.px[i], dz = Z.z[i] - Z.pz[i], mv = dx * dx + dz * dz > 4e-6;
         const zr = this.zRot || (this.zRot = new Float32Array(MAX_Z)); if (mv) zr[i] = Math.atan2(dx, dz);
-        const rot = mv || Z.bite[i] > 0 ? zr[i] : 0, sc = ZOMBIES[6].size * HUMAN_H / 2.95, ph = clock * 2.0 + Z.phase[i], sw = mv ? Math.sin(ph) * 0.4 : 0;
+        const rot = mv || Z.bite[i] > 0 ? zr[i] : 0, sc = ZOMBIES[Z.type[i]].size * HUMAN_H / 2.95, ph = clock * 2.0 + Z.phase[i], sw = mv ? Math.sin(ph) * 0.4 : 0;
         const crush = Z.biteK[i] === 5 && Z.bite[i] > 0, wallHit = Z.state[i] === 1 && !crush, f = crush ? 1 - Z.bite[i] / 1.4 : wallHit ? 1 - Math.max(0, Z.slam[i]) / 3.5 : 0;
         const swing = crush || wallHit, up = f < 0.7 ? -3.0 * (f / 0.7) : -3.0 + 3.6 * Math.min(1, (f - 0.7) / 0.15);   // élan lent, frappe brutale
         const armR = swing ? up : -0.25 + sw * 0.5 + 0.06 * Math.sin(clock * 1.3 + i), armL = swing ? -0.5 - 0.4 * Math.sin(f * 3.14) : -0.15 - sw * 0.6;
         const lean = swing ? (f < 0.7 ? -0.12 * f : 0.25) : 0.05 * Math.sin(ph * 2);
         d.position.set(x, Math.abs(Math.sin(ph)) * 0.1 * (mv ? 1 : 0), z); d.rotation.set(lean, rot, mv ? 0.05 * Math.sin(ph) : 0); d.scale.setScalar(sc); d.updateMatrix();
-        const hurt = Z.hp[i] / ZOMBIES[6].hp < 0.5 ? 0.75 : 1; tc.setRGB(hurt, hurt * 0.95, hurt * 0.92); if (Z.slow[i] > 0) tc.setRGB(0.7, 0.9, 1.3);
+        const hurt = Z.hp[i] / ZOMBIES[Z.type[i]].hp < 0.5 ? 0.75 : 1; if (Z.type[i] === 7) tc.setRGB(1.25 * hurt, 0.62 * hurt, 0.55 * hurt); else tc.setRGB(hurt, hurt * 0.95, hurt * 0.92); if (Z.slow[i] > 0) tc.setRGB(0.7, 0.9, 1.3);
         G.push(d.matrix, tc, [0, sw, -sw, armL, armR, swing ? (f < 0.7 ? -0.25 : 0.35) : 0.12 + 0.12 * Math.sin(clock * 0.9 + i)]); continue;   // tête : hoche, se rejette en arrière à l'élan
       }
       const t = Z.type[i], Zt = ZOMBIES[t], pool = ZVAR[t], vi = pool[((Z.phase[i] * 1000) | 0) % pool.length], im = this.zv[vi], k = cnt[vi]++;
@@ -789,7 +804,8 @@ export class Renderer {
       const zr = this.zRot || (this.zRot = new Float32Array(MAX_Z)), moving = dx * dx + dz * dz > 4e-6; if (moving) zr[i] = Math.atan2(dx, dz);
       const rot = moving || Z.bite[i] > 0 ? zr[i] : 0, c = Math.cos(rot), s2 = Math.sin(rot), sc = Zt.size * HUMAN_H / 1.6, o = k * 16, m = im.instanceMatrix.array;
       // morsures (v2.4) : 1 morsure debout (se penche et happe), 2 plongeon (se jette à l'horizontale), 3 déchirement (géant : se cabre, puis boit), 4 coup (lourd)
-      let pitch = Z.state[i] !== 1 && Z.pace(i, x, z) > 1 ? 0.12 + 0.12 * Z.rushK[i] : 0, fwd = 0, y = 0; const bk = Z.biteK[i], bt = Z.bite[i];   // en course : penché en avant
+      // chien (11) : à quatre pattes
+      let pitch = t === 11 ? 1.05 : Z.state[i] !== 1 && Z.pace(i, x, z) > 1 ? 0.12 + 0.12 * Z.rushK[i] : 0, fwd = 0, y = t === 11 ? -0.2 : 0; const bk = Z.biteK[i], bt = Z.bite[i];   // en course : penché en avant
       if (bt > 0) {
         if (bk === 1) { const f = 1 - bt / 0.75, e = Math.sin(Math.PI * Math.min(1, f * 1.3)); pitch = 0.55 * e; fwd = 0.45 * e; }
         else if (bk === 2) { const f = 1 - bt / 1.1; pitch = f < 0.35 ? 1.4 * (f / 0.35) : 1.4; fwd = Math.min(1, f / 0.35) * 1.3; y = f < 0.35 ? 0.35 * Math.sin(Math.PI * f / 0.35) : 0.05; }
@@ -797,7 +813,8 @@ export class Renderer {
         else if (bk === 4) { const f = 1 - bt / 0.9; pitch = f < 0.5 ? -0.3 * (f / 0.5) : -0.3 + 0.9 * ((f - 0.5) / 0.5); }
       }
       const cp = Math.cos(pitch), sp = Math.sin(pitch), px0 = x + s2 * fwd, pz0 = z + c * fwd;
-      m[o] = c * sc; m[o + 1] = 0; m[o + 2] = -s2 * sc; m[o + 3] = 0; m[o + 4] = s2 * sp * sc; m[o + 5] = cp * sc; m[o + 6] = c * sp * sc; m[o + 7] = 0; m[o + 8] = s2 * cp * sc; m[o + 9] = -sp * sc; m[o + 10] = c * cp * sc; m[o + 11] = 0; m[o + 12] = px0; m[o + 13] = y; m[o + 14] = pz0; m[o + 15] = 1;
+      const wx = t === 10 ? 1.45 : 1;   // gonflé : ventru
+      m[o] = c * sc * wx; m[o + 1] = 0; m[o + 2] = -s2 * sc * wx; m[o + 3] = 0; m[o + 4] = s2 * sp * sc; m[o + 5] = cp * sc; m[o + 6] = c * sp * sc; m[o + 7] = 0; m[o + 8] = s2 * cp * sc; m[o + 9] = -sp * sc; m[o + 10] = c * cp * sc; m[o + 11] = 0; m[o + 12] = px0; m[o + 13] = y; m[o + 14] = pz0; m[o + 15] = 1;
       const pace = Z.pace(i, x, z);   // pas traînant au loin, course près du mur
       const cps = Z.state[i] === 1 ? 1.3 : Math.max(0.25, Zt.speed * pace * (Z.slow[i] > 0 ? 0.4 : 1) / (1.6 * sc));
       im.anim.array[k] = ((clock * cps + Z.phase[i] / 6.2832) % 1) * 16;
@@ -810,7 +827,7 @@ export class Renderer {
   // ——— morts (v3.4) : le zombie tombe (0,55 s), gît au sol ~4 s puis s'efface en transparence (1,2 s) ———
   renderCorpses() {
     if (!this.zc) return; const Z = this.sim.zombies, now = this.clock, L = this.corpses;
-    for (const f of Z.fallen.splice(0)) { if (f.t === 6) continue; const pool = ZVAR[f.t]; L.push({ x: f.x, z: f.z, vi: pool[((f.ph * 1000) | 0) % pool.length], t: f.t, rot: Math.atan2(f.dx, f.dz) || f.ph, back: f.ph % 2 < 1, t0: now, fr: (f.ph * 2.5) % 16 }); }
+    for (const f of Z.fallen.splice(0)) { if (f.t === 6 || f.t === 7) { if (this.xv) { this.xv.corpses.push({ x: f.x, z: f.z, rot: f.ph, t0: this.xv.t, golem: true, boss: f.t === 7 }); this.xv.decals.add(f.x, f.z, 'blood', 5, 40); } continue; } const pool = ZVAR[f.t]; L.push({ x: f.x, z: f.z, vi: pool[((f.ph * 1000) | 0) % pool.length], t: f.t, rot: Math.atan2(f.dx, f.dz) || f.ph, back: f.ph % 2 < 1, t0: now, fr: (f.ph * 2.5) % 16 }); }
     while (L.length > 140) L.shift();
     const cnt = this.zcCount.fill(0), FALL = 0.55, LIE = 4.0, FADE = 1.2;
     for (let j = L.length - 1; j >= 0; j--) {
@@ -926,7 +943,7 @@ export class Renderer {
       this.threat[s].material.opacity = o;
     }
     this.updateWall(); this.updateEconomy(alpha); this.updateSiege(alpha); this.struct.update(dtReal, this.clock);
-    this.updateAtmosphere(dtReal); this.updateBlobs(sim.speed ? alpha : 1); this.maskGrass();
+    this.updateAtmosphere(dtReal); this.xv.update(sim.speed ? dtReal * Math.min(8, sim.speed) : 0, alpha); this.updateBlobs(sim.speed ? alpha : 1); this.maskGrass();
     this.fx.setTorches(this.torchPos, sim.army.gate, this.clock);
     // monde étendu : forêts à défricher, routes, braseros (les objets de la simulation sont recréés à chaque nouvelle partie)
     if (this.frontierV.F !== sim.frontier) { this.frontierV.F = sim.frontier; this.frontierV.ver = -1; }

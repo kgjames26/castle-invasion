@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { stoneMaterial } from './Stone.js';
-import { patchNorthFog } from './fog.js';
+import { patchNorthFog, applyFlutterFog } from './fog.js';
 
 const fog = m => { m.onBeforeCompile = sh => patchNorthFog(sh); m.customProgramCacheKey = () => 'nfog'; return m; };
 
@@ -115,7 +115,7 @@ export function buildCastleFort(cx, cz) {
     roof: fog(new THREE.MeshLambertMaterial({ color: 0x7a3a2a, flatShading: true, side: THREE.DoubleSide })),
     wood: fog(new THREE.MeshLambertMaterial({ color: 0x4a3426, flatShading: true })),
     slit: new THREE.MeshBasicMaterial({ color: 0x18120e }),
-    blue: fog(new THREE.MeshLambertMaterial({ color: 0x2f5fb0, side: THREE.DoubleSide })),
+    blue: applyFlutterFog(new THREE.MeshLambertMaterial({ color: 0x2f5fb0, side: THREE.DoubleSide }), 0.09),
     gold: fog(new THREE.MeshLambertMaterial({ color: 0xd9b43a, flatShading: true })),
     iron: fog(new THREE.MeshLambertMaterial({ color: 0x3a3c42, flatShading: true })),
   };

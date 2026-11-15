@@ -2,6 +2,7 @@
 // Chaque pièce est un InstancedMesh : une matrice par instance ET par pièce (pivot + rotation locale), donc des centaines d'unités
 // restent bon marché. Les modèles regardent vers +z (sud) pour les troupes ; les machines de siège regardent vers -z (nord, côté zombies).
 import * as THREE from 'three';
+import { patchNorthFog as patchNorthFogT } from './fog.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { applyNorthFog } from './fog.js';
 
@@ -33,7 +34,7 @@ const SKIN = 0xe0b48c, STEEL = 0xcfd6dd, DARKSTEEL = 0x8e98a4, LEATHER = 0x5a3a2
 //  Recrue : tunique, calotte de cuir, petit écu de bois, épée courte · Régulier : casque d'acier · Vétéran : cotte de mailles, cimier
 //  Élite : plastron, cape, dorures · Légende : armure dorée, heaume à couronne, grand cimier, épée longue étincelante.
 const GOLDT = 0xf2c94a, MAIL = 0x7d858f;
-function footParts(P, tier = 1) {
+export function footParts(P, tier = 1) {
   const heavy = !!P.heavy, t = tier, helm = t === 0 ? 0x6b4a2c : t >= 4 ? GOLDT : P.helm, shield = t === 0 ? 0x8a6a3a : P.shield, trim = t >= 3 ? GOLDT : P.trim;
   const body = [
     bx(0.5, 0.62, 0.3, t >= 2 ? MAIL : P.cloth, 0, 1.06, 0), bx(0.52, 0.5, 0.06, P.cloth, 0, 0.98, 0.16),                       // corps (mailles dès Vétéran) + tabard
@@ -83,7 +84,17 @@ function horseParts(P, tier = 1) {
   return [part('body', [0, 0, 0], body), part('arm', [0.3, 1.92 + dy, 0.02], arm, 'rot')];
 }
 export const tierOf = rankIndex => Math.max(0, Math.min(4, rankIndex | 0));
-export function siegeRig(scene, type, t) { return new Rig(scene, ({ ballista: ballistaParts, catapult: catapultParts, trebuchet: trebuchetParts })[type](t), 24); }
+export function siegeRig(scene, type, t) { return new Rig(scene, ({ ballista: ballistaParts, catapult: catapultParts, trebuchet: trebuchetParts, cannon: cannonParts })[type](t), 24); }
+// CANON (v4.0, poudre noire) : affût de chêne à roues cerclées, fût de bronze à frettes, boulets empilés ; le fût recule au tir ('slide')
+function cannonParts(t = 1) {
+  const BR = 0x8a6a3a, BRZ = 0xb08a4a, DK = 0x3a3c42;
+  const base = [bx(1.1, 0.35, 2.4, WOODC, 0, 0.55, 0.2), bx(0.18, 0.7, 2.2, DARKWOOD, -0.5, 0.75, 0.2), bx(0.18, 0.7, 2.2, DARKWOOD, 0.5, 0.75, 0.2),
+    ...[-1, 1].flatMap(sx => [cyl(0.55, 0.16, DARKWOOD, sx * 0.72, 0.55, -0.35, 0, Math.PI / 2, 12), cyl(0.58, 0.06, DK, sx * 0.8, 0.55, -0.35, 0, Math.PI / 2, 12)]),
+    bx(0.2, 0.18, 1.4, DARKWOOD, 0, 0.3, 1.5), ...[0, 1, 2].map(k => cyl(0.16, 0.32, DK, -0.9 + k * 0.32, 0.16, 1.4, 0, 0, 8)), cyl(0.16, 0.32, DK, -0.74, 0.44, 1.4, 0, 0, 8)];
+  base.push(...siegeDeco(t, 0.25, 1.2, 1.0));
+  const barrel = [cyl(0.28, 2.3, BRZ, 0, 1.15, -0.3, Math.PI / 2, 0, 12), cyl(0.36, 0.5, BRZ, 0, 1.15, 0.9, Math.PI / 2, 0, 12), ...[-1.2, -0.4, 0.4].map(z => cyl(0.32, 0.12, BR, 0, 1.15, z, Math.PI / 2, 0, 12)), cyl(0.18, 0.06, 0x111111, 0, 1.15, -1.46, Math.PI / 2, 0, 10)];
+  return [part('base', [0, 0, 0], base), part('barrel', [0, 0, 0], barrel, 'slide')];
+}
 export function troopRig(scene, type, tier) {
   if (type === 'cavalry') return new Rig(scene, horseParts(PALETTES.cavalry, tier), 600);
   return new Rig(scene, footParts(PALETTES[type], tier), type === 'heavy' ? 600 : 900);
@@ -146,7 +157,7 @@ const TOOLS = {
   hammer: P => [bx(0.07, 0.07, 0.6, WOODC, 0, -0.42, 0.32), bx(0.3, 0.2, 0.2, 0x55565c, 0, -0.42, 0.66)],
   none: P => [],
 };
-function villagerParts(P) {
+export function villagerParts(P) {
   const body = [
     bx(0.5, 0.62, 0.3, P.tunic, 0, 1.06, 0), bx(0.54, 0.1, 0.34, LEATHER, 0, 0.78, 0), bx(0.4, 0.34, 0.06, P.apron, 0, 0.98, 0.17),
     bx(0.27, 0.27, 0.27, SKIN, 0, 1.54, 0.01), bx(0.12, 0.5, 0.12, P.tunic, -0.31, 1.0, 0),
@@ -204,10 +215,22 @@ export class Rig {
   end() { for (const m of this.meshes) { m.count = this.n; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; } }
 }
 
+// Rig « fondu » (v4.0) : mêmes pièces, géométries clonées + attribut d'opacité par instance (cadavres qui s'effacent)
+export class FadeRig extends Rig {
+  constructor(scene, parts, cap) {
+    super(scene, parts.map(p => ({ ...p, geo: p.geo.clone() })), cap); this.blob = 0;
+    const m = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true, depthWrite: false });
+    m.onBeforeCompile = sh => { patchNorthFogT(sh); sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aFade;\nvarying float vFade;').replace('#include <project_vertex>', '#include <project_vertex>\nvFade = aFade;'); sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vFade;').replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.a *= vFade;'); };
+    m.customProgramCacheKey = () => 'rig-fade';
+    this.fades = this.meshes.map(im => { im.material = m; const a = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); im.geometry.setAttribute('aFade', a); return a; });
+  }
+  pushFade(base, tint, ang, f) { const k = this.n; this.push(base, tint, ang); if (this.n > k) for (const a of this.fades) a.array[k] = f; }
+  end() { super.end(); for (const a of this.fades) a.needsUpdate = true; }
+}
 export function buildTroopRigs(scene) {
   return {
     soldier: new Rig(scene, footParts(PALETTES.soldier), 900), heavy: new Rig(scene, footParts(PALETTES.heavy), 600), cavalry: new Rig(scene, horseParts(PALETTES.cavalry), 600),
-    ballista: new Rig(scene, ballistaParts(), 24), catapult: new Rig(scene, catapultParts(), 24), trebuchet: new Rig(scene, trebuchetParts(), 24),
+    ballista: new Rig(scene, ballistaParts(), 24), catapult: new Rig(scene, catapultParts(), 24), trebuchet: new Rig(scene, trebuchetParts(), 24), cannon: new Rig(scene, cannonParts(), 24),
   };
 }
 

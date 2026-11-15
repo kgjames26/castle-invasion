@@ -167,7 +167,7 @@ export class Build {
       let n = 0; for (const v of crew) if (v.state === 'building') n++;
       s.crew = n;
       if (n > 0) {   // on bâtit à tout moment, vague comprise
-        s.progress += dt * BUILD.speed * Math.pow(n, BUILD.workerExp) * (1 + UPGRADES.apprentice.per * (this.sim.eco.up.apprentice || 0)) / s.work;
+        s.progress += dt * BUILD.speed * (this.sim.extras ? this.sim.extras.buildMult() : 1) * Math.pow(n, BUILD.workerExp) * (1 + UPGRADES.apprentice.per * (this.sim.eco.up.apprentice || 0)) / s.work;
         if (s.progress >= 1) this.finish(s);
       }
     }

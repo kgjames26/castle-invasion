@@ -225,6 +225,7 @@ export class Army {
     // infirmerie : une partie des combattants tombés est relevée et retourne en réserve après soins
     const save = INFIRMARY.save[Math.min(3, sim.eco.level.infirmary || 0)], Z = sim.zombies, zt = zi >= 0 ? Z.type[zi] : -1;
     for (let k = q.n; k < n0; k++) {
+      if (sim.extras) sim.extras.onSoldierDown(q); if (sim.fallenUnits && sim.fallenUnits.length < 80) { const a = sim.rng() * 6.28, r = Math.sqrt(sim.rng()) * q.rad; sim.fallenUnits.push({ x: q.x + Math.cos(a) * r, z: q.z + Math.sin(a) * r, type: q.type, rot: sim.rng() * 6.28 }); }
       // morsure (v2.4) : un mordeur peut mordre au lieu de tuer (debout ou en plongeant) ; un géant déchire sa proie
       if (zt >= 0 && INFECTION.biters.includes(zt) && sim.infection && sim.rng() < INFECTION.bite) { const tackle = sim.rng() < INFECTION.tackle; sim.infection.bite(sim, q, zi, tackle); Z.bite[zi] = tackle ? 1.1 : 0.75; Z.biteK[zi] = tackle ? 2 : 1; continue; }
       if (zt >= 0 && INFECTION.tearers.includes(zt)) { Z.bite[zi] = 2.2; Z.biteK[zi] = 3; sim.blast('tear', Z.x[zi] + Math.sin(Math.atan2(q.x - Z.x[zi], q.z - Z.z[zi])) * 2, Z.z[zi] + Math.cos(Math.atan2(q.x - Z.x[zi], q.z - Z.z[zi])) * 2, 1); sim.events.push({ type: 'torn', unit: q.type }); continue; }
@@ -241,7 +242,7 @@ export class Army {
     const Z = sim.zombies, hash = sim.hash, eco = sim.eco, w = eco.up.weapons, ar = eco.up.archery;
     this.trainTick(dt, sim); this.syncWalkers(sim); this.updateGate(dt);
     // archers
-    const AU = UNITS.archer, range = AU.range + 3 * ar, adm = AU.dmg * eco.atkMult('archer') * this.rank(sim, 'archer').force;
+    const AU = UNITS.archer, range = (AU.range + 3 * ar) * (sim.extras ? sim.extras.rangeMult() : 1), adm = AU.dmg * eco.atkMult('archer') * this.rank(sim, 'archer').force;
     const assault = sim.phase === 'assault';
     for (let s = 0; s < SECTORS; s++) {
       const a = this.archers[s], nightR = sim.night ? sim.night.rangeMult(s) : 1, bless = sim.priest ? sim.priest.blessMult(sim, s) : 1;   // bénédiction du prêtre
@@ -312,7 +313,7 @@ export class Army {
     q.mom = moving ? 1 : Math.max(0, q.mom - dt * 0.6);
     if (live > 0) {
       q.fight = 0.5;
-      const mult = F.atk * (1 + (F.charge + (U.charge || 0)) * q.mom) * sim.eco.atkMult(q.type) * rk.force * (moving ? 0.5 : 1);
+      const mult = F.atk * (1 + (F.charge + (U.charge || 0)) * q.mom) * sim.eco.atkMult(q.type) * rk.force * (moving ? 0.5 : 1) * (sim.extras ? sim.extras.squadMult(q) : 1);
       q.atkAcc += q.n * F.engage * dt / U.rate;
       let hits = q.atkAcc | 0; q.atkAcc -= hits;
       const cleave = (U.cleave || 1) + (q.type === 'knight' ? (sim.eco.smith.atk.knight / 2) | 0 : 0), km = 1;

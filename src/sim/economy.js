@@ -45,7 +45,7 @@ export class Economy {
   gatherRate(t) {
     const T = TASKS[t]; let r = T.rate * (1 + UPGRADES.tools.per * this.up.tools) * (1 + ECON.levelGather * Math.max(0, (T.building ? this.level[T.building] : 1) - 1));
     if (t === 'food') r *= (1 + UPGRADES.plow.per * this.up.plow) * (1 + ECON.millBonus * this.level.mill);
-    return r * (this.famine ? ECON.famineMult : 1);
+    return r * (this.famine ? ECON.famineMult : 1) * (this.sim.extras ? this.sim.extras.gatherMult(t) : 1);   // saisons, moral, spécialistes
   }
   // ——— gisements : site principal + gisements découverts par prospection ———
   siteList(t) {
@@ -105,7 +105,7 @@ export class Economy {
     let n = 0; for (const c of this.villagers) if (c.task === t && !c.leaving) n++;
     if (n < this.assign[t]) { v.task = t; v.state = t === 'repair' ? 'repairIdle' : 'toSite'; v.sx = null; v.timer = 0; v.seg = -1; }
   }
-  idleCount() { let n = 0; for (const t of TASK_IDS) n += this.assign[t]; return this.villagers.length - n - this.builderCount() - (this.prospect ? 1 : 0); }
+  idleCount() { let n = 0; for (const t of TASK_IDS) n += this.assign[t]; return this.villagers.length - n - this.builderCount() - (this.prospect ? 1 : 0) - (this.sim.extras ? this.sim.extras.specCount() : 0); }
   military() { return this.sim.army.headcount(); }
   // ——— ressources ———
   afford(c) { for (const r in c) if (this.res[r] < c[r]) return false; return true; }
@@ -119,7 +119,7 @@ export class Economy {
   smithMax() { return Math.min(SMITH.max, SMITH.perForge * (this.level.forge || 0)); }
   smithCost(kind, t) { const lv = this.smith[kind][t]; return lv >= this.smithMax() ? null : (kind === 'atk' ? SMITH.atkCost : SMITH.defCost)(lv); }
   buySmith(kind, t) { const c = this.smithCost(kind, t); if (!c || !this.pay(c)) return false; this.smith[kind][t]++; return true; }
-  atkMult(t) { return 1 + SMITH.atk * (this.smith.atk[t] || 0); }
+  atkMult(t) { return (1 + SMITH.atk * (this.smith.atk[t] || 0)) * (this.sim.extras ? this.sim.extras.atkMult(t) : 1); }
   defMult(t) { return Math.max(0.4, 1 - SMITH.def * (this.smith.def[t] || 0)); }
   // ——— commandes ———
   // Effectifs d'une tâche. Sans villageois libre, on en EMPRUNTE un à la tâche la moins urgente (comme pour les chantiers) ;
@@ -166,6 +166,8 @@ export class Economy {
   buyUpgrade(u) { const U = UPGRADES[u]; if (U.req && this.level[U.req] < (U.minLevel || 1)) return false; const c = this.upgradeCost(u); if (!c || !this.pay(c)) return false; this.up[u]++; return true; }
   setRepairPriority(s) { this.repairPriority = s; }
   // ——— villageois ———
+  // villageois perdu (mordu dans le village) : retiré de sa tâche
+  killVillager(v) { const i = this.villagers.indexOf(v); if (i < 0) return; if (v.task && this.assign[v.task] > 0) this.assign[v.task]--; this.villagers.splice(i, 1); this.syncTasks(); }
   addVillager(x, z) {
     const i = this.villagers.length;
     const v = { id: this.nextId++, task: null, state: 'idle', x: 0, z: 0, px: 0, pz: 0, carry: 0, carryRes: null, timer: 0, seg: -1, leaving: false, jx: 0, jz: 0, job: 0, bx: 0, bz: 0, sx: null, sz: 0, si: -1 };

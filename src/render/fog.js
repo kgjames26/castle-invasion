@@ -41,6 +41,14 @@ export function patchWind(shader, amp = 0.012) {
         transformed.x += k * ( sin( uWindTime * 1.25 + ph ) + 0.35 * sin( uWindTime * 3.1 + ph * 2.0 ) );
         transformed.z += k * 0.6 * cos( uWindTime * 1.05 + ph * 1.3 ); }`);
 }
+// bannières (v4.0) : le tissu ondule (géométries en coordonnées monde, phase selon la position)
+export function applyFlutterFog(material, amp = 0.08) {
+  material.onBeforeCompile = sh => { patchNorthFog(sh); sh.uniforms.uWindTime = fogUniforms.uWindTime;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uWindTime;').replace('#include <begin_vertex>', `#include <begin_vertex>
+      transformed.z += ${amp.toFixed(3)} * sin( uWindTime * 4.2 + transformed.x * 1.9 + transformed.y * 2.6 ) + ${(amp * 0.5).toFixed(3)} * sin( uWindTime * 7.3 + transformed.y * 4.0 );
+      transformed.x += ${(amp * 0.4).toFixed(3)} * sin( uWindTime * 3.1 + transformed.y * 3.0 );`); };
+  material.customProgramCacheKey = () => 'flutter' + amp; return material;
+}
 export function applyWindFog(material, amp) {
   material.onBeforeCompile = sh => { patchNorthFog(sh); patchWind(sh, amp); };
   material.customProgramCacheKey = () => 'north-fog-wind' + amp;
