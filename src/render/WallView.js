@@ -30,12 +30,52 @@ export async function loadWall(url) {
   return { geo, map };
 }
 
+// Dallage du chemin de ronde (v3.4) : dalles de pierre taillée en rangs décalés, joints sombres, mousse dans les joints,
+// usure claire au passage des archers, éclats et grain. Texture procédurale 1024 px pour 2,5 m (tuilable).
+let walkTex = null;
+function walkwayTexture() {
+  if (walkTex) return walkTex;
+  const S = 1024, cv = document.createElement('canvas'); cv.width = cv.height = S; const g = cv.getContext('2d');
+  let sd = 77; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  g.fillStyle = '#3c3a36'; g.fillRect(0, 0, S, S);                                                       // mortier
+  const rows = [150, 210, 170, 240, 254], ys = []; let y = 0; for (const h of rows) { ys.push([y, h]); y += h; }
+  for (const [y0, h] of ys) {
+    let x = -r() * 200; const off = x;
+    while (x < S) {
+      const w = 160 + r() * 260, gap = 9;
+      for (const dx of [0, S, -S]) {
+        const px = x + dx; if (px > S || px + w < 0) continue;
+        const base = 128 + r() * 34, warm = r() * 10 - 3, rc = base + warm, gc2 = base + warm * 0.4, bc = base - warm * 0.6;
+        g.fillStyle = `rgb(${rc | 0},${gc2 | 0},${bc | 0})`;
+        g.beginPath(); g.roundRect(px + gap / 2, y0 + gap / 2, w - gap, h - gap, 12); g.fill();
+        // biseau : bord haut-gauche clair, bas-droit sombre
+        g.strokeStyle = 'rgba(255,255,255,.16)'; g.lineWidth = 5; g.beginPath(); g.moveTo(px + gap, y0 + h - gap); g.lineTo(px + gap, y0 + gap); g.lineTo(px + w - gap, y0 + gap); g.stroke();
+        g.strokeStyle = 'rgba(0,0,0,.28)'; g.beginPath(); g.moveTo(px + w - gap, y0 + gap); g.lineTo(px + w - gap, y0 + h - gap); g.lineTo(px + gap, y0 + h - gap); g.stroke();
+        // nuances, taches et éclats sur la dalle
+        for (let k = 0; k < 7; k++) { const cx = px + gap + r() * (w - 2 * gap), cy = y0 + gap + r() * (h - 2 * gap), rad = 10 + r() * 50, v = r() < 0.5 ? 0 : 255; const gr = g.createRadialGradient(cx, cy, 0, cx, cy, rad); gr.addColorStop(0, `rgba(${v},${v},${v},${0.05 + r() * 0.06})`); gr.addColorStop(1, `rgba(${v},${v},${v},0)`); g.fillStyle = gr; g.fillRect(cx - rad, cy - rad, rad * 2, rad * 2); }
+        if (r() < 0.45) { g.strokeStyle = 'rgba(30,28,25,.45)'; g.lineWidth = 1.5; g.beginPath(); let cx = px + gap + r() * w * 0.6, cy = y0 + gap + r() * h * 0.3; g.moveTo(cx, cy); for (let k = 0; k < 4; k++) { cx += 10 + r() * 30; cy += r() * 30; g.lineTo(cx, cy); } g.stroke(); }   // fissure
+        if (r() < 0.3) { g.fillStyle = 'rgba(40,38,34,.6)'; g.beginPath(); g.arc(px + (r() < 0.5 ? gap + 4 : w - gap - 4), y0 + gap + r() * (h - 2 * gap), 6 + r() * 8, 0, 7); g.fill(); }   // éclat au bord
+      }
+      x += w;
+    }
+  }
+  // mousse et herbe rase dans les joints
+  for (let k = 0; k < 520; k++) { const x = r() * S, y = r() * S, rad = 3 + r() * 9; g.fillStyle = `rgba(${70 + r() * 30 | 0},${96 + r() * 30 | 0},${48 + r() * 20 | 0},${0.12 + r() * 0.25})`; g.beginPath(); g.arc(x, y, rad, 0, 7); g.fill(); }
+  // usure : bande plus claire et lisse au milieu (passage des archers)
+  const wear = g.createLinearGradient(0, 0, 0, S); wear.addColorStop(0, 'rgba(255,250,240,0)'); wear.addColorStop(0.5, 'rgba(255,250,240,.07)'); wear.addColorStop(1, 'rgba(255,250,240,0)'); g.fillStyle = wear; g.fillRect(0, 0, S, S);
+  // grain fin
+  const img = g.getImageData(0, 0, S, S), d = img.data; for (let i = 0; i < d.length; i += 4) { const n = (r() - 0.5) * 18; d[i] += n; d[i + 1] += n; d[i + 2] += n; } g.putImageData(img, 0, 0);
+  walkTex = new THREE.CanvasTexture(cv); walkTex.colorSpace = THREE.SRGBColorSpace; walkTex.wrapS = walkTex.wrapT = THREE.RepeatWrapping; walkTex.anisotropy = 8; walkTex.repeat.set(SEG_W / 2.5, 4.6 / 2.5);
+  return walkTex;
+}
+
 export class WallView {
   constructor(scene, asset, sim, fog) {
     this.sim = sim; this.d = new THREE.Object3D(); this.c = new THREE.Color(); this.c2 = new THREE.Color(1, 0.35, 0.25); this.m = new THREE.Matrix4(); this.m2 = new THREE.Matrix4(); this.m3 = new THREE.Matrix4();
     const panelMat = fog(new THREE.MeshLambertMaterial({ map: asset.map, side: THREE.DoubleSide })), stone = stoneMaterial(0xffffff), unit = new THREE.BoxGeometry(1, 1, 1);
     const mk = (geo, mat, cap) => { const im = new THREE.InstancedMesh(geo, mat, cap); im.frustumCulled = false; im.count = 0; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3); scene.add(im); return im; };
     this.outer = mk(asset.geo, panelMat, SEGS + 2); this.inner = mk(asset.geo, panelMat, SEGS + 2); this.core = mk(unit, stone, SEGS + 2);
+    { const pg = new THREE.PlaneGeometry(1, 1); pg.rotateX(-Math.PI / 2); this.walk = mk(pg, fog(new THREE.MeshLambertMaterial({ map: walkwayTexture() })), SEGS + 2); this.walk.receiveShadow = true; }   // dallage du chemin de ronde
     this.leaves = mk(asset.geo, panelMat, 2); this.steps = mk(unit, stone, STAIR_XS.length * STEPS);
     this.merlons = mk(unit, stone, SEGS * 3 + 64); this.butt = mk(unit, stone, SEGS + 2);
     // herse : grille de barreaux de fer, pointes en bas (une instance par porte)
@@ -95,6 +135,8 @@ export class WallView {
       this.place(this.core, n, gc, (GH + WALK_H) / 2, Z_MID, 0, gw, WALK_H - GH, 4.7); this.core.setColorAt(n, this.c.setRGB(0.5, 0.5, 0.5)); n++; lintels++;
     }
     this.outer.count = n; this.core.count = n; this.inner.count = n - lintels; this.leaves.count = nl;
+    { let nw = 0; for (let i = 0; i < SEGS; i++) { if (wall.hp[i] <= 0) continue; const ratio = wall.hp[i] / wall.segMax(i); this.place(this.walk, nw, i * SEG_W + SEG_W / 2, WALK_H + 0.025, Z_MID, 0, SEG_W + 0.02, 1, 4.6); this.tint(this.walk, nw, ratio, false); nw++; }
+      this.walk.count = nw; this.walk.instanceMatrix.needsUpdate = true; this.walk.instanceColor.needsUpdate = true; }
     // herses : montent dans le châtelet à l'ouverture ; disparaissent si la porte est détruite
     let k = 0;
     this.gates.forEach(G => {

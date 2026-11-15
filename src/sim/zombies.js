@@ -19,7 +19,7 @@ export class ZombieSwarm {
     // morsures (v2.4) : bite = temps restant de l'animation, biteK = 1 morsure debout, 2 plongeon, 3 déchirement (géant), 4 coup (lourd) ; turned = ancien soldat
     this.bite = new Float32Array(n); this.biteK = new Uint8Array(n); this.rush = new Uint8Array(n); this.rushD = new Float32Array(n); this.rushK = new Float32Array(n); this.farK = new Float32Array(n); this.turned = new Uint8Array(n); this.atkT = new Float32Array(n);
     this.gx = new Float32Array(GROUPS); this.gz = new Float32Array(GROUPS); this.gn = new Int32Array(GROUPS); this.hpMult = 1;
-    this.n = 0; this.kills = 0;
+    this.n = 0; this.kills = 0; this.fallen = [];
     this.near = new Int16Array(SECTORS);      // zombies proches (z>95) par secteur ciblé
     this.attacking = new Int16Array(SECTORS);
     this.dead = false;
@@ -41,7 +41,7 @@ export class ZombieSwarm {
   }
   // multiplicateur d'allure selon la distance à la muraille : traîne (< 1) au loin, charge (> 1) une fois sa distance franchie
   pace(i, x, z) { if (!this.grp[i]) return 1; const dw = WALL_Z0 + wallOff(x) - z; return dw > this.rushD[i] ? this.farK[i] : dw > -2 ? this.rushK[i] : 1; }
-  hit(i, dmg) { if (this.hp[i] > 0) { this.hp[i] -= dmg; if (this.hp[i] <= 0) { this.kills++; this.dead = true; } } }
+  hit(i, dmg) { if (this.hp[i] > 0) { this.hp[i] -= dmg; if (this.hp[i] <= 0) { this.kills++; this.dead = true; if (this.fallen.length < 160) this.fallen.push({ x: this.x[i], z: this.z[i], t: this.type[i], ph: this.phase[i], dx: this.x[i] - this.px[i], dz: this.z[i] - this.pz[i] }); } } }   // fallen : cadavres à afficher (vue)
   compact() {
     if (!this.dead) return; this.dead = false;
     for (let i = this.n - 1; i >= 0; i--) if (this.hp[i] <= 0) this.removeAt(i);

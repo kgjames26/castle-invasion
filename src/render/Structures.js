@@ -2,7 +2,7 @@
 // barres de progression, fantôme de placement, anneau de sélection. Ne modifie jamais la simulation.
 import * as THREE from 'three';
 import { makeModel, pipsFor, signSprite } from './Buildings.js';
-import { levelProps } from './Village.js';
+import { levelProps, levelArch } from './Village.js';
 import { mat, GOLD, WOOD, DARK } from './Military.js';
 import { STRUCT, BUILD, TASKS } from '../content/medieval.js';
 import { W } from '../sim/constants.js';
@@ -109,7 +109,7 @@ export class StructureView {
       // maison : le modèle change avec le niveau
       if (s.type === 'house' && v.model && v.hlv !== s.level && s.level >= 1) { v.hlv = s.level; v.inner.remove(v.model); const m = makeModel('house', this.kit, s.id * 7 + (s.x | 0), s.level); v.model = m.g; v.top = m.top; v.inner.add(m.g); v.g.userData.sh = 0; if (s.level > 1) v.popT = 0.0001; v.bar.position.y = v.top + 4.6; v.pips.forEach(pp => pp.position.y = v.top + 1.4); }
       // installations de niveau (scierie, carrière, mine, ferme… et bannières) : reconstruites quand le niveau change
-      if (v.model && v.lvl !== s.level && (!s.fixed || s.type === 'prison') && s.type !== "house" && s.type !== "tower") { v.lvl = s.level; v.g.userData.sh = 0; if (v.extras) v.inner.remove(v.extras); v.extras = levelProps(s.type, s.level, v.hw, v.hd); v.inner.add(v.extras); if (s.type === 'mill') v.model.scale.setScalar(1 + 0.07 * (s.level - 1)); if (v.lvl > 1) v.popT = 0.0001; }   // le moulin grandit avec ses niveaux
+      if (v.model && v.lvl !== s.level && (!s.fixed || s.type === 'prison') && s.type !== "house" && s.type !== "tower") { v.lvl = s.level; v.g.userData.sh = 0; if (v.extras) v.inner.remove(v.extras); v.extras = levelProps(s.type, s.level, v.hw, v.hd); v.extras.add(levelArch(s.type, s.level, v.hw, v.hd, v.top, STRUCT[s.type].color)); v.inner.add(v.extras); if (s.type === 'mill') v.model.scale.setScalar(1 + 0.07 * (s.level - 1)); if (v.lvl > 1) v.popT = 0.0001; }   // le moulin grandit avec ses niveaux
       if (v.extras) v.extras.visible = !site;
       if (s.state === 'moving' && v.model) v.model.position.y = 0.15 * Math.sin(clock * 6);
       else if (v.model) v.model.position.y = 0;

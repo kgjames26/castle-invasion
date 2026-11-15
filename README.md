@@ -279,3 +279,9 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Vitesse : 1× → 2× → 4× → 8× (jusqu'à 24 pas de simulation par image).
 - Plus de cubes de niveau au-dessus des bâtiments.
 - Gisements cliquables (forêt des bûcherons, carrière, filons de fer et d'or, gisements découverts) : nature du minerai, quantité restante / initiale, ouvriers, temps avant épuisement, total restant ; rappel du stock restant dans la fiche des mines, carrières et scieries.
+
+## Phase 34 — Bâtiments qui grandissent, morts au sol, dallage du chemin de ronde
+- Chaque niveau agrandit physiquement le bâtiment : aile latérale et parvis (niv. 2), tour carrée crénelée et seconde aile (niv. 3), flèche dorée, bannières et bornes (niv. 4), faîtes dorés, oriflammes et lanternes (niv. 5), seconde tour (niv. 6).
+- Fiche d'un bâtiment : encadré « Au niveau N : » avec les gains chiffrés (emplacements, rendement, stocks, rang et vitesse d'entraînement, unités débloquées, plafonds, soins, routes, pouvoirs du prêtre, places…) et le nouvel aspect.
+- Les zombies tués tombent (en avant ou en arrière), gisent ~4 s puis s'effacent en transparence (1,2 s) ; instancié, coût négligeable.
+- Chemin de ronde : dallage de pierre taillée procédural haute qualité (rangs décalés, biseaux, fissures, éclats, mousse dans les joints, usure au passage).

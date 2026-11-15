@@ -247,3 +247,4 @@ body.paused::after { content:'❚❚  Pause'; position:fixed; left:50%; top:96px
 #b-pause { font-size:13px; letter-spacing:-2px; } #b-pause.on { letter-spacing:0; font-size:15px; }
 @media (max-width:480px) { .rline { gap:3px; } .rchip { font-size:11.5px; letter-spacing:-0.3px; padding:3px 2px; } .rchip i .ri { width:1.25em; height:1.25em; } .rchip.pop { flex:1.35; } }
 .rb .isvg.cam { width:22px; height:22px; vertical-align:middle; overflow:visible; }
+.gain { margin:6px 0 4px; padding:6px 9px; border-radius:10px; background:#3f7a3a14; border:1px solid #3f7a3a33; font-size:12.5px; line-height:1.45; } .gain .gt { font-weight:800; font-size:13px; margin-bottom:2px; color:#2f5f2a; }

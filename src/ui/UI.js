@@ -2,7 +2,7 @@
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
 import { SECTORS, SECTOR_NAMES, SECTOR_AT, ARCHER_SLOTS, CASTLE, wallOff } from '../sim/constants.js';
-import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, INFECTION, GRADES, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP, BARRACKS_ICO, TIMING } from '../content/medieval.js';
+import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, INFECTION, GRADES, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP, BARRACKS_ICO, TIMING, TRAIN, TOWER } from '../content/medieval.js';
 import { MAGE_TIERS } from '../render/Heroes.js';
 import { FORMATS, idealFormat, quality } from '../render/config.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
@@ -514,8 +514,39 @@ export class UI {
     if (s.type === 'forge' && s.level) h += `<div class="hint small">Plafond attaque/défense : ${this.sim.eco.smithMax()}</div>`;
     if (RANK_BUILDINGS.includes(s.type)) { const t = UNIT_ORDER.filter(u => UNITS[u].from === s.type), r = RANKS[Math.max(0, s.level - 1)], nx = RANKS[s.level]; h += `<div class="rank">⭐ Rang <b>${r.name}</b>${nx ? ` → <b>${nx.name}</b> au niv. ${s.level + 1} : force ×${nx.force}, résistance ×${nx.res}, tenue plus riche` : ' — rang maximum'}<small>${t.map(u => UNITS[u].ico).join(' ')} toutes les unités de ce bâtiment</small></div>`; }
     const uc = B.upCost(s), canMove = !s.fixed;
+    if (uc) h += this.upgradeGain(s);
     h += `<div class="row">${uc ? this.btn(`⬆ Niv. ${s.level + 1}`, `${this.cost(uc)} · ⏱${Math.round(B.upTime(s))} s`, `up:${s.id}`, !E.afford(uc)) : '<span class="max">niveau max</span>'}${canMove ? this.btn('✥ Déplacer', 'gratuit', `mv:${s.id}`, false, 'act sec') : ''}</div>`;
     return h;
+  }
+  // ce que rapporte le niveau suivant (v3.4) : effets chiffrés + aspect
+  upgradeGain(s) {
+    const E = this.sim.eco, L = s.level, N = L + 1, g = [], pct = v => Math.round(v * 100) + ' %';
+    const slot = () => g.push(`👷 Emplacements : <b>${E.slots(s.type)}</b> → <b>${E.slots(s.type) + ECON.slotsPerLevel}</b>`), yld = () => g.push(`📈 Rendement : +${pct(ECON.levelGather * L)} → <b>+${pct(ECON.levelGather * N)}</b>`);
+    switch (s.type) {
+      case 'sawmill': case 'quarry': case 'mine': slot(); yld(); break;
+      case 'farm': slot(); yld(); g.push(['', '', '🥬 potager et poulailler', '🍎 verger et foin', '🏛 silo et grange', '🐄 pâture et bêtes'][N] || ''); break;
+      case 'mill': g.push(`🌾 Nourriture : +${pct(ECON.millBonus * L)} → <b>+${pct(ECON.millBonus * N)}</b>`); break;
+      case 'granary': g.push(`${RES_INFO.food.ico} Stock de nourriture : <b>${E.cap('food')}</b> → <b>${E.cap('food') + ECON.storePerLevel}</b>`); break;
+      case 'warehouse': g.push(`📦 Stock bois, pierre, fer, or : <b>${E.cap('wood')}</b> → <b>${E.cap('wood') + ECON.storePerLevel}</b>`); break;
+      case 'barracks': case 'stable': case 'range': {
+        const r = RANKS[Math.min(RANKS.length - 1, N - 1)]; g.push(`⭐ Rang des unités : <b>${r.name}</b> (force ×${r.force}, résistance ×${r.res})`);
+        g.push(`⏱ Entraînement +${pct(TRAIN.speedPerLevel)} plus rapide · file +${TRAIN.queuePerLevel} places${TRAIN.parallel[Math.min(3, N)] > TRAIN.parallel[Math.min(3, L)] ? ` · <b>${TRAIN.parallel[Math.min(3, N)]}</b> formés à la fois` : ''}`);
+        if (s.type === 'barracks' && N === 2) g.push('🛡 Débloque les <b>Lourds</b>'); if (s.type === 'barracks' && N === 3) g.push('🗡 Débloque les <b>Chevaliers</b>'); break; }
+      case 'forge': g.push(`🔨 Plafond attaque / défense : <b>${[0, 2, 4, 6][L]}</b> → <b>${[0, 2, 4, 6][N]}</b>`); break;
+      case 'publicworks': g.push(`🛤 Toutes les routes : <b>${ROADWORKS.names[N]}</b> (villageois +${pct(ROADWORKS.speed[N])})`); break;
+      case 'infirmary': g.push(`🏥 Soins : ${(INFIRMARY.heal[L] * 100).toFixed(1)} % → <b>${(INFIRMARY.heal[N] * 100).toFixed(1)} %</b> PV/s · blessés sauvés <b>${pct(INFIRMARY.save[N])}</b>`); break;
+      case 'university': g.push(`🎓 Plafond des améliorations des villageois : <b>${L + 1}</b> → <b>${N + 1}</b>`); break;
+      case 'wizard': g.push(`🔮 Magicien niv. <b>${N}</b> : sorts plus puissants, plus de mana`); break;
+      case 'workshop': g.push(`🛠 +2 armes déployables${N === 2 ? ' · débloque la <b>catapulte</b>' : N === 3 ? ' · débloque le <b>trébuchet</b>' : ''}`); break;
+      case 'church': { const pw = PRIEST.powers.filter(w => w.level === N); g.push(`👪 +${PRIEST.pop} places de population · bénédiction +${pct(PRIEST.blessPerLevel)}`); for (const w of pw) g.push(`${w.ico} Nouveau pouvoir : <b>${w.name}</b>`); break; }
+      case 'prison': g.push(`🚧 +${INFECTION.cells} places · transformation encore ralentie (${pct(INFECTION.prisonSlow * L)} → <b>${pct(INFECTION.prisonSlow * N)}</b>)`); break;
+      case 'house': g.push(`🏠 Loge <b>${Math.floor(ECON.popPerHouse * BUILD.houseUnits[L])}</b> → <b>${Math.floor(ECON.popPerHouse * BUILD.houseUnits[N])}</b> personnes`); break;
+      case 'tower': g.push(`🏹 Portée +${TOWER.rangePerLevel} m · dégâts +${pct(TOWER.dmgPerLevel)} · cadence +${pct(TOWER.ratePerLevel)}`); break;
+    }
+    if (s.type !== 'tower' && s.type !== 'house' && s.type !== 'prison') g.push(['', '', '🏗 Aspect : une aile et un parvis de pierre', '🏗 Aspect : une tour et une seconde aile', '🏗 Aspect : tour couronnée, bannières, muret', '🏗 Aspect : toits dorés, grandes bannières', '🏗 Aspect : le bâtiment le plus imposant du village'][Math.min(6, N)] || '');
+    else if (s.type === 'house') g.push(['', '', '🏗 Aspect : maison à colombages à étage', '🏗 Aspect : grande maison avec lucarne', '🏗 Aspect : maison de notable à tourelle'][N] || '');
+    const lines = g.filter(Boolean); if (!lines.length) return '';
+    return `<div class="gain"><div class="gt">Au niveau ${N} :</div>${lines.map(l => `<div>${l}</div>`).join('')}</div>`;
   }
   castleCard() {
     const sim = this.sim, E = sim.eco, pop = E.population(), cap = E.popCap(), free = E.idleCount();

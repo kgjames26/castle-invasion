@@ -51,6 +51,16 @@ function vatMaterial(v) {
   m.onBeforeCompile = sh => { patchVat(sh, v); patchNorthFog(sh); }; m.customProgramCacheKey = () => 'vat-nfog'; return m;
 }
 
+// cadavres (v3.4) : même animation VAT, figée, + fondu par instance (attribut aFade) ; matériau transparent séparé
+export function vatFadeMaterial(v) {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true });
+  m.onBeforeCompile = sh => {
+    patchVat(sh, v); patchNorthFog(sh);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aFade;\nvarying float vFade;').replace('#include <project_vertex>', '#include <project_vertex>\nvFade = aFade;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vFade;').replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.a *= vFade;');
+  };
+  m.customProgramCacheKey = () => 'vat-fade'; return m;
+}
 // ——— villageois : humanoïde low-poly (couleurs de sommets), repris du « cultivateur » de l'ancien jeu ———
 const _c = new THREE.Color();
 function P(geom, color, t = {}) {
@@ -110,7 +120,7 @@ async function loadHorse(url) {
 
 export async function loadCharacters(base = 'assets/characters/') {
   const [zombies, archer, villager, horse] = await Promise.all([loadZombies(base + 'zombies.bin'), loadArcher(base + 'archer.bin'), loadVillager(base + 'villager.bin').catch(e => { console.warn('villageois GLB indisponible', e); return null; }), loadHorse(base + 'horse.bin').catch(e => { console.warn('cheval GLB indisponible', e); return null; })]);
-  zombies.mats = zombies.variants.map(vatMaterial);
+  zombies.mats = zombies.variants.map(vatMaterial); zombies.fadeMats = zombies.variants.map(vatFadeMaterial);
   const solid = applyNorthFog(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }));
   return { zombies, archer, villager, horse, archerMat: solid, villagerGeo: villagerGeometry(), villagerMat: solid };
 }

@@ -20,6 +20,39 @@ function cart(b, x, z, load, ry = 0) {
   g.g.position.set(x, 0, z); g.g.rotation.y = ry; b.g.add(g.g);
 }
 
+// Agrandissements ARCHITECTURAUX par niveau (v3.4) : chaque niveau rend le bâtiment plus imposant.
+//  niv. 2 : aile latérale + parvis de pierre à marches · niv. 3 : tour carrée à l'arrière + seconde aile · niv. 4 : tour crénelée à flèche
+//  dorée, bannières sur la façade, bornes de pierre · niv. 5 : faîtes dorés, grandes oriflammes, lanternes · niv. 6 : seconde tour.
+const STONE_A = 0x9a958c, ROOF_A = 0x7a3a2a, STONE_D = 0x7f7a72;
+function tower(b, x, z, h, w, gold) {
+  b.box(w + 0.5, 0.6, w + 0.5, STONE_D, x, 0, z); b.box(w, h, w, STONE_A, x, 0, z);
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]]) b.box(0.45, 0.6, 0.45, STONE_A, x + dx * (w / 2 - 0.2), h, z + dz * (w / 2 - 0.2));
+  b.add(new THREE.ConeGeometry(w * 0.72, w * 1.3, 4), ROOF_A, x, h + 0.6 + w * 0.65, z, 0, Math.PI / 4);
+  for (const y of [h * 0.4, h * 0.72]) b.box(0.3, 0.7, 0.08, 0x1c140e, x, y, z + w / 2 + 0.03);
+  if (gold) { b.cyl(0.06, 1.2, GOLD, x, h + 0.6 + w * 1.3, z, 5); b.ball(0.18, GOLD, x, h + 1.9 + w * 1.3, z); }
+}
+function wing(b, x, z, w, d, h, c, gold) {
+  b.box(w, 0.4, d, STONE_D, x, 0, z); b.box(w, h, d, c, x, 0.4, z); b.add(new THREE.BoxGeometry(w + 0.3, 0.2, d + 0.3), DARK, x, h + 0.5, z);
+  const roof = b.gable(d + 0.4, w + 0.6, Math.min(1.8, w * 0.6), ROOF_A, x, h + 0.6, z); roof.rotation.y = Math.PI / 2;
+  b.box(0.7, 0.8, 0.08, 0x2e3e52, x, h * 0.55, z + d / 2 + 0.03);
+  if (gold) b.box(0.25, 0.25, d + 0.3, GOLD, x, h + 0.6 + Math.min(1.8, w * 0.6), z);
+}
+export function levelArch(type, L, hw, hd, top, color = 0xb8a88a) {
+  const b = new B(); if (L < 2 || ['house', 'tower', 'prison', 'farm'].includes(type)) return b.g;
+  const H = Math.max(3, Math.min(9, top * 0.55)), ww = Math.min(2.2, hw * 0.45), wd = Math.min(hd * 1.3, 6);
+  // niv. 2 : aile gauche + parvis
+  wing(b, -hw - ww / 2 + 1.0, -hd * 0.15, ww, wd, H * 0.7, color, L >= 5);
+  b.box(Math.min(hw * 1.4, 7), 0.25, 1.4, STONE_A, 0, 0, hd + 0.7); b.box(Math.min(hw * 1.2, 6), 0.25, 0.8, STONE_D, 0, 0.25, hd + 0.5);
+  if (L >= 3) { tower(b, hw - 1.0, -hd + 1.0, Math.max(top * 1.25, 7), 2.4, L >= 4); wing(b, hw + ww / 2 - 1.0, hd * 0.25, ww, wd * 0.8, H * 0.6, color, L >= 5); }
+  if (L >= 4) {
+    for (const x of [-hw * 0.6, hw * 0.6]) { b.cyl(0.08, top + 1.6, DARK, x, 0, hd + 1.3, 5); b.box(1.0, 2.2, 0.06, BANNER[1], x + 0.55, top - 0.8, hd + 1.3); b.box(1.04, 0.12, 0.08, GOLD, x + 0.55, top + 0.3, hd + 1.3); }
+    for (const x of [-hw - 0.4, hw + 0.4]) { b.box(0.7, 1.1, 0.7, STONE_A, x, 0, hd + 1.4); b.ball(0.3, STONE_D, x, 1.4, hd + 1.4); }
+  }
+  if (L >= 5) { lantern(b, -hw * 0.3, hd + 1.6); lantern(b, hw * 0.3, hd + 1.6); for (const x of [-hw - 1.2, hw + 1.2]) flag(b, x, -hd - 0.6, BANNER[0], top + 3, true); }
+  if (L >= 6) tower(b, -hw + 1.0, -hd + 1.0, Math.max(top * 1.1, 6), 2.2, true);
+  return b.g;
+}
+
 // Installations ajoutées par niveau (2, 3, 4, 5) : toujours dans l'emprise du bâtiment ou juste à côté
 export function levelProps(type, level, hw, hd) {
   const b = new B(); if (level < 2) return b.g;

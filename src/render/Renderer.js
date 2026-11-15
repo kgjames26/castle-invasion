@@ -662,6 +662,12 @@ export class Renderer {
       im.anim = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); im.anim.setUsage(THREE.DynamicDrawUsage); v.geo.setAttribute('aAnim', im.anim); this.scene.add(im); return im;
     });
     this.zvCount = new Int32Array(this.zv.length); this.zMesh.visible = false;
+    // cadavres : une copie de chaque variante (géométrie clonée : ses propres attributs aAnim / aFade)
+    const CC = 140; this.corpses = []; this.zc = ch.zombies.variants.map((v, i) => {
+      const g = v.geo.clone(); const im = new THREE.InstancedMesh(g, ch.zombies.fadeMats[i], CC); im.frustumCulled = false; im.count = 0; im.renderOrder = 2;
+      im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(CC * 3), 3);
+      im.anim = new THREE.InstancedBufferAttribute(new Float32Array(CC), 1); im.fade = new THREE.InstancedBufferAttribute(new Float32Array(CC), 1); g.setAttribute('aAnim', im.anim); g.setAttribute('aFade', im.fade); this.scene.add(im); return im;
+    }); this.zcCount = new Int32Array(this.zc.length);
     this.zTint = ZOMBIES.map(z => new THREE.Color(0xffffff).lerp(new THREE.Color(z.color), 0.62));   // types plus reconnaissables
     const mk = geo => { const im = new THREE.InstancedMesh(geo, ch.archerMat, SECTORS * ARCHER_SLOTS + 150); im.frustumCulled = false; im.count = 0; this.scene.add(im); return im; };
     this.ab = mk(ch.archer.body); this.abow = mk(ch.archer.bow); this.aMesh.visible = false;
@@ -780,7 +786,24 @@ export class Renderer {
       if (Z.slow[i] > 0) { ca[k * 3] = 0.6; ca[k * 3 + 1] = 0.85; ca[k * 3 + 2] = 1.3; } else { ca[k * 3] = tt.r * hurt + (1 - hurt) * 0.5; ca[k * 3 + 1] = tt.g * hurt; ca[k * 3 + 2] = tt.b * hurt; }   // gelé : bleuté   // blessé : plus sombre, rougeâtre
     }
     this.zv.forEach((im, v) => { im.count = cnt[v]; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.anim.needsUpdate = true; });
-    G.end();
+    G.end(); this.renderCorpses();
+  }
+  // ——— morts (v3.4) : le zombie tombe (0,55 s), gît au sol ~4 s puis s'efface en transparence (1,2 s) ———
+  renderCorpses() {
+    if (!this.zc) return; const Z = this.sim.zombies, now = this.clock, L = this.corpses;
+    for (const f of Z.fallen.splice(0)) { if (f.t === 6) continue; const pool = ZVAR[f.t]; L.push({ x: f.x, z: f.z, vi: pool[((f.ph * 1000) | 0) % pool.length], t: f.t, rot: Math.atan2(f.dx, f.dz) || f.ph, back: f.ph % 2 < 1, t0: now, fr: (f.ph * 2.5) % 16 }); }
+    while (L.length > 140) L.shift();
+    const cnt = this.zcCount.fill(0), FALL = 0.55, LIE = 4.0, FADE = 1.2;
+    for (let j = L.length - 1; j >= 0; j--) {
+      const c = L[j], a = now - c.t0; if (a > FALL + LIE + FADE) { L.splice(j, 1); continue; }
+      const im = this.zc[c.vi], k = cnt[c.vi]++;
+      const f = Math.min(1, a / FALL), e = f * f, pitch = (c.back ? -1 : 1) * 1.45 * e, sc = ZOMBIES[c.t].size * HUMAN_H / 1.6;
+      const cr = Math.cos(c.rot), sr = Math.sin(c.rot), cp = Math.cos(pitch), sp = Math.sin(pitch), m = im.instanceMatrix.array, o = k * 16, y = 0.12 * Math.sin(Math.PI * f) * (1 - f);
+      m[o] = cr * sc; m[o + 1] = 0; m[o + 2] = -sr * sc; m[o + 3] = 0; m[o + 4] = sr * sp * sc; m[o + 5] = cp * sc; m[o + 6] = cr * sp * sc; m[o + 7] = 0; m[o + 8] = sr * cp * sc; m[o + 9] = -sp * sc; m[o + 10] = cr * cp * sc; m[o + 11] = 0; m[o + 12] = c.x; m[o + 13] = y; m[o + 14] = c.z; m[o + 15] = 1;
+      im.anim.array[k] = c.fr; im.fade.array[k] = a < FALL + LIE ? 1 : Math.max(0, 1 - (a - FALL - LIE) / FADE);
+      const tt = this.zTint[c.t], ca = im.instanceColor.array, d = 0.7 - 0.15 * f; ca[k * 3] = tt.r * d; ca[k * 3 + 1] = tt.g * d; ca[k * 3 + 2] = tt.b * d;   // un peu plus sombre au sol
+    }
+    this.zc.forEach((im, v) => { im.count = cnt[v]; im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.anim.needsUpdate = true; im.fade.needsUpdate = true; });
   }
   // équipement des archers selon leur rang : capuche → calotte d'acier → cape → heaume doré à cimier et cape pourpre
   archerGear(tier) {
