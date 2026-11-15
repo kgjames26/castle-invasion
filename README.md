@@ -403,3 +403,5 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 ## Phase 51 — Allumeurs autonomes
 - L'équipe des feux devient automatique : 10 allumeurs hors quota, qu'on ne commande pas, empilent les bûchers de la plaine le jour, les allument à l'approche de la nuit et ravitaillent les braseros de la muraille, de la cour et du village — sans puiser dans le stock de bois. Affecter des villageois à l'équipe des feux reste possible, en renfort.
 - Tutoriel : le halo du bouton disparaît quand le tutoriel est masqué (vague) ; le tas de bûches n'est plus dans l'axe de la grande porte.
+- Davantage de feux de défense : 6 bûchers de plus dans la plaine (14 au total) et 2 braseros de cour ; l'équipe passe à 14 allumeurs.
+- Braseros et bûchers de la défense redessinés avec les mêmes flammes que les feux de camp (les anciens blocs pâles sont très réduits).

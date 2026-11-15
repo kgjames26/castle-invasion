@@ -30,11 +30,13 @@ export const BRAZIERS = [
   ...[12, 37, 62, 86, 114, 138, 163, 188].map((x, i) => ({ x, z: i % 2 ? 122 : 108, zone: 'plain' })),
   { x: 30, z: 178, zone: 'court' }, { x: 100, z: 182, zone: 'court' }, { x: 170, z: 178, zone: 'court' },
   { x: 62, z: 248, zone: 'village' }, { x: 138, z: 248, zone: 'village' }, { x: 80, z: 276, zone: 'village' }, { x: 120, z: 276, zone: 'village' },
+  // (v10.2) davantage de feux : une seconde ligne de bûchers plus loin dans la plaine, et deux braseros de cour (ajoutés en fin de liste : les sauvegardes gardent leurs indices)
+  ...[24, 50, 75, 125, 150, 176].map((x, i) => ({ x, z: i % 2 ? 92 : 100, zone: 'plain' })), { x: 64, z: 180, zone: 'court' }, { x: 136, z: 180, zone: 'court' },
 ];
 // allumeurs : un plein de bois dure `burn` s ; `wood` par ravitaillement ; les zombies à moins de `stomp` m éteignent le feu ; on fuit à `flee` m
 //  feux de la plaine : entre deux vagues, l'équipe apporte du bois (`trip` par voyage) jusqu'à remplir un bûcher (`pile` bois), puis l'allume à l'approche
 //  de la nuit (le bois est pris aux tas réservés aux feux, dans la cour près des portes) ; il brûle `plainBurn` s ; les zombies piétinent les bûchers (`trample` par zombie et par s) et éteignent les feux
-export const FIRE_KEEP = { crew: 10, burn: 150, wood: 4, stoke: 1.6, stomp: 2.6, stompRate: 0.6, flee: 14, pile: 12, trip: 6, depots: [[28, 166], [108, 166], [188, 166]], stack: 2.2, light: 1.4, plainBurn: 260, plainStomp: 3.4, trample: 0.12 };
+export const FIRE_KEEP = { crew: 14, burn: 150, wood: 4, stoke: 1.6, stomp: 2.6, stompRate: 0.6, flee: 14, pile: 12, trip: 6, depots: [[28, 166], [108, 166], [188, 166]], stack: 2.2, light: 1.4, plainBurn: 260, plainStomp: 3.4, trample: 0.12 };
 // Forge v1.9 : attaque et défense PROPRES à chaque type, indépendantes du rang (bâtiment d'origine).
 //  attaque +12 %/niveau ; défense : dégâts reçus −8 %/niveau ; plafond = 2 × niveau de la forge (max 6).
 export const SMITH = {

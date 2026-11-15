@@ -182,12 +182,12 @@ export class BrazierView {
     this.logs.count = nl; this.logs.instanceMatrix.needsUpdate = true; if (nl) this.logs.instanceColor.needsUpdate = true; d.rotation.set(0, 0, 0);
     F.forEach((f, i) => {
       if (f.zone === 'plain') {   // grand feu de bois : flammes hautes, beaucoup d'étincelles, lueur large
-        d.position.set(f.x, f.lit ? 1.1 : -5, f.z); d.scale.setScalar(f.lit ? 1.5 + 0.4 * f.fuel : 0.001); d.updateMatrix(); this.coal.setMatrixAt(i, d.matrix); this.coal.setColorAt(i, c.setRGB(1, 0.5 + 0.2 * Math.sin(clock * 7 + i), 0.14));
+        d.position.set(f.x, f.lit ? 1.1 : -5, f.z); d.position.y = f.lit ? 0.45 : -5; d.scale.setScalar(f.lit ? 0.8 + 0.2 * f.fuel : 0.001); d.updateMatrix(); this.coal.setMatrixAt(i, d.matrix); this.coal.setColorAt(i, c.setRGB(0.85, 0.26 + 0.08 * Math.sin(clock * 7 + i), 0.05));   /* (v10.2) braise discrète : les flammes sont dessinées par ExtrasView */
         if (f.lit) {
           const fl = 0.85 + 0.15 * Math.sin(clock * 11 + i * 2.3) * Math.sin(clock * 6.1 + i), k = 0.5 + 0.5 * Math.min(1, f.fuel * 2);
-          fx.glowNow(f.x, 2.2, f.z, (1.4 + 1.6 * dark) * fl * k, 1, 0.55, 0.18);
-          for (let e = 0; e < 2; e++) if (Math.random() < 0.8 * fx.q.particles) fx.A.emit(f.x + (Math.random() - 0.5) * 1.4, 0.8, f.z + (Math.random() - 0.5) * 1.4, (Math.random() - 0.5) * 0.6, 2.6 + Math.random() * 2.2, (Math.random() - 0.5) * 0.6, 0.6, 0.45 + 0.3 * k, -1, Math.random() < 0.6 ? [1, 0.45, 0.08] : [1, 0.78, 0.2], 0.55);
-          if (Math.random() < 0.12 * fx.q.particles) fx.P.emit(f.x, 3.2, f.z, 0.3, 1.4, 0.1, 3, 0.8, -0.12, [0.3, 0.28, 0.28], 1.6);
+          fx.glowNow(f.x, 1.6, f.z, (0.7 + 0.8 * dark) * fl * k, 1, 0.5, 0.15);
+          for (let e = 0; e < 2; e++) if (Math.random() < 0.22 * fx.q.particles) fx.A.emit(f.x + (Math.random() - 0.5) * 1.4, 0.8, f.z + (Math.random() - 0.5) * 1.4, (Math.random() - 0.5) * 0.6, 2.6 + Math.random() * 2.2, (Math.random() - 0.5) * 0.6, 0.6, 0.2 + 0.14 * k, -1, Math.random() < 0.6 ? [1, 0.4, 0.06] : [1, 0.6, 0.12], 0.55);
+          if (Math.random() < 0.12 * fx.q.particles) fx.P.emit(f.x, 3.6, f.z, 0.3, 1.4, 0.1, 3, 0.45, -0.12, [0.16, 0.15, 0.15], 0.9);
         }
         return;
       }
@@ -196,7 +196,7 @@ export class BrazierView {
       if (f.lit) {
         const fl = 0.85 + 0.15 * Math.sin(clock * 11 + i * 2.3) * Math.sin(clock * 6.1 + i);
         fx.glowNow(f.x, y + 0.6, f.z, (0.8 + 0.9 * dark) * fl * k, 1, 0.55, 0.18);
-        if (Math.random() < 0.55 * fx.q.particles) fx.A.emit(f.x + (Math.random() - 0.5) * 0.6, y + 0.2, f.z + (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.4, 1.8 + Math.random() * 1.4, (Math.random() - 0.5) * 0.4, 0.5, 0.32 + 0.2 * k, -1, Math.random() < 0.6 ? [1, 0.45, 0.08] : [1, 0.78, 0.2], 0.5);
+        if (Math.random() < 0.15 * fx.q.particles) fx.A.emit(f.x + (Math.random() - 0.5) * 0.6, y + 0.2, f.z + (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.4, 1.8 + Math.random() * 1.4, (Math.random() - 0.5) * 0.4, 0.5, 0.32 + 0.2 * k, -1, Math.random() < 0.6 ? [1, 0.45, 0.08] : [1, 0.78, 0.2], 0.5);
         if (Math.random() < 0.06 * fx.q.particles) fx.P.emit(f.x, y + 1.4, f.z, 0.2, 1.2, 0.1, 2.2, 0.6, -0.15, [0.3, 0.28, 0.28], 1.2);
       }
     });

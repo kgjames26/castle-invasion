@@ -66,7 +66,7 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
 // v10.1 : allumeurs autonomes — hors quota, sans bois, ils préparent et allument les feux tout seuls
 { const sim = new Simulation(), E = sim.eco, pop0 = E.population(); E.res.wood = 0;
   for (let i = 0; i < 20 * 120; i++) sim.tick();
-  ok(E.crew.length === 10 && E.population() === pop0 && E.assign.fire === 0, `10 allumeurs hors quota (population ${E.population()})`);
+  ok(E.crew.length === 14 && E.population() === pop0 && E.assign.fire === 0, `14 allumeurs hors quota (population ${E.population()})`);
   ok(sim.night.piles().ready >= 4, `bûchers préparés sans bois du stock (${sim.night.piles().ready} prêts)`);
   sim.night.t = 0.8; for (let i = 0; i < 20 * 70; i++) sim.tick(); const lit = sim.night.fires.filter(f => f.lit).length; ok(lit >= 12, `à la nuit, les feux sont allumés tout seuls (${lit}/${sim.night.fires.length})`);
 }

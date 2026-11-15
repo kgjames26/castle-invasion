@@ -230,6 +230,11 @@ export class ExtrasView {
         for (let j = 0; j < 20; j++) { const x = s * SECTOR_W + 1 + j * 1.95, z = palZ(x), ph = j * 1.9 + s; F.add(x, 0.2 + 0.5 * Math.abs(Math.sin(ph)), z, (1.4 + 0.9 * Math.abs(Math.sin(ph * 1.7))) * k, ph, j % 3 ? 0 : 0.35);
           if (Math.random() < dt * 3) this.fx.add({ x: x + (Math.random() - 0.5), y: 2.5, z, vx: (Math.random() - 0.5) * 1.5, vy: 2.5 + Math.random() * 3, vz: (Math.random() - 0.5), t: 0, life: 1.4, a: 1, r: 1, gr: 0.6, b: 0.2, s: 0.22, g: -0.3 });
           if (Math.random() < dt * 1.5) this.smoke.add({ x, y: 3.5, z, vx: 0.5, vy: 1.6, vz: -0.3, t: 0, life: 5, a: 0.35, r: 0.18, gr: 0.16, b: 0.15, s: 1.6, grow: 2.5 }); } }
+      // (v10.2) feux de la défense (braseros du rempart, de la cour et du village, bûchers de la plaine) : mêmes belles flammes que les feux de camp
+      for (const f of sim.night.fires) { if (!f.lit) continue; const k = 0.6 + 0.4 * Math.min(1, f.fuel * 2), ph = f.id * 1.7;
+        if (f.zone === 'plain') { F.add(f.x, 0.3, f.z, 2.6 * k, ph, 0.9); F.add(f.x + 0.5, 0.3, f.z - 0.3, 1.7 * k, ph + 2, 0); F.add(f.x - 0.45, 0.3, f.z + 0.35, 1.9 * k, ph + 4, 0);
+          if (Math.random() < dt * 8) this.fx.add({ x: f.x + (Math.random() - 0.5), y: 2.5, z: f.z + (Math.random() - 0.5), vx: (Math.random() - 0.5) * 1.2, vy: 2.5 + Math.random() * 3, vz: (Math.random() - 0.5) * 1.2, t: 0, life: 1.6, a: 1, r: 1, gr: 0.6, b: 0.2, s: 0.2 }); }
+        else F.add(f.x, (f.zone === 'wall' ? 6.4 : 0) + 1.8, f.z, 1.05 * k, ph, f.zone === 'wall' ? 0 : 0.5); }
       if (Zb.burnT) for (let i = 0; i < Zb.n; i++) { const bt = Zb.burnT[i]; if (!(bt > 0) || Zb.hp[i] <= 0) continue; const sz = ZOMBIES[Zb.type[i]].size || 1, ph = i * 2.3;
         F.add(Zb.x[i] + 0.15 * Math.sin(t * 7 + ph), 0.5 * sz, Zb.z[i], 0.75 * sz * Math.min(1, bt), ph, 0.35); F.add(Zb.x[i] - 0.1, 1.2 * sz, Zb.z[i] + 0.1, 0.5 * sz * Math.min(1, bt), ph + 1, 0);
         if (Math.random() < dt * 4) this.smoke.add({ x: Zb.x[i], y: 2.2 * sz, z: Zb.z[i], vx: 0.3, vy: 1.4, vz: 0, t: 0, life: 2.2, a: 0.3, r: 0.16, gr: 0.14, b: 0.13, s: 0.7, grow: 2 });
