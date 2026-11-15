@@ -185,7 +185,7 @@ Object.assign(BUILDINGS, ARMY_BUILDINGS);
 // ——— Phase 6 : construction libre ———
 // Structures multiples (placées où l'on veut) : maisons et tours de défense. Les autres bâtiments existent en un seul exemplaire (niveaux).
 export const MULTI = {
-  house: { name: 'Maison', ico: '🏠', group: 'eco', time: 16, size: [6, 4.6, 6], info: `+15 places de population (villageois + armée)` },
+  house: { name: 'Maison', ico: '🏠', group: 'eco', time: 16, max: 4, size: [6, 4.6, 6], info: `+15 places (niv. 1) · 37 (niv. 2) · 67 (niv. 3) · 105 (niv. 4)` },
   tower: { name: 'Tour de défense', ico: '🗼', group: 'def', time: 30, size: [5, 14, 5], cost: { wood: 70, stone: 110 }, max: 5, info: 'Tire seule sur les zombies à portée · améliorable' },
 };
 export const STRUCT = { ...BUILDINGS, ...MULTI };
@@ -212,7 +212,9 @@ export const DIFFICULTY = { easy: { name: 'Facile', n: 0.75, hp: 0.85 }, normal:
 export const AUTO_REPAIR = { threshold: 0.7, crew: 2 };
 export const BUILD = {
   minX: 5, maxX: 195, minZ: 212, towerMinZ: 154, maxZ: 312, gap: 1.2,
+  speed: 2.6,   // chantiers ~2,6× plus rapides (v3.1)
   refund: 0.8, moveWork: 6, workerExp: 0.85, maxWorkers: 4, upgradeTime: 0.7,
+  houseUnits: [0, 1, 2.5, 4.5, 7], houseUpCost: lv => ({ wood: 60 + 70 * lv, stone: 30 + 60 * lv, ...(lv >= 2 ? { gold: 25 * lv } : {}) }),
   maxTowers: 14, houseCost: n => ({ wood: 40 + 4 * n, stone: 8 + 2 * n }), towerUpCost: lv => ({ wood: 50 * lv, stone: 90 * lv }),
   blockers: [{ x: 100, z: 298, r: 24 }, { x: 162, z: 292, r: 6.5 }],
   oreR: 6.5, oreSnap: 16,      // gisements : seules les mines s'y posent (centrées dessus) ; aucun autre bâtiment ne peut les recouvrir
@@ -248,9 +250,9 @@ export const UPGRADES = {
 
 export const PHASES = { prep: 'Temps calme', alert: 'Alerte', assault: 'Vague en cours', calm: 'Accalmie' };
 // deux moments (v2.9) : le TEMPS CALME (préparation + accalmie) pour construire et s'organiser, plus long ; la VAGUE (alerte + assaut), chantiers en pause
-export const TIMING = { firstPrep: 120, prep: 75, alert: 10, calm: 20 };
+export const TIMING = { firstPrep: 300, prep: 170, alert: 12, calm: 15 };   // v3.1 : hordes nettement plus tardives
 // zombies : ils traînent loin de la muraille, puis se ruent dessus d'un coup (approach : distance à la muraille où ils accélèrent)
-export const ZOMBIE_PACE = { far: 0.55, rush: 1.7, approach: 42 };
+export const ZOMBIE_PACE = { farMin: 0.42, farMax: 0.75, rushMin: 1.3, rushMax: 2.3, minD: 12, maxD: 105 };
 
 // Composition d'une vague (indicatif, équilibrable sans toucher au moteur)
 // Colosses : à partir de la vague 6, une chance sur deux d'en voir un (un de plus toutes les 6 vagues)

@@ -17,7 +17,7 @@ export class ZombieSwarm {
     // hordes : chaque zombie garde sa place (ox, oz) autour du centre de son groupe → ils avancent en masse, pas à la file
     this.grp = new Int32Array(n); this.ox = new Float32Array(n); this.oz = new Float32Array(n); this.slow = new Float32Array(n); this.slam = new Float32Array(n); this.slams = [];
     // morsures (v2.4) : bite = temps restant de l'animation, biteK = 1 morsure debout, 2 plongeon, 3 déchirement (géant), 4 coup (lourd) ; turned = ancien soldat
-    this.bite = new Float32Array(n); this.biteK = new Uint8Array(n); this.rush = new Uint8Array(n); this.turned = new Uint8Array(n); this.atkT = new Float32Array(n);
+    this.bite = new Float32Array(n); this.biteK = new Uint8Array(n); this.rush = new Uint8Array(n); this.rushD = new Float32Array(n); this.rushK = new Float32Array(n); this.farK = new Float32Array(n); this.turned = new Uint8Array(n); this.atkT = new Float32Array(n);
     this.gx = new Float32Array(GROUPS); this.gz = new Float32Array(GROUPS); this.gn = new Int32Array(GROUPS); this.hpMult = 1;
     this.n = 0; this.kills = 0;
     this.near = new Int16Array(SECTORS);      // zombies proches (z>95) par secteur ciblé
@@ -32,8 +32,15 @@ export class ZombieSwarm {
     this.hp[i] = ZOMBIES[type].hp * this.hpMult; this.type[i] = type; this.sector[i] = sector; this.state[i] = 0;
     this.grp[i] = grp; this.ox[i] = ox; this.oz[i] = oz; this.slow[i] = 0; this.slam[i] = 1.5; this.bite[i] = 0; this.biteK[i] = 0; this.rush[i] = 0; this.turned[i] = 0; this.atkT[i] = 0.5;
     this.phase[i] = rng() * 6.28;
+    // allure (v3.1) : chaque horde a sa propre distance de charge (de 12 à 105 m de la muraille), chaque zombie s'en écarte ;
+    // quelques isolés chargent n'importe quand → les uns traînent encore quand les autres se ruent déjà
+    const gh = ((Math.imul(grp + 7, 2654435761) >>> 0) % 1000) / 1000, P = ZOMBIE_PACE;
+    this.rushD[i] = rng() < 0.12 ? P.minD + rng() * (P.maxD - P.minD) : (P.minD + gh * (P.maxD - P.minD)) * (0.65 + rng() * 0.7);
+    this.rushK[i] = P.rushMin + rng() * (P.rushMax - P.rushMin); this.farK[i] = P.farMin + rng() * (P.farMax - P.farMin);
     return true;
   }
+  // multiplicateur d'allure selon la distance à la muraille : traîne (< 1) au loin, charge (> 1) une fois sa distance franchie
+  pace(i, x, z) { if (!this.grp[i]) return 1; const dw = WALL_Z0 + wallOff(x) - z; return dw > this.rushD[i] ? this.farK[i] : dw > -2 ? this.rushK[i] : 1; }
   hit(i, dmg) { if (this.hp[i] > 0) { this.hp[i] -= dmg; if (this.hp[i] <= 0) { this.kills++; this.dead = true; } } }
   compact() {
     if (!this.dead) return; this.dead = false;
@@ -44,7 +51,7 @@ export class ZombieSwarm {
     this.x[i] = this.x[l]; this.z[i] = this.z[l]; this.px[i] = this.px[l]; this.pz[i] = this.pz[l];
     this.hp[i] = this.hp[l]; this.type[i] = this.type[l]; this.sector[i] = this.sector[l]; this.state[i] = this.state[l]; this.phase[i] = this.phase[l];
     this.grp[i] = this.grp[l]; this.ox[i] = this.ox[l]; this.oz[i] = this.oz[l]; this.slow[i] = this.slow[l]; this.slam[i] = this.slam[l];
-    this.bite[i] = this.bite[l]; this.biteK[i] = this.biteK[l]; this.rush[i] = this.rush[l]; this.turned[i] = this.turned[l]; this.atkT[i] = this.atkT[l];
+    this.bite[i] = this.bite[l]; this.biteK[i] = this.biteK[l]; this.rush[i] = this.rush[l]; this.rushD[i] = this.rushD[l]; this.rushK[i] = this.rushK[l]; this.farK[i] = this.farK[l]; this.turned[i] = this.turned[l]; this.atkT[i] = this.atkT[l];
   }
   // animation d'attaque au contact d'une escouade : morsure (mordeurs), coup (lourds) ; le plongeon et le déchirement sont déclenchés par la morsure elle-même
   // (golem : coup de masse, biteK 5)
@@ -68,7 +75,7 @@ export class ZombieSwarm {
       const gx = Math.min(GW - 1, (x / CELL) | 0), gz = Math.min(159, (z / CELL) | 0);
       const cost = Math.min(2, COST[terrainType(terrain, gx, gz)]);
       let speed = t.speed / cost;
-      { const dw = WALL_Z0 + wallOff(x) - z; if (dw > ZOMBIE_PACE.approach) speed *= ZOMBIE_PACE.far; else if (dw > -2) { speed *= ZOMBIE_PACE.rush; this.rush[i] = 1; } }   // ils traînent, puis se ruent sur la muraille
+      { const k = this.pace(i, x, z); speed *= k; if (k > 1) this.rush[i] = 1; }   // ils traînent, puis se ruent sur la muraille
       if (this.slow[i] > 0) { this.slow[i] -= dt; speed *= 0.4; }
       if (this.bite[i] > 0) { this.bite[i] -= dt; if (this.biteK[i] >= 2) continue; }          // plongeon / déchirement : immobile le temps de l'animation
       // un mordu à terre attire les zombies proches : ils se ruent pour le dévorer

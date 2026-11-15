@@ -2,9 +2,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildCastleFort } from './Castle.js';
+import { buildBorder, westEdge, eastEdge, outsidePlay } from './Border.js';
 import { W, D, SECTORS, SECTOR_W, SEGS, SEG_W, WALL_Z0, WALL_Z1, GATE_SEGS, CASTLE, GW, GD, CELL, MAX_Z, ARCHER_SLOTS, ARCHER_Z, SECTOR_SHORT, PLAZA, WALK_H, wallOff, wallSlope } from '../sim/constants.js';
 import { T } from '../sim/terrain.js';
-import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO, INFECTION, ZOMBIE_PACE } from '../content/medieval.js';
+import { ZOMBIES, UNITS, SIEGE, BUILDINGS, TASKS, RES_INFO, INFECTION, FRONTIER } from '../content/medieval.js';
 import { archerPos, formationLayout, archerPose, rallySlot } from '../sim/army.js';
 import { applyNorthFog } from './fog.js';
 import { StructureView } from './Structures.js';
@@ -242,7 +243,11 @@ export class Renderer {
     mk(new THREE.DodecahedronGeometry(1, 0), lam(0x8a8f94), rock, 0.55);
     // forêt (dans la carte et tout autour, hors des limites, pour cacher le vide) : sapins à deux étages, teintes variées, neige légère
     // bordure : à côté du champ de bataille seulement ; plus bas, ce sont les forêts vierges à défricher (World.js)
-    for (let i = 0; i < 520; i++) { const side = i % 3, x = side === 0 ? -8 - r() * 70 : side === 1 ? W + 8 + r() * 70 : -230 + r() * (W + 460), z = side === 2 ? D + 6 + r() * 60 : 10 + r() * 192; tree.push([x, z, 2.6 + r() * 2.6]); }
+    // forêt de bordure : uniquement au-delà de la crête (couloir nord évasé compris) ; sapins, de plus en plus enneigés vers le nord
+    for (let i = 0; i < 2600 && tree.length < 2400; i++) {
+      const side = i % 3, z = side === 2 ? D + 10 + r() * 60 : -60 + r() * 270, x = side === 0 ? westEdge(z) - 6 - r() * 190 : side === 1 ? eastEdge(z) + 6 + r() * 190 : -230 + r() * (W + 460);
+      if (outsidePlay(x, z) && !(z > FRONTIER.z0 - 6 && z < D + 6 && (x < 0 || x > W))) tree.push([x, z, 2.6 + r() * 2.6]);
+    }
     this.buildForest(tree, r);
   }
   buildForest(list, r) {
@@ -256,22 +261,16 @@ export class Renderer {
     const ims = parts.map(([g, col]) => { const im = new THREE.InstancedMesh(g, lam(0xffffff), n); im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); this.scene.add(im); return [im, col]; });
     list.forEach(([x, z, s], i) => {
       d.position.set(x, 0, z); d.rotation.set(0, i * 1.7, 0); const sy = s * (0.85 + r() * 0.35); d.scale.set(s, sy, s); d.updateMatrix();
-      const hue = r(), v = 0.8 + r() * 0.35, snow = z < 150 ? 1 : 0.35 + r() * 0.4;
+      const hue = r(), v = 0.8 + r() * 0.35, snow = Math.min(1, Math.max(0, (175 - z) / 110 + (r() - 0.5) * 0.5));   // neige : progressive, du nord (plein) au village (aucune)
       ims.forEach(([im, col], k) => {
         im.setMatrixAt(i, d.matrix); c.setHex(col);
         if (parts[k][2] === 1) c.multiplyScalar(v).lerp(c2.setHex(hue < 0.3 ? 0x4a6a3a : hue < 0.55 ? 0x26503f : 0x2f5d3c), 0.5);
-        if (parts[k][2] === 2) c.multiplyScalar(snow > 0.6 ? 1 : 0.0001 + snow);
+        if (parts[k][2] === 2) c.setHex(0x3a6b45).multiplyScalar(v).lerp(c2.setHex(0xf2f6fa), snow);   // pointe : verte → enneigée selon la latitude
         im.setColorAt(i, c);
       });
-      if (snow < 0.6) { d.scale.set(0, 0, 0); d.updateMatrix(); ims[3][0].setMatrixAt(i, d.matrix); }   // pas de neige sur les sapins du sud
     });
     for (const [im] of ims) { im.instanceMatrix.needsUpdate = true; im.instanceColor.needsUpdate = true; im.castShadow = true; }
-    // pourtour de la carte : sol prolongé (neige au nord, terre au sud) sous la forêt de bordure
-    const sk = document.createElement('canvas'); sk.width = 4; sk.height = 64; const sg = sk.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 64);
-    gr.addColorStop(0, '#5f6d7d'); gr.addColorStop(0.45, '#bcc8d3'); gr.addColorStop(0.5, '#9a9488'); gr.addColorStop(0.75, '#a99d84'); gr.addColorStop(1, '#8c8270'); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 64);
-    const tex = new THREE.CanvasTexture(sk); tex.colorSpace = THREE.SRGBColorSpace;
-    const skirt = new THREE.Mesh(new THREE.PlaneGeometry(W + 720, D + 160), applyNorthFog(new THREE.MeshLambertMaterial({ map: tex })));
-    skirt.rotation.x = -Math.PI / 2; skirt.position.set(W / 2, -0.06, D / 2 + 20); skirt.receiveShadow = true; this.scene.add(skirt);
+    this.border = buildBorder(this.scene, m => this.shadowize(m));   // crête de collines et rochers + sol de sous-bois au-delà
   }
   buildWall() {
     this.wallMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(SEG_W - 0.25, 4, 8), lam(0xffffff), SEGS);
@@ -765,7 +764,7 @@ export class Renderer {
       const zr = this.zRot || (this.zRot = new Float32Array(MAX_Z)), moving = dx * dx + dz * dz > 4e-6; if (moving) zr[i] = Math.atan2(dx, dz);
       const rot = moving || Z.bite[i] > 0 ? zr[i] : 0, c = Math.cos(rot), s2 = Math.sin(rot), sc = Zt.size * HUMAN_H / 1.6, o = k * 16, m = im.instanceMatrix.array;
       // morsures (v2.4) : 1 morsure debout (se penche et happe), 2 plongeon (se jette à l'horizontale), 3 déchirement (géant : se cabre, puis boit), 4 coup (lourd)
-      let pitch = Z.rush[i] && Z.state[i] !== 1 && WALL_Z0 + wallOff(x) - z > -2 && WALL_Z0 + wallOff(x) - z < ZOMBIE_PACE.approach ? 0.28 : 0, fwd = 0, y = 0; const bk = Z.biteK[i], bt = Z.bite[i];   // en course : penché en avant
+      let pitch = Z.state[i] !== 1 && Z.pace(i, x, z) > 1 ? 0.12 + 0.12 * Z.rushK[i] : 0, fwd = 0, y = 0; const bk = Z.biteK[i], bt = Z.bite[i];   // en course : penché en avant
       if (bt > 0) {
         if (bk === 1) { const f = 1 - bt / 0.75, e = Math.sin(Math.PI * Math.min(1, f * 1.3)); pitch = 0.55 * e; fwd = 0.45 * e; }
         else if (bk === 2) { const f = 1 - bt / 1.1; pitch = f < 0.35 ? 1.4 * (f / 0.35) : 1.4; fwd = Math.min(1, f / 0.35) * 1.3; y = f < 0.35 ? 0.35 * Math.sin(Math.PI * f / 0.35) : 0.05; }
@@ -774,7 +773,7 @@ export class Renderer {
       }
       const cp = Math.cos(pitch), sp = Math.sin(pitch), px0 = x + s2 * fwd, pz0 = z + c * fwd;
       m[o] = c * sc; m[o + 1] = 0; m[o + 2] = -s2 * sc; m[o + 3] = 0; m[o + 4] = s2 * sp * sc; m[o + 5] = cp * sc; m[o + 6] = c * sp * sc; m[o + 7] = 0; m[o + 8] = s2 * cp * sc; m[o + 9] = -sp * sc; m[o + 10] = c * cp * sc; m[o + 11] = 0; m[o + 12] = px0; m[o + 13] = y; m[o + 14] = pz0; m[o + 15] = 1;
-      const dwz = WALL_Z0 + wallOff(x) - z, pace = dwz > ZOMBIE_PACE.approach ? ZOMBIE_PACE.far : dwz > -2 ? ZOMBIE_PACE.rush : 1;   // pas traînant au loin, course près du mur
+      const pace = Z.pace(i, x, z);   // pas traînant au loin, course près du mur
       const cps = Z.state[i] === 1 ? 1.3 : Math.max(0.25, Zt.speed * pace * (Z.slow[i] > 0 ? 0.4 : 1) / (1.6 * sc));
       im.anim.array[k] = ((clock * cps + Z.phase[i] / 6.2832) % 1) * 16;
       const hurt = Z.hp[i] / Zt.hp < 0.5 ? 0.72 : 1, tt = Z.turned[i] ? this.turnTint || (this.turnTint = new THREE.Color(0x8fa0b8)) : this.zTint[t], ca = im.instanceColor.array;   // ancien soldat : teinte de sa tunique

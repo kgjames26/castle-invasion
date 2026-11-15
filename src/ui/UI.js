@@ -2,14 +2,14 @@
 //  · pastilles de secteur sur la muraille · bulle contextuelle ancrée sur la structure touchée · feuille (Bâtir / Armée / Villageois / Savoir)
 //  · placement tactile : fantôme à glisser, rotation, nombre d'ouvriers · aucun état de jeu ici (tout passe par les commandes de la simulation).
 import { SECTORS, SECTOR_NAMES, SECTOR_AT, ARCHER_SLOTS, CASTLE, wallOff } from '../sim/constants.js';
-import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, INFECTION, GRADES, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP, BARRACKS_ICO } from '../content/medieval.js';
+import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS, SQUAD, TASKS, BUILDINGS, STRUCT, BUILD, UPGRADES, RES, RES_INFO, ECON, PROSPECT, waveSpec, RANKS, RANK_BUILDINGS, MAGE, PRIEST, INFECTION, GRADES, DIFFICULTY, SMITH, INFIRMARY, FRONTIER, ROADWORKS, FIRE_KEEP, BARRACKS_ICO, TIMING } from '../content/medieval.js';
 import { MAGE_TIERS } from '../render/Heroes.js';
 import { FORMATS, idealFormat, quality } from '../render/config.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
-const fmt = n => Math.floor(n).toString();
+const fmt = n => n >= 100000 ? Math.round(n / 1000) + 'k' : n >= 10000 ? (n / 1000).toFixed(1).replace('.0', '') + 'k' : Math.floor(n).toString();   // compact : jamais plus de 4 caractères
 const TASK_ORDER = ['wood', 'stone', 'iron', 'gold', 'food'];
 const TB = { sawmill: ['wood'], quarry: ['stone'], mine: ['iron', 'gold'], farm: ['food'] };       // bâtiment → tâches de récolte
 const GROUPS = [['Économie', ['sawmill', 'quarry', 'mine', 'farm', 'mill', 'granary', 'warehouse', 'university', 'publicworks', 'house']], ['Armée', ['barracks', 'range', 'stable', 'workshop', 'forge', 'infirmary', 'wizard']], ['Défense', ['tower']]];
@@ -32,8 +32,8 @@ export class UI {
     this.sheetEl.addEventListener('input', e => { const k = e.target.dataset?.vol; if (k && hooks.audio) hooks.audio.setVolume(k, +e.target.value / 100); });
     this.top.innerHTML = `
       <div class="rline">${RES.map(r => `<span class="rchip" id="r-${r}"><i>${RES_INFO[r].ico}</i><b>0</b></span>`).join('')}<span class="rchip pop" id="r-pop"><i>👥</i><b>0</b></span></div>
-      <div class="wline"><div class="wave"><div class="wt"><b id="wave-title">Vague 1</b><span id="wave-phase" class="phase"></span></div><div class="cbar"><span>🏰 Château</span><div class="bar"><i id="castle-bar"></i></div></div></div>
-        <button id="b-skip" class="rb" title="Lancer la vague">▶</button><button id="b-turn" class="rb" title="Pivoter la vue (vers le sud / vers le nord)">🧭</button><button id="b-speed" class="rb">×1</button><button id="b-menu" class="rb">☰</button></div>`;
+      <div class="wline"><div class="wave"><div class="wt"><b id="wave-title">Vague 1</b><span id="wave-phase" class="phase"></span></div><div class="cbar"><div class="bar thin" title="Avant la vague"><i id="calm-bar"></i></div><div class="bar" title="Château"><i id="castle-bar"></i></div></div><button id="b-skip" class="launch" title="Lancer la vague maintenant">⚔ Lancer</button></div>
+        <div class="tgroup"><button id="b-pause" class="rb" title="Pause / reprendre">❚❚</button><button id="b-speed" class="rb spd" title="Vitesse du jeu">1×</button></div><button id="b-turn" class="rb" title="Pivoter la vue (vers le sud / vers le nord)">🧭</button><button id="b-menu" class="rb">☰</button></div>`;
     this.dock.innerHTML = Object.entries(SHEETS).map(([k, n]) => { const [ic, ...t] = n.split(' '); return `<button class="dk" data-sheet="${k}">${ic}<span>${t.join(' ')}</span></button>`; }).join('');
     this.badges = [];
     for (let s = 0; s < SECTORS; s++) {
@@ -42,7 +42,10 @@ export class UI {
       this.badgesEl.appendChild(b); this.badges.push(b);
     }
     $('#b-skip').addEventListener('click', () => sim.skipPrep());
-    $('#b-speed').addEventListener('click', e => { sim.speed = sim.speed === 1 ? 2 : sim.speed === 2 ? 4 : sim.speed === 4 ? 0 : 1; e.currentTarget.textContent = sim.speed ? '×' + sim.speed : '⏸'; });
+    // temps : un bouton pause/lecture, un bouton vitesse (1× → 2× → 3×) qui ne met jamais en pause
+    this.pace = 1;
+    $('#b-pause').addEventListener('click', () => { if (this.deploy) return; sim.speed = sim.speed ? 0 : this.pace; this.syncTime(); });
+    $('#b-speed').addEventListener('click', () => { this.pace = this.pace >= 3 ? 1 : this.pace + 1; if (sim.speed) sim.speed = this.pace; this.syncTime(); });
     $('#b-menu').addEventListener('click', () => this.toggleSheet('menu'));
     $('#b-turn').addEventListener('click', e => { this.cam.turn(); this.buzz(10); e.currentTarget.classList.toggle('on', this.cam.facingSouth()); this.toast(this.cam.facingSouth() ? '🧭 Vue vers le sud : le village et le château' : '🧭 Vue vers le nord : la muraille et la horde', 'info'); });
     $('#over-btn').addEventListener('click', () => { this.showOver(false); this.openSheet('newgame'); });
@@ -263,9 +266,15 @@ export class UI {
     }
   }
   // toast : kind = 'info' | 'ok' | 'warn' | 'danger' (couleur et durée) ; les messages identiques consécutifs sont regroupés (×2, ×3…)
+  syncTime() {
+    const sp = this.sim.speed, p = $('#b-pause'), v = $('#b-speed'); if (!p) return;
+    p.textContent = sp ? '❚❚' : '▶'; p.classList.toggle('on', !sp); p.title = sp ? 'Mettre en pause' : 'Reprendre';
+    v.textContent = this.pace + '×'; v.classList.toggle('fast', this.pace > 1);
+    document.body.classList.toggle('paused', !sp && !this.deploy);
+  }
   // Grand bandeau au changement de moment : calme (on bâtit) / vague (chantiers en pause).
   phaseBanner(p) {
-    const T = { prep: ['🌿 Temps calme', 'Construis, recrute, prépare la défense'], alert: ['🔔 Alerte', 'La horde approche · chantiers en pause'], assault: ['⚔ Vague en cours', 'Défends la muraille · chantiers en pause'], calm: ['🕊 Vague repoussée', 'Les chantiers reprennent'] }[p];
+    const T = { prep: ['🌿 Temps calme', 'Construis, recrute, prépare la défense'], alert: ['🔔 Alerte', 'La horde approche'], assault: ['⚔ Vague en cours', 'Défends la muraille'], calm: ['🕊 Vague repoussée', 'Souffle un peu'] }[p];
     if (!T) return; let el = document.getElementById('phase-banner');
     if (!el) { el = document.createElement('div'); el.id = 'phase-banner'; document.body.appendChild(el); }
     el.dataset.p = p; el.innerHTML = `<b>${T[0]}</b><small>${T[1]}</small>`; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
@@ -276,7 +285,7 @@ export class UI {
     if (last && last.dataset.msg === msg && last.dataset.k === kind) { const n = (+last.dataset.n || 1) + 1; last.dataset.n = n; last.innerHTML = `${msg} <b class="tn">×${n}</b>`; clearTimeout(last._t); last._t = setTimeout(() => last.remove(), 3000); return; }
     const t = el('div', 'toast ' + kind, msg); t.dataset.msg = msg; t.dataset.k = kind; this.toasts.appendChild(t);
     t._t = setTimeout(() => t.remove(), kind === 'danger' ? 4500 : kind === 'warn' ? 3800 : 3000);
-    while (this.toasts.children.length > 3) this.toasts.firstChild.remove();
+    while (this.toasts.children.length > 2) this.toasts.firstChild.remove();   // épuré : deux messages au plus
     if (kind === 'danger' && UI_FLAGS.haptics) this.buzz([40, 40, 80]);
   }
   buzz(p) { if (UI_FLAGS.haptics && navigator.vibrate) try { navigator.vibrate(p); } catch { /* non supporté */ } }
@@ -312,11 +321,14 @@ export class UI {
     for (const r of RES) { const e = $('#r-' + r); e.querySelector('b').textContent = fmt(E.res[r]); e.classList.toggle('full', E.res[r] >= E.cap(r) - 0.5); e.classList.toggle('low', r === 'food' && E.famine); }
     if (this.plainLitShown && this.sim.night.light() > 0.97) this.plainLitShown = false;
     const pop = $('#r-pop'); pop.querySelector('b').textContent = `${E.population()}/${E.popCap()}`; pop.classList.toggle('max', E.popRoom() <= 0);
-    $('#wave-title').textContent = `Vague ${sim.wave}` + (sim.phase === 'assault' ? ` · ${sim.zombies.n + (sim.spawn ? sim.spawn.left : 0)} 🧟` : '');
-    const Lt = sim.night.light(), dn = Lt > 0.8 ? '☀' : Lt > 0.45 ? (sim.night.t < 0.5 || sim.night.t > 0.9 ? '🌅' : '🌇') : '🌙';
-    $('#wave-phase').textContent = PHASES[sim.phase] + (sim.phase === 'assault' ? '' : ` · ${Math.ceil(sim.timer)} s`) + ` · ${dn}`;
+    $('#wave-title').textContent = `Vague ${sim.wave}`;
+    const zl = sim.zombies.n + (sim.spawn ? sim.spawn.left : 0);
+    $('#wave-phase').textContent = sim.phase === 'assault' ? `⚔ ${zl} zombies` : sim.phase === 'alert' ? '🔔 Ils arrivent' : sim.phase === 'calm' ? '🕊 Répit' : '🌿 Calme';
     if (this.lastPhase !== sim.phase) { if (this.lastPhase) this.phaseBanner(sim.phase); this.lastPhase = sim.phase; }
     $('#wave-phase').dataset.p = sim.phase; $('#b-skip').style.display = sim.phase === 'prep' ? '' : 'none';
+    { const tot = sim.phase === 'prep' ? (sim.wave === 1 ? TIMING.firstPrep : TIMING.prep) : sim.phase === 'alert' ? TIMING.alert : sim.phase === 'calm' ? TIMING.calm : 0, cb = $('#calm-bar');
+      cb.parentNode.style.display = tot ? '' : 'none'; if (tot) cb.style.width = (100 * Math.max(0, sim.timer) / tot) + '%'; cb.parentNode.dataset.p = sim.phase; }
+    if (!!sim.speed === document.body.classList.contains('paused') || (this.deploy && document.body.classList.contains('paused'))) this.syncTime();
     $('#castle-bar').style.width = (100 * sim.castleHp / CASTLE.hp) + '%';
     let alert = false;
     for (let s = 0; s < SECTORS; s++) {
@@ -431,7 +443,7 @@ export class UI {
   // ——— fiches ———
   cost(c) { const E = this.sim.eco; return Object.keys(c).map(r => `<i class="${E.res[r] >= c[r] ? '' : 'no'}">${RES_INFO[r].ico}${c[r]}</i>`).join(' '); }
   btn(label, sub, a, off, cls = 'act') { return `<button class="${cls}" data-a="${a}"${off ? ' disabled' : ''}>${label}${sub ? `<small>${sub}</small>` : ''}</button>`; }
-  pips(s) { const mx = STRUCT[s.type].max || ECON.maxLevel; return mx > 1 && s.type !== 'house' ? `<span class="pips">${'◆'.repeat(s.level)}${'◇'.repeat(Math.max(0, mx - s.level))}</span>` : ''; }
+  pips(s) { const mx = STRUCT[s.type].max || ECON.maxLevel; return mx > 1 ? `<span class="pips">${'◆'.repeat(s.level)}${'◇'.repeat(Math.max(0, mx - s.level))}</span>` : ''; }
   taskRow(t) {
     const E = this.sim.eco, T = TASKS[t], n = E.assign[t], capT = E.taskCap(t), idle = E.idleCount();
     return `<div class="row step"><span class="lab">${T.ico} ${T.name}<small class="sub">+${E.rate[t].toFixed(2)}/s · places ${n}/${n + capT}</small></span>${this.btn('−', '', `as:${t}:-1`, n <= 0, 'sq')}<b class="val">${n}</b>${this.btn('+', '', `as:${t}:1`, idle <= 0 || n >= capT, 'sq')}</div>`;
@@ -439,12 +451,12 @@ export class UI {
   structCard(s) {
     const sim = this.sim, B = sim.build, E = sim.eco, def = STRUCT[s.type], working = s.state !== 'built';
     let h = `<div class="ptitle">${def.ico} ${def.name}<span class="lvl">${s.level ? 'Niv. ' + s.level : 'chantier'}</span></div>`;
-    if (!working && STRUCT[s.type].max !== 1 && s.type !== 'house') h += `<div>${this.pips(s)}</div>`;
+    if (!working && STRUCT[s.type].max !== 1) h += `<div>${this.pips(s)}</div>`;
     if (working) {
       let crew = 0; for (const v of E.villagers) if (v.job === s.id) crew++;
-      const here = s.crew || 0, sec = Math.ceil((1 - s.progress) * s.work / Math.pow(Math.max(1, here), BUILD.workerExp)), free = E.idleCount();
+      const here = s.crew || 0, sec = Math.ceil((1 - s.progress) * s.work / BUILD.speed / Math.pow(Math.max(1, here), BUILD.workerExp)), free = E.idleCount();
       const what = s.state === 'site' ? 'Construction' : s.state === 'upgrading' ? `Amélioration → niv. ${s.level + 1}` : 'Remise en service (déplacé)';
-      h += `<div class="hpline"><div class="bar big"><i style="width:${Math.round(s.progress * 100)}%"></i></div><span>${Math.round(s.progress * 100)} %${here && !this.sim.build.paused() ? ` · ~${sec} s` : ''}</span></div><div class="hint small">${what}</div>${this.sim.build.paused() ? '<div class="warn">⏸ Vague en cours : chantier en pause jusqu\'au retour du calme.</div>' : ''}
+      h += `<div class="hpline"><div class="bar big"><i style="width:${Math.round(s.progress * 100)}%"></i></div><span>${Math.round(s.progress * 100)} %${here ? ` · ~${sec} s` : ''}</span></div><div class="hint small">${what}</div>
         <div class="row step"><span class="lab">👷 Ouvriers<small class="sub">${here} au travail · libres ${free}</small></span>${this.btn('−', '', `wk:${s.id}:-1`, s.workers <= 0, 'sq')}<b class="val">${s.workers}</b>${this.btn('+', '', `wk:${s.id}:1`, s.workers >= BUILD.maxWorkers || free <= 0 && crew >= s.workers, 'sq')}</div>`;
       if (s.workers > 0 && crew < s.workers && free <= 0) h += `<div class="warn">Aucun villageois libre : retire-en d'une tâche dans 👥.</div>`;
       else if (s.workers === 0) h += `<div class="warn">Aucun ouvrier : le chantier est à l'arrêt.</div>`;
@@ -454,7 +466,7 @@ export class UI {
     }
     if (s.type === 'tower') { const st = B.towerStats(s, sim); h += `<div class="hint">🏹 <b>${st.dmg.toFixed(0)}</b> dégâts · portée <b>${st.range.toFixed(0)} m</b> · <b>${(1 / st.rate).toFixed(1)}</b> tirs/s</div><div class="hint small">${s.fixed ? 'Tour de la muraille : défend seule, améliorable.' : def.info}</div>`; }
     else h += `<div class="hint small">${def.info}</div>`;
-    if (s.type === 'house') h += `<div class="hint small">Population : ${E.population()}/${E.popCap()}</div>`;
+    if (s.type === 'house') { const U = BUILD.houseUnits, here = Math.floor(ECON.popPerHouse * (U[s.level] || 0)), nx = s.level < 4 ? Math.floor(ECON.popPerHouse * U[s.level + 1]) : 0; h += `<div class="hint small">🏠 Loge <b>${here}</b> personnes${nx ? ` · niv. ${s.level + 1} : <b>${nx}</b>` : ''} · population ${E.population()}/${E.popCap()}</div>`; }
     for (const t of TB[s.type] || []) h += this.taskRow(t);
     if (TRAIN_BUILDINGS.includes(s.type) && s.level) h += this.productionHtml(s);
     if (s.type === 'workshop') h += this.btn('🛠 Armes de siège', '', 'sheet:army:siege', false, 'act sec');
@@ -471,7 +483,7 @@ export class UI {
     if (s.type === 'forge' && s.level) h += `<div class="hint small">Plafond attaque/défense : ${this.sim.eco.smithMax()}</div>`;
     if (RANK_BUILDINGS.includes(s.type)) { const t = UNIT_ORDER.filter(u => UNITS[u].from === s.type), r = RANKS[Math.max(0, s.level - 1)], nx = RANKS[s.level]; h += `<div class="rank">⭐ Rang <b>${r.name}</b>${nx ? ` → <b>${nx.name}</b> au niv. ${s.level + 1} : force ×${nx.force}, résistance ×${nx.res}, tenue plus riche` : ' — rang maximum'}<small>${t.map(u => UNITS[u].ico).join(' ')} toutes les unités de ce bâtiment</small></div>`; }
     const uc = B.upCost(s), canMove = !s.fixed;
-    h += `<div class="row">${uc ? this.btn(`⬆ Niv. ${s.level + 1}`, `${this.cost(uc)} · ⏱${Math.round(B.upTime(s))} s`, `up:${s.id}`, !E.afford(uc)) : (s.type === 'house' ? '' : '<span class="max">niveau max</span>')}${canMove ? this.btn('✥ Déplacer', 'gratuit', `mv:${s.id}`, false, 'act sec') : ''}</div>`;
+    h += `<div class="row">${uc ? this.btn(`⬆ Niv. ${s.level + 1}`, `${this.cost(uc)} · ⏱${Math.round(B.upTime(s))} s`, `up:${s.id}`, !E.afford(uc)) : '<span class="max">niveau max</span>'}${canMove ? this.btn('✥ Déplacer', 'gratuit', `mv:${s.id}`, false, 'act sec') : ''}</div>`;
     return h;
   }
   castleCard() {
@@ -534,7 +546,7 @@ export class UI {
     if (!sim.army.squads.length) { this.toast('Aucune escouade à placer : recrute des troupes', 'warn'); return; }
     this.invite = false; this.deploy = { speed: sim.speed || 1 }; sim.speed = 0; this.depSel = 0; this.closeSheet(); this.closeCard(); this.cam.focusOn(100, 158); this.renderOrder();
   }
-  endDeploy() { if (!this.deploy) return; this.sim.speed = this.deploy.speed; this.deploy = null; this.depSel = 0; this.rd.setSquad(0); const b = $('#b-speed'); if (b) b.textContent = '×' + this.sim.speed; this.renderOrder(); this.toast('▶ Troupes en place', 'ok'); }
+  endDeploy() { if (!this.deploy) return; this.sim.speed = this.deploy.speed; this.deploy = null; this.depSel = 0; this.rd.setSquad(0); this.syncTime(); this.renderOrder(); this.toast('▶ Troupes en place', 'ok'); }
   renderOrder() {
     if (!this.orderEl) { this.orderEl = el('div', 'orderbar'); document.body.appendChild(this.orderEl); this.orderEl.addEventListener('click', e => { const b = e.target.closest('[data-a]'); if (b) { this.act(b.dataset.a); this.refresh(true); } }); }
     if (this.deploy) {

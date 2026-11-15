@@ -20,7 +20,8 @@ export function generateTerrain(seed = 1337) {
   };
   // collines et forêts (z 20–135), rochers (z 45–118), chemins
   for (let i = 0; i < 7; i++) blob(rng() * W, 25 + rng() * 105, 8 + rng() * 8, T.HILL);
-  for (let i = 0; i < 9; i++) blob(rng() * W, 22 + rng() * 100, 7 + rng() * 9, T.FOREST);
+  // forêts (v3.1) : seulement sur les flancs ; le centre nord, d'où viennent les hordes, reste dégagé
+  for (let i = 0; i < 6; i++) { const side = i % 2; blob(side ? W - 6 - rng() * 38 : 6 + rng() * 38, 22 + rng() * 64, 6 + rng() * 7, T.FOREST); }
   for (let i = 0; i < 6; i++) { // chemins qui serpentent du nord vers la muraille
     const x0 = 20 + rng() * 160, a = 6 + rng() * 10, ph = rng() * 6.28;
     for (let z = 0; z < WALL_Z0 - 2; z += 2) blob(Math.max(4, Math.min(W - 4, x0 + a * Math.sin(z / 28 + ph))), z, 3, T.ROAD);

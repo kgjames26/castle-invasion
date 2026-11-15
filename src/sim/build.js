@@ -18,7 +18,6 @@ export class Build {
     this.syncLevels();
   }
   // pendant une vague (alerte + assaut), les chantiers sont en pause
-  paused() { const p = this.sim.phase; return p === 'assault' || p === 'alert'; }
   make(type, x, z, rot, o = {}) {
     return { id: this.nextId++, type, x, z, rot, level: 0, state: 'site', progress: 0, work: 0, workers: 1, paid: null, fixed: false, wt: -1, cd: 0, born: 0, ...o };
   }
@@ -35,7 +34,8 @@ export class Build {
     return { ...STRUCT[type].cost };
   }
   upCost(s) {
-    if (s.level >= this.maxLevel(s) || s.type === 'house') return null;
+    if (s.level >= this.maxLevel(s)) return null;
+    if (s.type === 'house') return BUILD.houseUpCost(s.level);
     if (s.type === 'tower') return BUILD.towerUpCost(s.level);
     if (RANK_BUILDINGS.includes(s.type)) { const c = { ...STRUCT[s.type].cost }; for (const r in RANK_UP.extra) c[r] = (c[r] || 0) + RANK_UP.extra[r]; return this.sim.eco.scaled(c, RANK_UP.mult[s.level + 1]); }   // rang suivant
     return this.sim.eco.scaled(STRUCT[s.type].cost, s.level + 1);
@@ -120,12 +120,12 @@ export class Build {
   // ——— niveaux dérivés ———
   syncLevels() {
     const E = this.sim.eco; for (const b in BUILDINGS) E.level[b] = 0;
-    let houses = 0;
+    let houses = 0, hn = 0;
     for (const s of this.items) {
-      if (s.type === 'house') { if (s.state === 'built') houses++; }
+      if (s.type === 'house') { if (ACTIVE(s)) { houses += BUILD.houseUnits[s.level] || 1; hn++; } }   // une maison de niv. 4 loge autant que 7 chaumières
       else if (s.type !== 'tower' && ACTIVE(s)) E.level[s.type] = s.level;
     }
-    E.houses = houses;
+    E.houses = houses; E.houseCount = hn;
   }
   towerLevel(s) { return ACTIVE(s) ? s.level : 0; }
   towerStats(s, sim) {
@@ -166,8 +166,8 @@ export class Build {
       crew.forEach((v, k) => { const [bx, bz] = this.builderSpot(s, k); v.bx = bx; v.bz = bz; });
       let n = 0; for (const v of crew) if (v.state === 'building') n++;
       s.crew = n;
-      if (n > 0 && !this.paused()) {
-        s.progress += dt * Math.pow(n, BUILD.workerExp) * (1 + UPGRADES.apprentice.per * (this.sim.eco.up.apprentice || 0)) / s.work;
+      if (n > 0) {   // on bâtit à tout moment, vague comprise
+        s.progress += dt * BUILD.speed * Math.pow(n, BUILD.workerExp) * (1 + UPGRADES.apprentice.per * (this.sim.eco.up.apprentice || 0)) / s.work;
         if (s.progress >= 1) this.finish(s);
       }
     }

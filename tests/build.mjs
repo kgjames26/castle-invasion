@@ -29,6 +29,6 @@ E.res.gold = 500; E.res.food = 500; const n0 = E.extra.iron.length; ok(E.startPr
 const ex = E.extra.iron[n0]; ok(B.canPlace('mine', ex.x, ex.z, 0).ok, 'mine possible sur un gisement découvert ' + JSON.stringify([ex, B.canPlace('mine', ex.x, ex.z, 0)])); ok(!B.canPlace('farm', ex.x, ex.z, 0).ok, 'ferme interdite sur gisement découvert');
 // défense seule : aucune construction, 5 vagues
 const d = new Simulation(); let lost = 0;
-for (let i = 0; i < 20 * 60 * 14 && !d.over; i++) { d.tick(); }
+for (let i = 0; i < 20 * 60 * 20 && !d.over; i++) { d.tick(); }
 console.log('sans rien construire : vague', d.wave, 'château', Math.round(d.castleHp), 'brèches', d.stats.breaches, 'tués', d.zombies.kills, d.over ? 'PERDU' : '');
 ok(d.wave >= 4 && !d.over, 'les tours de base tiennent les premières vagues');

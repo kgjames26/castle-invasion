@@ -174,8 +174,56 @@ function quarantineModel() {
   b.box(0.5, 0.5, 0.5, 0x6b4a2c, 6.2, 0.08, -4.6); b.cyl(0.25, 0.5, 0x7a5a3a, 6.8, 0.08, -3.6, 8);                 // caisse, seau
   return { g: b.g, top: 4.5 };
 }
+// ——— Maisons améliorables (v3.1) : niv. 1 chaumière du kit, niv. 2 maison à colombages à étage, niv. 3 grande maison avec appentis
+// et lucarne, niv. 4 maison de notable en pierre avec tourelle. Emprise fixe (6 × 6 m) : on gagne en hauteur et en détails.
+const HPL = [0xeadcbc, 0xe4d2ae, 0xefe4cc, 0xdcc9a4], HRF = [0x9a3b2a, 0x7a4630, 0x8a3a2c, 0x5a5f6e];
+function timberFrame(b, w, h, d, y, c) {     // poutres apparentes sur les quatre faces
+  for (const sz of [-1, 1]) { b.box(w + 0.1, 0.22, 0.12, c, 0, y, sz * (d / 2 + 0.03)); b.box(w + 0.1, 0.22, 0.12, c, 0, y + h - 0.22, sz * (d / 2 + 0.03)); for (const x of [-w / 2, -w / 6, w / 6, w / 2]) b.box(0.2, h, 0.12, c, x, y, sz * (d / 2 + 0.03)); b.box(0.16, h * 0.95, 0.1, c, -w / 3, y, sz * (d / 2 + 0.05), 0, 0.55 * sz); }
+  for (const sx of [-1, 1]) { b.box(0.12, 0.22, d + 0.1, c, sx * (w / 2 + 0.03), y + h - 0.22, 0); for (const z of [-d / 2, 0, d / 2]) b.box(0.12, h, 0.2, c, sx * (w / 2 + 0.03), y, z); }
+}
+function windows(b, w, d, y, n, c = 0x3a4a5a) { for (let i = 0; i < n; i++) { const x = -w / 2 + (i + 0.5) * w / n; b.box(0.7, 0.8, 0.1, c, x, y, d / 2 + 0.08); b.box(0.9, 0.12, 0.16, 0x6b4a2c, x, y - 0.08, d / 2 + 0.1); } }
+export function houseModel(kit, seed, lv) {
+  if (lv <= 1) { if (kit) { const k = seed % 5; return { g: kitModel(kit, 'House' + (k + 1), HOUSE_SC[k], seed), top: 6 }; } return houseFallback(); }
+  const b = new B(), pl = HPL[seed % 4], rf = HRF[(seed >> 2) % 4], tb = 0x4e3522, st = 0x9a958c;
+  if (lv === 2) {
+    b.box(5.4, 0.5, 5.0, st, 0, 0, 0);
+    b.box(5.2, 2.5, 4.8, pl, 0, 0.5, 0); timberFrame(b, 5.2, 2.5, 4.8, 0.5, tb);
+    b.box(5.6, 2.3, 5.2, pl, 0, 3.0, 0); timberFrame(b, 5.6, 2.3, 5.2, 3.0, tb);           // étage en encorbellement
+    b.gable(6.2, 6.0, 2.6, rf, 0, 5.3, 0);
+    b.box(1.0, 1.9, 0.15, DARK, 0.9, 0.5, 2.48); windows(b, 5.2, 4.8, 1.8, 2); windows(b, 5.6, 5.2, 4.0, 3);
+    b.box(0.7, 2.2, 0.7, 0x8a7f72, -1.8, 6.0, -0.8);                                        // cheminée
+    return { g: b.g, top: 8.6 };
+  }
+  if (lv === 3) {
+    b.box(5.8, 0.6, 5.6, st, 0, 0, 0);
+    b.box(5.4, 2.6, 5.0, pl, 0, 0.6, -0.2); timberFrame(b, 5.4, 2.6, 5.0, 0.6, tb);
+    b.box(5.8, 2.5, 5.4, pl, 0, 3.2, -0.2); timberFrame(b, 5.8, 2.5, 5.4, 3.2, tb);
+    b.gable(6.4, 6.4, 3.2, rf, 0, 5.7, -0.2);
+    b.box(1.6, 1.2, 1.2, pl, 0, 6.4, 2.4); b.gable(1.8, 1.6, 1.0, rf, 0, 7.6, 2.4); b.box(0.6, 0.7, 0.1, 0x3a4a5a, 0, 6.6, 3.02);   // lucarne
+    b.add(new THREE.BoxGeometry(5.4, 0.14, 1.6), rf, 0, 2.7, 2.7, -0.25);                 // auvent au-dessus de l'entrée
+    for (const x of [-2.4, 2.4]) b.box(0.18, 2.6, 0.18, tb, x, 0.6, 3.3);
+    b.box(1.1, 2.0, 0.15, DARK, 0, 0.6, 2.33); windows(b, 5.4, 4.6, 1.9, 2); windows(b, 5.8, 5.0, 4.3, 3);
+    b.box(0.8, 2.6, 0.8, 0x8a7f72, 2.0, 7.2, -1.2);
+    for (let i = 0; i < 3; i++) b.box(0.5, 0.5, 0.5, 0x6a8a3a, -2.2 + i * 0.5, 0.6, 3.2);   // jardinière
+    return { g: b.g, top: 10 };
+  }
+  // niveau 4 : maison de notable
+  b.box(5.6, 3.0, 5.2, st, 0, 0, -0.2);                                                    // rez-de-chaussée en pierre
+  b.box(5.9, 2.6, 5.5, pl, 0, 3.0, -0.2); timberFrame(b, 5.9, 2.6, 5.5, 3.0, tb);
+  b.box(5.9, 2.2, 5.5, pl, 0, 5.6, -0.2); timberFrame(b, 5.9, 2.2, 5.5, 5.6, tb);
+  b.gable(6.5, 6.5, 3.4, rf, 0, 7.8, -0.2);
+  b.cyl(1.25, 9.5, st, 2.6, 0, 2.4, 10); b.cyl(1.4, 0.5, st, 2.6, 9.5, 2.4, 10);                              // tourelle d'escalier
+  b.add(new THREE.ConeGeometry(1.6, 2.8, 10), HRF[3], 2.6, 11.4, 2.4); b.box(0.08, 1.2, 0.08, GOLD, 2.6, 12.8, 2.4);
+  b.box(0.9, 0.5, 0.08, 0x2f5fb0, 2.6, 13.3, 2.4);                                          // fanion
+  b.box(1.4, 2.4, 0.18, DARK, -0.8, 0, 2.43); b.box(1.8, 0.3, 0.25, st, -0.8, 2.4, 2.45);
+  windows(b, 5.6, 4.8, 1.8, 2, 0x2e3e52); windows(b, 5.9, 5.1, 4.2, 3); windows(b, 5.9, 5.1, 6.6, 3);
+  for (const x of [-2.0, 0.4]) b.box(0.8, 3.0, 0.8, 0x8a7f72, x, 8.6, -1.4);
+  return { g: b.g, top: 12 };
+}
+
 // Fabrique le modèle d'une structure. `seed` varie l'aspect des maisons. Renvoie { g, top } ; les pastilles de niveau sont ajoutées par le vue.
-export function makeModel(type, kit, seed = 0) {
+export function makeModel(type, kit, seed = 0, lv = 1) {
+  if (type === 'house') return houseModel(kit, seed, lv);
   if (type === 'wizard') return wizardModel();
   if (type === 'infirmary') return infirmaryModel();
   if (type === 'university') return universityModel();
@@ -198,4 +246,4 @@ export function makeModel(type, kit, seed = 0) {
   const f = { sawmill, quarry, mine, farm, forge }[type]; return f ? f() : { g: new THREE.Group(), top: 5 };
 }
 
-export function pipsFor(type) { if (type === 'house') return 0; const mx = STRUCT[type].max || 4; return mx > 1 ? mx : 0; }
+export function pipsFor(type) { const mx = STRUCT[type].max || 4; return mx > 1 ? mx : 0; }

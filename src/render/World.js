@@ -20,11 +20,16 @@ export class FrontierView {
     const mk = (g, n) => { const m = new THREE.InstancedMesh(g, lamV(), n); m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; scene.add(m); return m; };
     this.fir = mk(fir, N); this.oak = mk(oak, N); this.stump = mk(stump, N); this.stump.castShadow = false;
     this.trees = []; let sd = 99; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
-    for (const p of frontier.patches) for (let k = 0; k < this.per; k++) this.trees.push({ p: p.id, x: p.x0 + 1.5 + r() * (FRONTIER.cell - 3), z: p.z0 + 1.5 + r() * (FRONTIER.cell - 3), s: 1.1 + r() * 0.9, oak: r() < 0.35, ry: r() * 6.28, k, tint: 0.82 + r() * 0.3 });
+    // essences cohérentes par forêt : à l'ouest, sapinière au nord qui cède peu à peu la place aux feuillus vers le sud ;
+    // à l'est, sapinière avec un bois de feuillus autour de (330, 285). Lisière de transition progressive (mélange sur ~40 m).
+    const sm = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const oakP = (x, z) => x < 100 ? sm(240, 290, z + 18 * Math.sin(x * 0.045)) : 1 - sm(38, 72, Math.hypot(x - 330, (z - 285) * 1.2) + 10 * Math.sin(x * 0.07 + z * 0.05));
+    for (const p of frontier.patches) for (let k = 0; k < this.per; k++) this.trees.push({ p: p.id, x: p.x0 + 1.5 + r() * (FRONTIER.cell - 3), z: p.z0 + 1.5 + r() * (FRONTIER.cell - 3), s: 1.1 + r() * 0.9, oak: 0, ry: r() * 6.28, k, tint: 0.82 + r() * 0.3 });
+    for (const t of this.trees) t.oak = r() < oakP(t.x, t.z);
     // sol des forêts : sous-bois sombre (parcelles) ; un anneau signale les parcelles en cours de défrichage
     const pg = new THREE.PlaneGeometry(FRONTIER.cell, FRONTIER.cell); pg.rotateX(-Math.PI / 2);
     const px = (r, g, b) => { const t = new THREE.DataTexture(new Uint8Array([r, g, b, 255]), 1, 1); t.needsUpdate = true; return t; };   // sol des parcelles : mêmes textures de détail (herbe mêlée de terre)
-    this.floor = new THREE.InstancedMesh(pg, groundMaterial(px(255, 255, 255), px(110, 0, 0)), frontier.patches.length); this.floor.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(frontier.patches.length * 3), 3); this.floor.receiveShadow = true; this.floor.frustumCulled = false; scene.add(this.floor);
+    this.floor = new THREE.InstancedMesh(pg, groundMaterial(px(150, 172, 104), px(70, 0, 0)), frontier.patches.length); this.floor.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(frontier.patches.length * 3), 3); this.floor.receiveShadow = true; this.floor.frustumCulled = false; scene.add(this.floor);
     const rg = new THREE.RingGeometry(FRONTIER.cell * 0.46, FRONTIER.cell * 0.5, 4, 1); rg.rotateX(-Math.PI / 2); rg.rotateY(Math.PI / 4);
     this.marks = new THREE.InstancedMesh(rg, new THREE.MeshBasicMaterial({ color: 0xffd24a, transparent: true, opacity: 0.85, depthWrite: false }), frontier.patches.length); this.marks.frustumCulled = false; this.marks.count = 0; scene.add(this.marks);
     this.ver = -1; this.d = new THREE.Object3D(); this.c = new THREE.Color(); this.sel = -1;
@@ -42,7 +47,9 @@ export class FrontierView {
     for (const m of [this.fir, this.oak, this.stump]) { m.instanceMatrix.needsUpdate = true; if (m.count) m.instanceColor.needsUpdate = true; }
     if (this.ver !== F.version) {
       this.ver = F.version;
-      F.patches.forEach((p, i) => { d.position.set(p.x, 0.03, p.z); d.rotation.set(0, 0, 0); d.scale.setScalar(1); d.updateMatrix(); this.floor.setMatrixAt(i, d.matrix); this.floor.setColorAt(i, p.state === 'open' ? c.setRGB(0.42, 0.52, 0.28) : c.setRGB(0.28, 0.34, 0.2).multiplyScalar(0.9 + (p.seed || 0) * 0.2)); });
+      // sol propre seulement sous les parcelles défrichées (prairie) ; sous la forêt, c'est le sol de sous-bois de la bordure
+      let nfl = 0; F.patches.forEach(p => { if (p.state !== 'open') return; d.position.set(p.x, 0.03, p.z); d.rotation.set(0, 0, 0); d.scale.setScalar(1); d.updateMatrix(); this.floor.setMatrixAt(nfl, d.matrix); this.floor.setColorAt(nfl, c.setScalar(0.92 + (p.seed || 0) * 0.12)); nfl++; });
+      this.floor.count = nfl;
       this.floor.instanceMatrix.needsUpdate = true; this.floor.instanceColor.needsUpdate = true;
     }
     for (const p of F.patches) {

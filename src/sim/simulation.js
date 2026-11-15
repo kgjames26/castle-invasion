@@ -145,10 +145,12 @@ export class Simulation {
   hurtCastle(d) { this.castleHp -= d; if (this.castleHp <= 0 && !this.over) { this.castleHp = 0; this.over = true; this.events.push({ type: 'gameOver' }); } }
 
   // ——— cycle des vagues ———
+  // couloirs d'arrivée (v3.1) : n'importe où au nord, mais 30 % des couloirs passent par le centre ; les secteurs visés en découlent
   pickTargets() {
-    const spec = waveSpec(this.wave), pool = [0, 1, 2, 3, 4], out = [];
-    for (let k = 0; k < Math.min(spec.sectors, 5); k++) out.push(pool.splice((this.rng() * pool.length) | 0, 1)[0]);
-    this.targets = out.sort();
+    const spec = waveSpec(this.wave), rng = this.rng, n = Math.max(2, Math.min(6, spec.sectors + 1 + ((rng() * 2) | 0)));
+    this.lanes = [];
+    for (let k = 0; k < n; k++) this.lanes.push(rng() < 0.3 ? W / 2 + (rng() - 0.5) * 44 : 8 + rng() * (W - 16));
+    this.targets = [...new Set(this.lanes.map(x => sectorOfX(x)))].sort();
   }
   startAssault() {
     const spec = waveSpec(this.wave), D = DIFFICULTY[this.difficulty] || DIFFICULTY.normal; spec.n = Math.round(spec.n * D.n); this.zombies.hpMult = D.hp;
@@ -183,8 +185,10 @@ export class Simulation {
   packSize(n) { return Math.max(4, Math.round(PACK.base + this.wave * PACK.perWave + this.rng() * PACK.jitter)); }
   // Un groupe : même secteur cible, même type dominant (ils avancent à la même allure), placés en masse serrée
   spawnPack(sp, size) {
-    const rng = this.rng, s = this.targets[(rng() * this.targets.length) | 0], cx = s * SECTOR_W + SECTOR_W / 2;
-    const gx = Math.min(W - 6, Math.max(6, cx + (rng() - 0.5) * 70)), gz = 3 + rng() * 22, rad = 2 + Math.sqrt(size) * PACK.spread;
+    const rng = this.rng; if (!this.lanes || !this.lanes.length) this.pickTargets();
+    const lx = this.lanes[(rng() * this.lanes.length) | 0], gx = Math.min(W - 6, Math.max(6, lx + (rng() - 0.5) * 24)), s = sectorOfX(gx), gz = 3 + rng() * 22;
+    // tantôt une masse serrée, tantôt une troupe éparpillée
+    const loose = rng(), rad = (2 + Math.sqrt(size) * PACK.spread) * (loose < 0.35 ? 0.6 : loose < 0.75 ? 1.1 : 2.2);
     let primary = this.pickType(sp), done = 0; if (primary < 0) return 0;
     const grp = this.nextGroup = (this.nextGroup || 0) % 1000000 + 1;
     for (let i = 0; i < size && sp.left > 0; i++) {

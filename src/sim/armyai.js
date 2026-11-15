@@ -25,18 +25,20 @@ export class ArmyAI {
   update(dt, sim) {
     if ((this.t -= dt) > 0) return; this.t = 1;
     const A = sim.army, M = threatMap(sim), fight = sim.phase === 'assault' || sim.phase === 'alert';
-    if (A.autoArchers) this.archers(sim, A, M, fight);
+    this.archers(sim, A, M, fight);   // les archers formés montent toujours sur la muraille ; le mode manuel ne coupe que la redistribution
     this.squads(sim, A, M, fight);
   }
   archers(sim, A, M, fight) {
     let total = A.reserve.archer; for (const a of A.archers) total += a.n;
     const w = new Float32Array(SECTORS); let sw = 0; for (let s = 0; s < SECTORS; s++) { w[s] = 1 + (fight ? M.T[s] * 0.25 : 0); sw += w[s]; }
     const want = s => Math.min(ARCHER_SLOTS, total * w[s] / sw);
-    // les archers en réserve montent sur les remparts, là où il en manque le plus
-    while (A.reserve.archer > 0) { let b = -1, bg = -Infinity; for (let s = 0; s < SECTORS; s++) { const g = want(s) - A.archers[s].n; if (A.archers[s].n < ARCHER_SLOTS && g > bg) { bg = g; b = s; } } if (b < 0 || !A.assignArchers(b, 1)) break; }
+    // secteur tenable : muraille intacte et aucun zombie passé derrière (sinon on n'y envoie plus personne)
+    const ok = s => sim.wall.breaches(s) === 0 && !M.inside[s];
+    // les archers en réserve montent sur les remparts dès leur formation, là où il en manque le plus, tant qu'il reste de la place
+    while (A.reserve.archer > 0) { let b = -1, bg = -Infinity; for (let s = 0; s < SECTORS; s++) { if (!ok(s)) continue; const g = want(s) - A.archers[s].n; if (A.archers[s].n < ARCHER_SLOTS && g > bg) { bg = g; b = s; } } if (b < 0 || !A.assignArchers(b, 1)) break; }
     // pendant l'assaut : déplacer un archer vers le secteur le plus pressé (pas plus d'un toutes les 3 s)
-    if (fight && (this.moveT -= 1) <= 0) {
-      let src = -1, dst = -1, gs = 0, gd = 0; for (let s = 0; s < SECTORS; s++) { const g = want(s) - A.archers[s].n; if (g > gd) { gd = g; dst = s; } if (-g > gs && A.archers[s].n > 2) { gs = -g; src = s; } }
+    if (A.autoArchers && fight && (this.moveT -= 1) <= 0) {
+      let src = -1, dst = -1, gs = 0, gd = 0; for (let s = 0; s < SECTORS; s++) { const g = want(s) - A.archers[s].n; if (g > gd && ok(s)) { gd = g; dst = s; } if (-g > gs && A.archers[s].n > 2) { gs = -g; src = s; } }
       if (src >= 0 && dst >= 0 && src !== dst && gd > 2 && gs > 2 && A.archers[dst].n < ARCHER_SLOTS) { A.assignArchers(src, -1); A.assignArchers(dst, 1); this.moveT = 3; }
     }
   }

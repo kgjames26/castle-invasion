@@ -225,3 +225,24 @@ h2,h3,.ptitle,.wave b,.tile b,.dk span { font-family:var(--serif); }
 #phase-banner[data-p=alert], #phase-banner[data-p=assault] { background: rgba(48, 14, 12, .85); border-color: rgba(240, 120, 90, .6); }
 
 .isvg { width: 1.3em; height: 1.3em; vertical-align: -0.2em; display: inline-block; }
+/* v3.1 : bandeau du haut épuré — ressources compactes au-dessus, vague + temps dessous */
+#top { gap:5px; }
+.rline { position:relative; z-index:2; }
+.rchip { font-size:13px; padding:3px 3px; white-space:nowrap; overflow:hidden; }
+.rchip b { overflow:hidden; text-overflow:clip; }
+.wline { position:relative; z-index:1; }
+.wave { padding:4px 8px; gap:8px; }
+.wave .wt b { font-size:14px; }
+.cbar { display:flex; flex-direction:column; gap:3px; justify-content:center; }
+.cbar .bar.thin { height:4px; opacity:.9; } .cbar .bar.thin i { background:linear-gradient(90deg,#8fc46a,#cfe39a); }
+.cbar .bar.thin[data-p=alert] i { background:#e0a43a; } .cbar .bar.thin[data-p=calm] i { background:#8fb6d8; }
+.launch { flex:none; border-radius:999px; padding:5px 10px; font-weight:800; font-size:12px; background:linear-gradient(180deg,#d8553e,#a8321f); color:#fff; border:1px solid #6e1d10; white-space:nowrap; }
+.tgroup { display:flex; gap:0; flex:none; border-radius:999px; box-shadow:var(--sh); }
+.tgroup .rb { box-shadow:none; border-radius:0; width:38px; }
+.tgroup .rb:first-child { border-radius:999px 0 0 999px; border-right:none; }
+.tgroup .rb:last-child { border-radius:0 999px 999px 0; font-size:14px; }
+.rb.spd.fast { background:linear-gradient(180deg,#cfe8ff,#8fb8e0); }
+body.paused::after { content:'❚❚  Pause'; position:fixed; left:50%; top:96px; transform:translateX(-50%); padding:4px 14px; border-radius:999px; background:rgba(20,16,10,.78); color:#f4e4bc; font-weight:800; font-size:13px; pointer-events:none; z-index:6; }
+@media (max-width:480px) { .launch { padding:5px 7px; font-size:11px; } .rchip i { font-size:12px; } .rchip { font-size:12px; gap:2px; } .rb { width:36px; height:36px; font-size:15px; } .tgroup .rb { width:34px; } }
+#b-pause { font-size:13px; letter-spacing:-2px; } #b-pause.on { letter-spacing:0; font-size:15px; }
+@media (max-width:480px) { .rline { gap:3px; } .rchip { font-size:11.5px; letter-spacing:-0.3px; padding:3px 2px; } .rchip i .ri { width:1.25em; height:1.25em; } .rchip.pop { flex:1.35; } }

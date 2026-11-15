@@ -30,7 +30,7 @@ export class Economy {
   // ——— grandeurs dérivées ———
   cap(r) { return ECON.baseStore + ECON.storePerLevel * this.level[r === 'food' ? 'granary' : 'warehouse']; }
   // Population PARTAGÉE : villageois + toutes les unités militaires (réserve, escouades, garnisons, file d'entraînement)
-  popCap() { return ECON.popBase + ECON.popPerHouse * this.houses + (this.level.church ? PRIEST.pop * this.level.church : 0); }   // église : des familles s'installent
+  popCap() { return ECON.popBase + Math.floor(ECON.popPerHouse * this.houses) + (this.level.church ? PRIEST.pop * this.level.church : 0); }   // église : des familles s'installent
   population() { return this.villagers.length + this.sim.army.popUsed() + this.sim.siege.popUsed() + (this.sim.mages ? this.sim.mages.popUsed() : 0); }
   popRoom() { return this.popCap() - this.population(); }
   speed() { return ECON.villagerSpeed * (1 + UPGRADES.boots.per * this.up.boots); }

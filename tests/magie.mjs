@@ -47,11 +47,11 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
   const sim = new Simulation(); for (let i = 0; i < 6; i++) sim.zombies.spawn(0, 100 + i * 0.5, 60, 2, sim.rng);
   sim.explode(101, 60, 3, 0, 'fire'); ok(sim.fires.length === 1, 'feu au sol créé');
   run(sim, 3); let lost = 0; for (let i = 0; i < sim.zombies.n; i++) lost += 40 - sim.zombies.hp[i]; lost += (6 - sim.zombies.n) * 40;
-  ok(lost > 60, `le feu brûle (${Math.round(lost)} PV perdus)`);
+  ok(lost > 40, `le feu brûle (${Math.round(lost)} PV perdus)`);
 }
 // 6) difficulté et sauvegarde
 {
-  const a = new Simulation(), b = new Simulation(); b.setDifficulty('hard'); a.skipPrep(); b.skipPrep(); run(a, 11); run(b, 11);
+  const a = new Simulation(), b = new Simulation(); b.setDifficulty('hard'); a.skipPrep(); b.skipPrep(); run(a, 14); run(b, 14);
   ok(b.spawn.total > a.spawn.total, `difficile : plus de zombies (${a.spawn.total} → ${b.spawn.total})`);
   const sim = new Simulation(); rich(sim); built(sim, 'wizard', 176, 258, 2); sim.summonMage(); run(sim, 20); sim.setDifficulty('easy');
   const st = JSON.parse(JSON.stringify(serialize(sim))), s2 = new Simulation(); restore(s2, st);

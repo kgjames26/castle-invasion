@@ -4,10 +4,20 @@ import * as THREE from 'three';
 import { makeModel, pipsFor, signSprite } from './Buildings.js';
 import { levelProps } from './Village.js';
 import { mat, GOLD, WOOD, DARK } from './Military.js';
-import { STRUCT, BUILD } from '../content/medieval.js';
+import { STRUCT, BUILD, TASKS } from '../content/medieval.js';
 import { W } from '../sim/constants.js';
 
 const ease = t => 1 - Math.pow(1 - t, 3);
+// pastille discrète « il manque N villageois » (petite, semi-transparente)
+const needCache = new Map();
+function needTex(n) {
+  const key = Math.min(n, 9); if (needCache.has(key)) return needCache.get(key);
+  const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const g = cv.getContext('2d');
+  g.fillStyle = 'rgba(30,22,14,.72)'; g.beginPath(); g.roundRect(4, 8, 120, 48, 24); g.fill();
+  g.fillStyle = '#f2c94a'; g.beginPath(); g.arc(34, 25, 8, 0, 7); g.fill(); g.beginPath(); g.ellipse(34, 46, 13, 9, 0, Math.PI, 0); g.fill();   // silhouette
+  g.font = 'bold 30px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#f4e4bc'; g.fillText((n > 9 ? '9+' : n) + '', 84, 33);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; needCache.set(key, t); return t;
+}
 const box = (w, h, d, c, x, y, z, parent) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(c)); m.position.set(x, y + h / 2, z); parent.add(m); return m; };
 
 export class StructureView {
@@ -31,7 +41,7 @@ export class StructureView {
     const def = STRUCT[s.type], [w, h, d] = def.size, v = { id: s.id, g: new THREE.Group(), state: '', pop: 1, popT: 0 };
     v.g.position.set(s.x, 0, s.z); v.hw = w / 2; v.hd = d / 2; v.H = Math.min(h, 14);
     v.inner = new THREE.Group(); v.g.add(v.inner);                                // tourne avec la structure
-    if (!s.fixed || s.type === 'prison') { const m = makeModel(s.type, this.kit, s.id * 7 + (s.x | 0)); v.model = m.g; v.top = m.top; v.inner.add(m.g); }
+    if (!s.fixed || s.type === 'prison') { const m = makeModel(s.type, this.kit, s.id * 7 + (s.x | 0), s.level); v.hlv = s.level; v.model = m.g; v.top = m.top; v.inner.add(m.g); }
     else { v.top = 15.5; }
     // pastilles de niveau (dorées) au-dessus de l'entrée
     const np = pipsFor(s.type); v.pips = [];
@@ -63,6 +73,15 @@ export class StructureView {
     box(hw * 2, 0.15, 1.2, 0xd9b27a, 0, H * 0.4, hd + 0.3, g);
     g.visible = false; return g;
   }
+  missing(s) {
+    const E = this.sim.eco;
+    if (s.state === 'site' || s.state === 'upgrading' || s.state === 'moving') { if (E.idleCount() > 0) return 0; let c = 0; for (const v of E.villagers) if (v.job === s.id) c++; return Math.max(0, s.workers - c); }
+    if (s.state !== 'built') return 0;
+    if (!this.taskOf) { this.taskOf = {}; for (const t in TASKS) if (TASKS[t].building) (this.taskOf[TASKS[t].building] ||= []).push(t); }
+    const ts = this.taskOf[s.type]; if (!ts || this.sim.build.of(s.type) !== s) return 0;   // une seule pastille par métier
+    let used = 0; for (const t of ts) used += E.assign[t] || 0;
+    return Math.max(0, E.slots(s.type) - used);
+  }
   // ——— mise à jour à chaque image ———
   update(dt, clock) {
     const B = this.sim.build, seen = new Set();
@@ -76,12 +95,19 @@ export class StructureView {
       const site = s.state === 'site', work = site || s.state === 'upgrading' || s.state === 'moving', p = s.progress;
       if (v.model) v.model.visible = !site; if (v.sign) v.sign.visible = !site;
       v.site.visible = site; v.scaf.visible = s.state === 'upgrading' || s.state === 'moving';
+      // villageois manquants : chantier sans tous ses ouvriers, ou atelier de récolte avec des places libres
+      { const miss = this.missing(s); if (miss > 0) { if (!v.need) { v.need = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, opacity: 0.8 })); v.need.scale.set(2.6, 1.3, 1); v.need.renderOrder = 9; v.g.add(v.need); }
+          if (v.needN !== miss) { v.needN = miss; v.need.material.map = needTex(miss); v.need.material.needsUpdate = true; }
+          v.need.visible = true; v.need.position.set(v.hw * 0.7, (site ? 3.5 : v.top) + 1.6 + 0.15 * Math.sin(clock * 2 + s.id), v.hd * 0.7); }
+        else if (v.need) v.need.visible = false; }
       if (site) this.pose(v.site, p);
       // pastilles : niveau atteint (la prochaine clignote pendant l'amélioration)
       v.pips.forEach((pp, i) => { pp.visible = i < s.level || (s.state === 'upgrading' && i === s.level && Math.sin(clock * 8) > 0); });
       v.bar.visible = work; if (work) { v.fill.scale.x = Math.max(0.001, p); v.bar.quaternion.copy(this.camera.quaternion); v.fill.material.color.setHex(s.state === 'moving' ? 0x8fd0ff : 0xe8c14a); }
       // apparition du bâtiment terminé : petit rebond
       if (v.popT > 0) { v.popT += dt; const t = Math.min(1, v.popT / 0.7), sc = t < 1 ? 0.55 + 0.45 * ease(t) + 0.12 * Math.sin(t * Math.PI) : 1; v.inner.scale.set(sc, sc, sc); if (t >= 1) { v.popT = 0; v.inner.scale.set(1, 1, 1); } }
+      // maison : le modèle change avec le niveau
+      if (s.type === 'house' && v.model && v.hlv !== s.level && s.level >= 1) { v.hlv = s.level; v.inner.remove(v.model); const m = makeModel('house', this.kit, s.id * 7 + (s.x | 0), s.level); v.model = m.g; v.top = m.top; v.inner.add(m.g); v.g.userData.sh = 0; if (s.level > 1) v.popT = 0.0001; v.bar.position.y = v.top + 4.6; v.pips.forEach(pp => pp.position.y = v.top + 1.4); }
       // installations de niveau (scierie, carrière, mine, ferme… et bannières) : reconstruites quand le niveau change
       if (v.model && v.lvl !== s.level && (!s.fixed || s.type === 'prison') && s.type !== "house" && s.type !== "tower") { v.lvl = s.level; v.g.userData.sh = 0; if (v.extras) v.inner.remove(v.extras); v.extras = levelProps(s.type, s.level, v.hw, v.hd); v.inner.add(v.extras); if (s.type === 'mill') v.model.scale.setScalar(1 + 0.07 * (s.level - 1)); if (v.lvl > 1) v.popT = 0.0001; }   // le moulin grandit avec ses niveaux
       if (v.extras) v.extras.visible = !site;

@@ -258,3 +258,14 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Château fort** procédural : enceinte crénelée, quatre tours rondes à toits coniques, châtelet à herse, donjon à échauguettes, logis, puits.
 - **Lisières** : l'herbe déborde en touffes irrégulières sur la terre et les pavés ; bord déformé par un bruit dans le shader.
 - **Entraînement** : file de 30 (+20 par niveau), 3 / 5 / 8 unités formées **en même temps** selon le niveau, boutons +1 / +5 / +15.
+
+## Phase 31 — Bordure de carte, rythme, maisons à 4 niveaux, interface épurée
+- **Rythme** : chantiers ×2,6 plus rapides ; on bâtit, recrute et produit **à tout moment**, vague comprise ; 5 min avant la 1re vague, ~3 min entre les suivantes.
+- **Zombies** : chaque horde a sa propre distance de charge (12 à 105 m), chaque zombie s'en écarte, quelques isolés chargent n'importe quand ; allure lente et course très variables. Couloirs d'arrivée tirés au hasard sur tout le nord, dont 30 % par le centre ; hordes tantôt serrées, tantôt éparpillées. Le centre nord n'a plus de forêt.
+- **Bordure** : crête de collines et de rochers autour de la zone jouable, évasée vers le nord au-dessus du couloir des hordes ; sol de sous-bois au-delà, forêt de bordure derrière la crête seulement.
+- **Forêts** : essences cohérentes (sapinière au nord, feuillus au sud-ouest, bois de feuillus à l'est) avec lisières progressives ; neige qui s'estompe peu à peu vers le sud.
+- **Maisons** : 4 niveaux (15 / 37 / 67 / 105 places), modèles dédiés (chaumière, colombages à étage, grande maison à lucarne, maison de notable à tourelle).
+- **Archers** : montent sur la muraille dès leur formation, tant qu'il y a de la place et que le secteur n'est ni percé ni franchi.
+- **Portes** : à hauteur de muraille ; seule la herse levée (et ses rails) dépasse. Correction : les herses n'étaient plus affichées (ligne avalée par un commentaire, le garde-fou détecte désormais ce cas).
+- **Interface** : pause ❚❚/▶ séparée de la vitesse (1× · 2× · 3×), « ⚔ Lancer » explicite, bandeau de vague sans compte à rebours précis (barre de répit), ressources compactes (12.4k), deux messages au plus.
+- **Villageois manquants** : petite pastille discrète (silhouette + nombre) au-dessus des ateliers aux places libres et des chantiers en manque d'ouvriers.
