@@ -416,3 +416,4 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 ## Phase 52 — Matières
 - Bâtiments : matières déduites de la couleur (planches jointives, pierres appareillées avec joints, tuiles en rangs, chaume strié), pied des murs assombri.
 - Douves défensives : même eau réaliste que celles du château. Fleurs de printemps plus fines et plus nombreuses.
+- Arbres défrichables plus détaillés : sapins à quatre étages irréguliers, feuillus à quatre houppiers bosselés, dégradé sombre → clair.

@@ -14,8 +14,16 @@ function colored(geo, hex) { const g = geo.index ? geo.toNonIndexed() : geo; g.d
 export class FrontierView {
   constructor(scene, frontier) {
     this.F = frontier; this.per = 16; const N = frontier.patches.length * this.per; this.N = N;
-    const fir = mergeGeometries([colored(new THREE.CylinderGeometry(0.2, 0.3, 1.2, 5).translate(0, 0.6, 0), 0x5a3d26), colored(new THREE.ConeGeometry(1.25, 2.4, 7).translate(0, 2.0, 0), 0x2f5d3c), colored(new THREE.ConeGeometry(0.9, 1.9, 7).translate(0, 3.2, 0), 0x3a6b45)]);
-    const oak = mergeGeometries([colored(new THREE.CylinderGeometry(0.25, 0.35, 1.6, 6).translate(0, 0.8, 0), 0x6b4a2c), colored(new THREE.IcosahedronGeometry(1.5, 0).translate(0, 2.6, 0), 0x4f7f3a), colored(new THREE.IcosahedronGeometry(1.0, 0).translate(0.7, 3.2, 0.3), 0x5f8f44)]);
+    // (v10.9) arbres plus détaillés : sapin à quatre étages aux bords irréguliers, feuillu à quatre houppiers bosselés ;
+    // dégradé du sombre (dessous, intérieur) vers le clair (pointes, sommet) peint dans les couleurs de sommets
+    let ts = 31; const tr = () => (ts = (ts * 16807) % 2147483647) / 2147483647, cA = new THREE.Color(), cB = new THREE.Color();
+    const shaded = (g, lo, hi, jit = 0) => { g = g.index ? g.toNonIndexed() : g; g.deleteAttribute('uv'); g.deleteAttribute('normal'); const P = g.attributes.position; g.computeBoundingBox(); const y0 = g.boundingBox.min.y, h = g.boundingBox.max.y - y0 || 1, col = new Float32Array(P.count * 3), seen = new Map();
+      for (let i = 0; i < P.count; i++) { const key = P.getX(i).toFixed(3) + ',' + P.getY(i).toFixed(3) + ',' + P.getZ(i).toFixed(3); let o = seen.get(key); if (!o) { o = [(tr() - 0.5) * jit, (tr() - 0.5) * jit * 0.6, (tr() - 0.5) * jit]; seen.set(key, o); }
+        const f = (P.getY(i) - y0) / h; cA.set(lo).lerp(cB.set(hi), f * f * 0.9 + 0.1 * tr()); col[i * 3] = cA.r; col[i * 3 + 1] = cA.g; col[i * 3 + 2] = cA.b; P.setXYZ(i, P.getX(i) + o[0], P.getY(i) + o[1], P.getZ(i) + o[2]); }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals(); return g; };
+    const norm = g => { g = g.index ? g.toNonIndexed() : g; g.deleteAttribute('uv'); g.computeVertexNormals(); return g; };
+    const fir = mergeGeometries([norm(colored(new THREE.CylinderGeometry(0.16, 0.3, 1.4, 6).translate(0, 0.7, 0), 0x4a3220)), ...[[1.45, 1.9, 1.5], [1.15, 1.7, 2.4], [0.85, 1.5, 3.3], [0.5, 1.3, 4.1]].map(([r0, h, y]) => shaded(new THREE.ConeGeometry(r0, h, 9, 1).translate(0, y, 0), 0x24502f, 0x5fa064, 0.22))]);
+    const oak = mergeGeometries([norm(colored(new THREE.CylinderGeometry(0.22, 0.36, 1.8, 7).translate(0, 0.9, 0), 0x5a3d26)), ...[[1.45, 0, 2.7, 0], [1.05, 0.8, 3.2, 0.3], [0.95, -0.7, 3.0, -0.4], [0.8, 0.1, 3.9, 0.2]].map(([r0, x, y, z]) => shaded(new THREE.IcosahedronGeometry(r0, 1).translate(x, y, z), 0x2f5a26, 0x7fae52, 0.3))]);
     const stump = colored(new THREE.CylinderGeometry(0.3, 0.38, 0.45, 6).translate(0, 0.22, 0), 0x7a5a3a);
     const mk = (g, n) => { const m = new THREE.InstancedMesh(g, lamV(), n); m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); m.frustumCulled = false; m.castShadow = true; m.receiveShadow = true; scene.add(m); return m; };
     this.fir = mk(fir, N); this.oak = mk(oak, N);
