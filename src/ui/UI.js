@@ -522,7 +522,7 @@ export class UI {
       b.style.display = b.dataset.show && onScr ? '' : 'none'; b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
       this.edgeArrow(s, p, onScr, vw, vh);
     }
-    this.bigBars(vw, vh);
+    this.bigBars(vw, vh); this.upMarks(vw, vh);
     const c = this.card; if (!c) return;
     let a;
     if (c.kind === 'struct') { const s = this.sim.build.get(c.id); if (!s) return; a = this.rd.project(s.x, 4, s.z); }
@@ -530,6 +530,17 @@ export class UI {
     const w = this.cardEl.offsetWidth, h = this.cardEl.offsetHeight, topMin = 96, botMax = vh - 90;
     let top = a.y - h - 26; if (top < topMin) top = Math.min(botMax - h, a.y + 30); if (top + h > botMax) top = Math.max(topMin, botMax - h);
     this.cardEl.style.left = Math.min(vw - w - 8, Math.max(8, a.x - w / 2)) + 'px'; this.cardEl.style.top = top + 'px';
+  }
+  // (v6.0) flèche dorée ⬆ au-dessus des bâtiments améliorables MAINTENANT (assez de ressources), pendant le temps calme
+  upMarks(vw, vh) {
+    const sim = this.sim, B = sim.build, E = sim.eco, pool = this.upPool || (this.upPool = []); let k = 0;
+    const on = (sim.phase === 'prep' || sim.phase === 'calm') && this.mode === 'idle' && !this.sheet && UI_FLAGS.upMarks !== false;
+    if (on && (!this.upT || performance.now() - this.upT > 600)) { this.upT = performance.now(); this.upList = B.items.filter(b => b.state === 'built' && !b.fixed && (() => { const c = B.upCost(b); return c && E.afford(c); })()).slice(0, 14).map(b => b.id); }
+    if (on) for (const id of this.upList || []) { const b = B.get(id); if (!b || b.state !== 'built') continue; const S = STRUCT[b.type], p = this.rd.project(b.x, (S.size ? S.size[1] : 4) + 2.2, b.z);
+      if (!p.vis || p.x < 20 || p.x > vw - 20 || p.y < 100 || p.y > vh - 100) continue;
+      let e = pool[k]; if (!e) { e = pool[k] = el('button', 'upm'); e.textContent = '⬆'; e.addEventListener('click', ev => { ev.stopPropagation(); const t = B.get(+e.dataset.id); if (t) { this.cam.focusOn(t.x, t.z); this.openCard({ kind: 'struct', id: t.id }); } }); document.getElementById('app').appendChild(e); }
+      e.dataset.id = id; e.title = `${S.name} : amélioration possible`; e.style.display = ''; e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; k++; }
+    for (let j = k; j < pool.length; j++) pool[j].style.display = 'none';
   }
   // barres de vie au-dessus des colosses, golems et boss (+ grande barre du boss en haut de l'écran)
   bigBars(vw, vh) {
