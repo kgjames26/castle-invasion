@@ -52,7 +52,7 @@ export class Night {
     for (const f of this.fires) {
       const dist = Math.hypot(f.x - v.x, f.z - v.z) * 0.05;
       if (f.zone === 'plain') {
-        if (this.danger(sim, f.x, f.z)) continue;
+        if (this.danger(sim, f.x, f.z) || (v.free && sim.phase === 'assault')) continue;   // (v10.3) les allumeurs autonomes ne sortent pas pendant une vague
         if (soon && !f.lit && f.pile >= 0.999 && f.claim < 1) { const s = 130 - dist; if (s > bs) { bs = s; best = f.id; mode = 'light'; } }
         else if (build && !f.lit && f.pile < 0.999 && f.claim < 2) { const s = 40 + f.pile * 20 - dist; if (s > bs) { bs = s; best = f.id; mode = 'stack'; } }
         continue;

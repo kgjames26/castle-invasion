@@ -125,13 +125,13 @@ export class Effects {
   // grande explosion de feu : boule de feu, braises, débris, colonne de fumée, onde de choc, brûlure, secousse
   explosion(x, z, r, kind = 'fire') {
     const big = kind === 'meteor', k = big ? 1.5 : 1;
-    this.flash(x, 2, z, 2.2 + r * 0.45 * k, 0.4 * k, [0.9, 0.5, 0.15]); this.flash(x, 0.8, z, 1.5 + r * 0.3, 0.8, [0.7, 0.25, 0.04]);
-    this.burst(x, 1.2, z, 22 * k, 2 + r * 0.7, 3 + r * 0.4, 0.55, 0.7 + r * 0.07, -1.5, [0.9, 0.32, 0.05], true, 1.2);
-    this.burst(x, 1.0, z, 12 * k, 1 + r * 0.5, 5 + r * 0.3, 0.4, 0.5 + r * 0.05, 0, [0.8, 0.55, 0.12], true, 1.0);
+    this.flash(x, 2, z, 1.6 + r * 0.3 * k, 0.35 * k, [0.4, 0.2, 0.05]); this.flash(x, 0.8, z, 1.2 + r * 0.2, 0.6, [0.3, 0.1, 0.02]);
+    this.burst(x, 1.0, z, 34 * k, 2 + r * 0.7, 3 + r * 0.4, 0.5, 0.3 + r * 0.035, -1.5, [0.95, 0.3, 0.04], true, 1.0);   // (v10.3) éclats plus petits et plus nombreux : boule de feu moins « en blocs »
+    this.burst(x, 0.9, z, 20 * k, 1 + r * 0.5, 5 + r * 0.3, 0.38, 0.22 + r * 0.03, 0, [1, 0.55, 0.1], true, 0.9);
     this.burst(x, 0.5, z, 16 * k, 3 + r * 0.9, 7, 1.1, 0.22, 14, COL.ember, true);
-    this.burst(x, 0.6, z, 12 * k, 2 + r * 0.6, 6, 1.2, 0.4, 14, COL.debris);
-    this.burst(x, 1.5, z, 10 * k, 1 + r * 0.3, 2.5, 2.8, 1.6 + r * 0.15, -0.6, COL.smoke, false, 1.5);
-    this.ring(x, z, r * 2.2 * k, 0.55, [1, 0.6, 0.25]);
+    this.burst(x, 0.6, z, 6 * k, 2 + r * 0.6, 6, 1.2, 0.26, 14, COL.debris);
+    this.burst(x, 1.8, z, 12 * k, 1 + r * 0.3, 2.5, 2.2, 0.55 + r * 0.05, -0.6, [0.17, 0.15, 0.14], false, 1.1);
+    this.ring(x, z, r * 1.5 * k, 0.4, [0.55, 0.24, 0.06]);
     this.scorch(x, z, r * 0.9);
     this.addShake(big ? 0.55 : 0.18 + r * 0.03);
   }
@@ -208,7 +208,7 @@ export class Effects {
     for (const f of sim.fires || []) {
       const life = Math.min(1, f.t / 1.5);
       this.glowNow(f.x, 0.8, f.z, f.r * 0.9 * life, 0.5 * life, 0.22 * life, 0.04);
-      if (this.fireAcc >= 1) for (let k = 0; k < 2; k++) { const a = Math.random() * 6.283, rr = f.r * Math.sqrt(Math.random()); this.A.emit(f.x + Math.cos(a) * rr, 0.2, f.z + Math.sin(a) * rr, 0, 2 + Math.random() * 2, 0, 0.6, 0.5 + Math.random() * 0.5, -1, Math.random() < 0.6 ? COL.fire : COL.fireY, 0.6); if (Math.random() < 0.15) this.P.emit(f.x + Math.cos(a) * rr, 1, f.z + Math.sin(a) * rr, 0.2, 1.4, 0.1, 2.4, 1.0, -0.2, COL.smoke, 1.4); }
+      if (this.fireAcc >= 1) for (let k = 0; k < 1; k++) {   /* (v10.3) les flammes au sol sont dessinées par ExtrasView : ici, seulement quelques braises */ const a = Math.random() * 6.283, rr = f.r * Math.sqrt(Math.random()); this.A.emit(f.x + Math.cos(a) * rr, 0.2, f.z + Math.sin(a) * rr, 0, 2 + Math.random() * 2, 0, 0.5, 0.16 + Math.random() * 0.16, -1, Math.random() < 0.6 ? COL.fire : COL.fireY, 0.6); if (Math.random() < 0.15) this.P.emit(f.x + Math.cos(a) * rr, 1, f.z + Math.sin(a) * rr, 0.2, 1.4, 0.1, 2.4, 1.0, -0.2, COL.smoke, 1.4); }
     }
     if (this.fireAcc >= 1) this.fireAcc = 0;
     // zombies : passage vivant → mort

@@ -291,7 +291,7 @@ export class Economy {
       v.timer = 0;
     }
     const F = N.fires[v.fire], drop = () => { if (F.claim > 0) F.claim--; v.fire = -1; };
-    if (F.zone === 'plain' && N.danger(sim, F.x, F.z)) { drop(); v.path = home(); v.state = 'returning'; return; }   // un zombie approche : on rentre
+    if (F.zone === 'plain' && (N.danger(sim, F.x, F.z) || (v.free && sim.phase === 'assault'))) { drop(); v.path = home(); v.state = 'returning'; return; }   // un zombie approche : on rentre
     if (v.fireMode === 'stack' && (F.lit || F.pile >= 0.999 || !N.building(sim)) && v.state !== 'toFire') { drop(); return; }
     if (v.state === 'toWood') {                                      // au tas de bois des feux (cour, près des portes) : on charge un fagot (rondins sur l'épaule)
       if (!walk()) return;

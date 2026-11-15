@@ -405,3 +405,5 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Tutoriel : le halo du bouton disparaît quand le tutoriel est masqué (vague) ; le tas de bûches n'est plus dans l'axe de la grande porte.
 - Davantage de feux de défense : 6 bûchers de plus dans la plaine (14 au total) et 2 braseros de cour ; l'équipe passe à 14 allumeurs.
 - Braseros et bûchers de la défense redessinés avec les mêmes flammes que les feux de camp (les anciens blocs pâles sont très réduits).
+- Feu au sol (huile bouillante, boules de feu, poix) : nappe de flammes dessinée avec les nouvelles flammes ; explosion moins « en blocs » (éclats plus petits et plus nombreux, fumée sombre, éclair et anneau atténués).
+- Les allumeurs autonomes ne sortent plus dans la plaine pendant une vague.
