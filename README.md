@@ -1,9 +1,10 @@
-# 🏰 Castle Invasion v3 — Phases 2 et 3 (combat + économie)
+# 🏰 Castle Invasion v11.4
 
 Défense de forteresse médiévale en temps réel contre des hordes de zombies. **Nord en haut**, zombies du nord vers le sud,
-muraille horizontale de 200 m en **5 secteurs**, royaume au sud. Pensé d'abord pour le **smartphone en portrait**.
+muraille horizontale de 200 m en **5 secteurs**, royaume au sud. Pensé d'abord pour le **smartphone** (portrait et paysage), jouable aussi sur tablette et PC.
+Application installable (PWA), déployée sur Vercel : https://castle-invasion.vercel.app
 
-Three.js r170 + JS vanilla (modules ES), **aucune étape de build**. Conception complète : voir le doc `conception-v3-phase1` du Project.
+Three.js r170 + JS vanilla (modules ES). Le détail historique des phases de conception figure plus bas.
 
 ## Lancer
 ```bash
@@ -13,7 +14,7 @@ node tests/headless.mjs 26        # joueur automatique jusqu'à la vague 26
 node tests/headless.mjs 12 dumb   # joueur passif
 ```
 
-## Ce que contient ce prototype
+## Base posée aux phases 2 et 3
 - Carte 200 × 320 m (spawn, approche avec forêts/collines/rochers/chemins, glacis, muraille, royaume, château), brouillard de guerre au nord.
 - Muraille : 40 tronçons de 5 m, 5 secteurs indépendants (PV, niveau de résistance, brèches, porte au centre), réparation, renforcement.
 - Zombies : 5 types, champ de flux (Dijkstra) par secteur recalculé à chaque brèche, séparation par hachage spatial, rendu en `InstancedMesh`.
@@ -27,9 +28,9 @@ node tests/headless.mjs 12 dumb   # joueur passif
 - Sauvegarde versionnée (localStorage, v2 ; migration v1→v2 incluse), auto toutes les 30 s et en fin de vague.
 - Portrait : barre des 5 secteurs + panneau contextuel. Paysage : terrain pleine largeur + panneau latéral.
 
-## Pas encore (phases suivantes)
-Entraînement/files/types d'unités (4), équilibrage et nouveaux ennemis (5), tours automatiques,
-cohortes de zombies agrégées (> 4 000), personnages archivés, effets et polissage (6). Onglet Armée : absent tant qu'il serait factice. Les villageois ne peuvent pas encore être attaqués.
+## Évolutions depuis
+Ce socle a été complété par les phases suivantes (voir les sections ci-dessous) : armée et entraînement, nouveaux ennemis, eau et ponts,
+marchés, fusions, sélection rectangulaire, vue des archers, incendies, etc. Version actuelle : **v11.4**.
 
 ## Structure
 ```
