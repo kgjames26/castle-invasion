@@ -5,6 +5,7 @@ import { W, D } from '../sim/constants.js';
 
 import { CAMERA } from '../render/config.js';
 const PITCH = CAMERA.pitchDeg * Math.PI / 180;       // vue rasante : moins « table de jeu » (réglable dans render/config.js)
+const MOVE_KEYS = new Set(['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'a', 'q', 'd', 'w', 'z', 's']);
 export class CameraController {
   constructor(camera, dom, onTap) {
     this.cam = camera; this.dom = dom; this.onTap = onTap;
@@ -14,7 +15,7 @@ export class CameraController {
     dom.addEventListener('pointerdown', e => this.down(e)); dom.addEventListener('pointermove', e => this.move(e));
     dom.addEventListener('pointerup', e => this.up(e)); dom.addEventListener('pointercancel', e => this.up(e, true)); dom.addEventListener('lostpointercapture', e => { if (this.ptrs.has(e.pointerId)) this.up(e, true); });
     dom.addEventListener('wheel', e => { e.preventDefault(); this.setZoom(this.zoom * (e.deltaY > 0 ? 1.1 : 0.9)); }, { passive: false });
-    addEventListener('keydown', e => { const k = e.key.toLowerCase(); if (k === 'r' && !e.repeat && e.target === document.body) this.turn(); this.keys.add(k); }); addEventListener('keyup', e => this.keys.delete(e.key.toLowerCase()));
+    addEventListener('keydown', e => { const k = e.key.toLowerCase(); if (k === 'r' && !e.repeat && e.target === document.body) this.turn(); if (MOVE_KEYS.has(k) && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) this.keys.add(k); }); addEventListener('keyup', e => this.keys.delete(e.key.toLowerCase()));   // seules les touches de déplacement comptent (F, G, Tab… ne bougent pas la caméra)
   }
   // distance par défaut selon le format : portrait ≈ 2,5 secteurs (≈105 m) visibles, paysage ≈ le front entier (≈205 m)
   fit(w, h) {
@@ -37,7 +38,7 @@ export class CameraController {
   down(e) {
     // souris : seul le bouton gauche agit, et un seul pointeur existe (un relâchement perdu — menu contextuel, sortie de fenêtre — laissait un pointeur fantôme qui faisait croire à un pincement : plus de clic possible)
     if (e.pointerType === 'mouse') { if (e.button !== 0) return; this.ptrs.clear(); this.pinch = null; }
-    this.dom.setPointerCapture(e.pointerId); this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); this.moved = 0; this.focus = null;
+    this.dom.setPointerCapture(e.pointerId); this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); this.moved = 0; this.focus = null; this.downF = !!this.follow;
     if (this.ptrs.size === 1) { this.drag = this.worldAt(e.clientX, e.clientY); this.gdrag = !!(this.drag && this.ghostHit && this.ghostHit(this.drag.x, this.drag.z)); if (this.gdrag) this.drag = null; }
     else if (this.ptrs.size === 2) { const [a, b] = [...this.ptrs.values()]; this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: this.zoom }; this.drag = null; }
   }
@@ -48,6 +49,7 @@ export class CameraController {
     if (this.gdrag && this.ptrs.size === 1) { const w = this.worldAt(e.clientX, e.clientY); if (w && this.moved > 4) this.ghostMove(w.x, w.z); return; }   // on glisse le fantôme de construction, pas la caméra
     if (this.ptrs.size === 2 && this.pinch) { const [a, b] = [...this.ptrs.values()]; this.setZoom(this.pinch.zoom * this.pinch.d / (Math.hypot(a.x - b.x, a.y - b.y) || 1)); }
     else if (this.ptrs.size === 1 && this.drag && this.moved > 8) {
+      if (this.follow) { this.follow = null; if (this.onUser) this.onUser(); }   // (v11) glisser la carte arrête le suivi d'une troupe
       this.update(0); const w = this.worldAt(e.clientX, e.clientY);
       if (w) { this.tx += this.drag.x - w.x; this.tz += this.drag.z - w.z; this.clamp(); this.update(0); }
     }
@@ -71,8 +73,9 @@ export class CameraController {
     if (this.keys.size) {
       const sg = Math.cos(this.yaw) >= 0 ? 1 : -1;   // vue retournée : gauche/droite et haut/bas inversés dans le monde
       if (this.keys.has('arrowleft') || this.keys.has('a') || this.keys.has('q')) this.tx -= sp * sg; if (this.keys.has('arrowright') || this.keys.has('d')) this.tx += sp * sg;
-      if (this.keys.has('arrowup') || this.keys.has('w') || this.keys.has('z')) this.tz -= sp * sg; if (this.keys.has('arrowdown') || this.keys.has('s')) this.tz += sp * sg; this.focus = null;
+      if (this.keys.has('arrowup') || this.keys.has('w') || this.keys.has('z')) this.tz -= sp * sg; if (this.keys.has('arrowdown') || this.keys.has('s')) this.tz += sp * sg; this.focus = null; if (this.follow) { this.follow = null; if (this.onUser) this.onUser(); }
     }
+    if (this.follow && !this.keys.size) { const p = this.follow(); if (p) { const k = dt ? 1 - Math.exp(-5 * dt) : 1; this.tx += (p.x - this.tx) * k; this.tz += (p.z - this.tz) * k; } else { this.follow = null; if (this.onUser) this.onUser(); } }   // (v11) suivre une troupe
     if (this.focus) { const k = 1 - Math.exp(-8 * dt); this.tx += (this.focus.x - this.tx) * k; this.tz += (this.focus.z - this.tz) * k; if (Math.hypot(this.focus.x - this.tx, this.focus.z - this.tz) < 0.3) this.focus = null; }
     this.clamp();
     if (this.yaw !== this.yawT) { const k = dt ? 1 - Math.exp(-6 * dt) : 1; this.yaw += (this.yawT - this.yaw) * k; if (Math.abs(this.yawT - this.yaw) < 0.002) this.yaw = this.yawT; }

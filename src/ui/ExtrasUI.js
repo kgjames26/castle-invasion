@@ -6,6 +6,7 @@ import { EXTRA, ZOMBIES, SIEGE, STRUCT, STREAM, FRONTIER, RES_INFO } from '../co
 import { SECTORS, SECTOR_W, SECTOR_NAMES, W, D, CASTLE, WALL_STAND_Z, wallOff } from '../sim/constants.js';
 import { archerPos } from '../sim/army.js';
 import { serialize, restore } from '../sim/save.js';
+import { sqColor } from './ArmyUI.js';
 
 const $ = s => document.querySelector(s);
 const RICO = r => RES_INFO[r].ico;
@@ -199,7 +200,14 @@ export function installExtrasUI(UI) {
     // bâtiments à l'échelle
     for (const b of sim.build.items) { if (b.fixed) continue; const S = STRUCT[b.type]; if (!S) continue; const sz = S.size || [6, 4, 6], rot = b.rot && (Math.round(b.rot / (Math.PI / 2)) & 1), w = rot ? sz[2] : sz[0], d = rot ? sz[0] : sz[2];
       g.fillStyle = b.state === 'built' ? '#d8c49a' : 'rgba(216,196,154,.5)'; g.fillRect(b.x - w / 2, b.z - d / 2, w, d); g.strokeStyle = '#5a4630'; g.lineWidth = 0.8; g.strokeRect(b.x - w / 2, b.z - d / 2, w, d); }
-    g.fillStyle = '#3d7bd6'; for (const q of sim.army.squads) { g.beginPath(); g.arc(q.x, q.z, 3.2, 0, 7); g.fill(); }
+    // (v11) troupes : pastille de leur couleur avec leur numéro ; trajet de la troupe choisie ; drapeau de la réserve
+    { const A = sim.army, selId = this.card?.kind === 'squad' ? this.card.id : this.followId; g.font = 'bold 10px system-ui'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      const r = A.rally, nres = ['soldier', 'heavy', 'knight', 'cavalry'].reduce((a, t) => a + (A.reserve[t] || 0), 0);
+      if (nres) { g.strokeStyle = '#3a2a14'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(r.x, r.z + 4); g.lineTo(r.x, r.z - 8); g.stroke(); g.fillStyle = '#e8c24a'; g.beginPath(); g.moveTo(r.x, r.z - 8); g.lineTo(r.x + 7, r.z - 6); g.lineTo(r.x, r.z - 4); g.fill(); }
+      for (const q of A.squads) { if (!q.n) continue; const sel = q.id === selId;
+        if ((sel || q.mode === 'field') && q.way && q.way.length) { g.strokeStyle = sel ? '#fff' : 'rgba(255,255,255,.45)'; g.setLineDash([3, 3]); g.lineWidth = sel ? 1.4 : 0.9; g.beginPath(); g.moveTo(q.x, q.z); for (const w of q.way) g.lineTo(w.x, w.z); g.stroke(); g.setLineDash([]); }
+        const col = sqColor(q), rad = sel ? 8.5 + 1.2 * Math.sin(t * 6) : 7; g.fillStyle = col; g.beginPath(); g.arc(q.x, q.z, rad, 0, 7); g.fill(); g.strokeStyle = sel ? '#fff' : 'rgba(0,0,0,.55)'; g.lineWidth = sel ? 1.6 : 0.8; g.stroke();
+        g.fillStyle = '#fff'; g.fillText(String(q.num || ''), q.x, q.z + 0.4); } }
     const Z = sim.zombies, pulse = 1 + 0.25 * Math.sin(t * 6); g.fillStyle = '#ff3a2a';
     for (let i = 0; i < Z.n; i++) { const big = Z.type[i] >= 5 && Z.type[i] <= 7, r = big ? 6 * pulse : 3; g.fillRect(Z.x[i] - r / 2, Z.z[i] - r / 2, r, r); }
     // champ de vision : intersection réelle des coins de l'écran avec le sol

@@ -3,6 +3,8 @@
 import { TASKS, BUILDINGS, UPGRADES, ECON, START, RES, RES_INFO, PROSPECT, START_DEPOSITS, AUTO_REPAIR, SMITH, FIRE_KEEP, PRIEST } from '../content/medieval.js';
 import { SEGS, SEG_W, SECTORS, SEGS_PER_SECTOR, wallOff } from './constants.js';
 import { WALL } from '../content/medieval.js';
+import { campSpot } from './camps.js';
+const KEEP_BASE = 28;   // feux des allumeurs : 0-13 équipe autonome, 14-27 allumeurs du village (rendu), 28+ villageois affectés aux feux
 
 const TASK_IDS = Object.keys(TASKS);
 const DROPS = { wood: ['warehouse', 'sawmill'], stone: ['warehouse', 'quarry'], iron: ['warehouse', 'mine'], gold: ['warehouse', 'mine'], food: ['granary', 'mill', 'farm'] };
@@ -36,7 +38,7 @@ export class Economy {
   popRoom() { return this.popCap() - this.population(); }
   speed() { return ECON.villagerSpeed * (1 + UPGRADES.boots.per * this.up.boots); }
   carryCap() { return ECON.carry * (1 + UPGRADES.carts.per * this.up.carts); }
-  slots(b) { return BUILDINGS[b].base + ECON.slotsPerLevel * this.level[b]; }   // base = ce que le château permet avant toute construction
+  slots(b) { return BUILDINGS[b].base + ECON.slotsPerLevel * (this.levelSum?.[b] ?? this.level[b]); }   // base = ce que le château permet ; plusieurs carrières / mines : leurs places s'additionnent
   taskCap(t) {
     if (t === 'repair' || !TASKS[t].building) return TASKS[t].slots;
     const b = TASKS[t].building; let used = 0;
@@ -55,7 +57,9 @@ export class Economy {
     if (!T.deposit) { const f = t === 'food' ? this.sim.build.of('farm') : null; return f && (f.state === 'built' || f.state === 'upgrading') ? [{ x: f.x, z: f.z, si: -1 }] : [{ x: T.site.x, z: T.site.z, si: -1 }]; }
     if (this.deposit[t] > 0) out.push({ x: T.site.x, z: T.site.z, si: -1 });
     const ex = this.extra[t]; if (ex) ex.forEach((e, i) => { if (e.amount > 0) out.push({ x: e.x, z: e.z, si: i }); });
-    return out;
+    // (v11) gisements équipés d'une carrière / d'une mine : les ouvriers y travaillent en priorité
+    const B = this.sim.build, eq = T.building ? out.filter(o => B.items.some(s => s.type === T.building && (s.state === 'built' || s.state === 'upgrading') && Math.hypot(s.x - o.x, s.z - o.z) < 3.5)) : [];
+    return eq.length ? eq : out;
   }
   amountAt(t, si) { if (TASKS[t].dyn) { const p = this.sim.frontier.patches[si]; return p && p.state === 'clearing' ? p.wood : 0; } return si < 0 ? this.deposit[t] : (this.extra[t][si]?.amount || 0); }
   totalDeposit(t) { let n = this.deposit[t] || 0; for (const e of this.extra[t] || []) n += e.amount; return n; }
@@ -209,6 +213,7 @@ export class Economy {
     for (const t of GATHER) { const T = TASKS[t]; if (T.regen && this.deposit[t] < T.deposit) this.deposit[t] = Math.min(T.deposit, this.deposit[t] + T.regen * dt); }   // la forêt repousse
     this.updateProspect(dt); this.updateLoans(dt);
     this.claims.fill(0); for (const v of this.villagers) if (v.task === 'repair' && v.seg >= 0) this.claims[v.seg]++;
+    this.assignCamps(dt);
     for (let i = 0; i < this.villagers.length; i++) this.updateVillager(this.villagers[i], i, dt);
     // (v10.1) allumeurs autonomes : une équipe HORS QUOTA, qu'on ne commande pas, entretient braseros et bûchers sans puiser dans le stock de bois
     if (this.sim.night) { while (this.crew.length < FIRE_KEEP.crew) { const k = this.crew.length; this.crew.push({ id: -1 - k, free: true, task: 'fire', state: 'fireIdle', fire: -1, x: 80 + k * 6, z: 190 + (k % 3) * 2, px: 80 + k * 6, pz: 190 + (k % 3) * 2, carry: 0, carryRes: null, timer: 0, seg: -1, leaving: false, jx: 0, jz: 0, job: 0, bx: 0, bz: 0, sx: null, sz: 0, si: -1 }); }
@@ -216,8 +221,30 @@ export class Economy {
     this.rateTimer += dt;
     if (this.rateTimer >= 1) { for (const t of GATHER) { this.rate[t] = this.rate[t] * 0.92 + 0.08 * this.acc[t] / this.rateTimer; this.acc[t] = 0; } this.rateTimer = 0; }
   }
+  // (v11) feux de veillée : chaque villageois sans travail (et chaque allumeur au repos) reçoit une place, assise d'abord ; réévalué 2× par seconde
+  assignCamps(dt) {
+    if ((this.campT = (this.campT || 0) - dt) > 0) return; this.campT = 0.5;
+    // places STABLES : chacun garde la sienne tant qu'il reste au repos ; un nouveau prend la plus petite libre ; une place assise libérée est reprise par quelqu'un debout
+    const stable = (list, base, seats) => {
+      const taken = new Set(); for (const v of list) if (v.camp >= base) taken.add(v.camp);
+      let f = base; for (const v of list) if (!(v.camp >= base)) { while (taken.has(f)) f++; v.camp = f; taken.add(f); }
+      let hole = base; while (taken.has(hole)) hole++;
+      if (hole < base + seats) { let far = null; for (const v of list) if (v.camp >= base + seats && (!far || v.camp > far.camp)) far = v; if (far) far.camp = hole; }   // compacte : un debout s'assoit
+    };
+    const folk = [], fire = [];
+    for (const v of this.villagers) { const ok = !v.task && !v.job && v.carry <= 0 && v.state === 'idle'; if (ok) folk.push(v); else if (v.task !== 'fire') v.camp = -1; }
+    for (const v of this.villagers) if (v.task === 'fire') { if (v.state === 'fireIdle' && (v.fire == null || v.fire < 0) && v.z >= 150) fire.push(v); else v.camp = -1; }
+    for (const v of this.crew) v.camp = v.state === 'fireIdle' && (v.fire == null || v.fire < 0) && v.z >= 150 ? -v.id - 1 : -1;   // allumeurs autonomes : places 0 à 13 (le rendu prend 14 à 27)
+    stable(folk, 0, 24); stable(fire, KEEP_BASE, 0);
+  }
+  // aller s'asseoir (ou se tenir debout) à sa place autour du feu ; assis une fois arrivé, tourné vers les flammes
+  toCamp(v, kind, dt) {
+    const p = campSpot(kind, v.camp, this._cs || (this._cs = {})); if (!p) { v.sit = 0; return false; }
+    if (this.moveTo(v, p.x, p.z, dt)) { v.sit = p.sit; v.face = p.face; return true; }
+    v.sit = 0; return false;
+  }
   updateVillager(v, i, dt) {
-    v.px = v.x; v.pz = v.z;
+    v.px = v.x; v.pz = v.z; if (v.state !== 'idle') v.sit = 0;
     if (v.job) {   // ouvrier de chantier : va sur place, puis travaille (la progression est comptée par Build)
       if (v.state === 'toBuild') { if (this.moveTo(v, v.bx, v.bz, dt)) v.state = 'building'; }
       return;
@@ -225,7 +252,7 @@ export class Economy {
     const T = v.task ? TASKS[v.task] : null, dep = T && (T.deposit || T.dyn);
     if (v.task === 'fire') return this.updateKeeper(v, i, dt);
     switch (v.state) {
-      case 'idle': this.moveTo(v, v.jx, v.jz, dt); break;
+      case 'idle': if (v.camp >= 0) this.toCamp(v, 'folk', dt); else this.moveTo(v, v.jx, v.jz, dt); break;
       case 'toSite': {
         if (v.sx === null) {                       // choisit un gisement (réparti entre les gisements encore riches)
           const l = this.siteList(v.task); if (!l.length && T.dyn) { v.state = 'blocked'; this.moveTo(v, v.jx, v.jz, dt); break; }
@@ -284,7 +311,8 @@ export class Economy {
     if (v.state === 'returning') { if (walk()) { giveBack(); v.state = 'fireIdle'; } return; }
     if (v.fire == null || v.fire < 0) {
       const m = N.pick(sim, v);
-      if (!m) { giveBack(); v.state = 'fireIdle'; if (v.z < 150) { v.path = home(); v.state = 'returning'; } else this.moveTo(v, 100 + ((i * 17) % 21 - 10), 192 + (i % 5), dt); return; }
+      if (!m) { giveBack(); v.state = 'fireIdle'; if (v.z < 150) { v.sit = 0; v.path = home(); v.state = 'returning'; } else if (v.camp >= 0) this.toCamp(v, 'keep', dt); else this.moveTo(v, 100 + ((i * 17) % 21 - 10), 192 + (i % 5), dt); return; }   // rien à allumer : au feu de veillée des allumeurs
+      v.sit = 0;
       v.fire = m.id; v.fireMode = m.mode; N.fires[m.id].claim++; const F = N.fires[m.id];
       if (m.mode === 'stack' && v.carry <= 0) { const d = N.depot(F); v.path = N.route(v.x, v.z, d[0] + ((i % 3) - 1) * 1.2, d[1] + 1.6); v.state = 'toWood'; }
       else { v.path = N.route(v.x, v.z, F.x + ((i % 3) - 1) * 0.9, F.z + 1.2); v.state = 'toFire'; }

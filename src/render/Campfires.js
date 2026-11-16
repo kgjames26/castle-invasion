@@ -10,6 +10,7 @@ import { STREAM, STRUCT } from '../content/medieval.js';
 import { applyNorthFog } from './fog.js';
 import { Rig, villagerParts } from './Troops.js';
 import { quality } from './config.js';
+import { CAMPS, campSpot, bench } from '../sim/camps.js';
 
 const lam = (c, o = {}) => applyNorthFog(new THREE.MeshLambertMaterial({ color: c, flatShading: true, ...o }));
 const strip = g => { g = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(g.attributes)) if (!['position', 'normal'].includes(k)) g.deleteAttribute(k); return g; };
@@ -80,7 +81,16 @@ export class Campfires {
     this.rig = new Rig(scene, villagerParts(KEEPER), N); this.rig.blob = 0.8;
     this.bundleM = im(strip(mergeGeometries([0, 1, 2].map(k => strip(new THREE.CylinderGeometry(0.07, 0.07, 0.9, 6).rotateZ(Math.PI / 2).translate(0, k * 0.12, (k % 2) * 0.1))))), lam(0x6b4a2c), N);
     this.torchM = im(strip(new THREE.CylinderGeometry(0.03, 0.04, 0.7, 5)), lam(0x3a2a1c), N);
-    this.flames = new FlameSet(scene, this.sites.length + N + 4);
+    // (v11) feux de veillée : grand foyer + 4 bancs de bûches ; les villageois sans travail et les allumeurs au repos s'y assoient
+    const benchG = [];
+    for (let b = 0; b < 4; b++) { const B = bench({ x: 0, z: 0 }, b); const g = new THREE.CylinderGeometry(0.2, 0.22, 2.5, 8); g.rotateZ(Math.PI / 2); g.rotateY(B.a); g.translate(B.x, CAMPS.seatH - 0.2, B.z); benchG.push(strip(g));
+      for (const e of [-1, 1]) { const st = new THREE.CylinderGeometry(0.13, 0.15, 0.32, 6); st.translate(B.x + Math.cos(B.a) * 0.95 * e, 0.12, B.z - Math.sin(B.a) * 0.95 * e); benchG.push(strip(st)); } }
+    const ring = []; for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; ring.push(strip(new THREE.DodecahedronGeometry(0.28, 0).scale(1, 0.65, 1).translate(Math.cos(a) * 1.0, 0.12, Math.sin(a) * 1.0))); }
+    const tipi = []; for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2, g = new THREE.CylinderGeometry(0.08, 0.11, 1.35, 6); g.rotateZ(0.5); g.translate(0.3, 0.5, 0); g.rotateY(a); tipi.push(strip(g)); }
+    this.campBench = im(mergeGeometries(benchG), lam(0x6e4a2a), CAMPS.list.length); this.campRing = im(mergeGeometries(ring), lam(0x6f6a62), CAMPS.list.length);
+    this.campTipi = im(mergeGeometries(tipi), lam(0x3e2a1a), CAMPS.list.length); this.campAsh = im(strip(new THREE.CircleGeometry(0.85, 14).rotateX(-Math.PI / 2).translate(0, 0.03, 0)), lam(0x2a2420), CAMPS.list.length);
+    this._sp = {};
+    this.flames = new FlameSet(scene, this.sites.length + N + 4 + CAMPS.list.length);
     this.d = new THREE.Object3D(); this.t = 0; this.freeT = 0;
   }
   // emplacements recouverts par un bâtiment : feu masqué, l'équipe l'ignore
@@ -95,16 +105,20 @@ export class Campfires {
     const want = night ? 1 : 0.3, assault = sim.phase === 'assault';
     // les feux se consument (plus vite le jour : ce sont des feux de cuisine)
     let lit = 0, nFree = 0; for (const s of this.sites) { if (!s.free) continue; nFree++; if (s.lit) { s.fuel -= gdt / (night ? 150 : 70); if (s.fuel <= 0) { s.fuel = 0; s.lit = false; } else lit++; } }
+    // (v11) places autour des feux de veillée des allumeurs
+    this.keepers.forEach((k, i) => { k.spot = campSpot('keep', 14 + i, k.spot || {}); });   // places fixes 14-27 (0-13 : allumeurs de la simulation)
     // allumeurs : chercher des bûches → aller au feu le plus utile → l'attiser/allumer → recommencer
     for (const k of this.keepers) {
       if (!sp) break;
       if (k.st === 'idle') { k.t -= gdt; if (k.t > 0) continue;
         const needLit = lit < want * nFree; let best = -1, bs = -1e9;
         this.sites.forEach((s, i) => { if (!s.free || s.claim) return; const sc = (s.lit ? (s.fuel < 0.35 ? 40 : -1e9) : needLit ? 60 : -1e9) - Math.hypot(s.x - k.x, s.z - k.z) * 0.6 + (s.ph % 1) * 8; if (sc > bs) { bs = sc; best = i; } });
-        if (best < 0) { k.t = 1.5 + Math.random() * 2; k.wander = [k.x + (Math.random() - 0.5) * 10, k.z + (Math.random() - 0.5) * 10]; k.st = 'stroll'; continue; }
+        if (best < 0) { k.t = 2 + Math.random() * 2; k.st = 'rest'; continue; }   // (v11) rien à faire : s'asseoir au feu de veillée des allumeurs
         this.sites[best].claim = 1; k.target = best; const dp = this.depots.reduce((a, p) => Math.hypot(p[0] - k.x, p[1] - k.z) < Math.hypot(a[0] - k.x, a[1] - k.z) ? p : a); k.goal = [dp[0] + (Math.random() - 0.5), dp[1] + 1.2]; k.st = 'fetch'; }
       const go = (gx, gz, next) => { const dx = gx - k.x, dz = gz - k.z, l = Math.hypot(dx, dz); if (l < 0.6) { k.st = next; k.t = 0; return; } const v = Math.min(l, k.sp * gdt); k.x += dx / l * v; k.z += dz / l * v; k.ang = Math.atan2(dx, dz); };
       if (k.st === 'stroll') { go(k.wander[0], k.wander[1], 'idle'); if (k.st === 'idle') k.t = 1 + Math.random() * 2; }
+      else if (k.st === 'rest') { go(k.spot.x, k.spot.z, 'seated'); if (k.st === 'seated') { k.t = 5 + Math.random() * 6; k.x = k.spot.x; k.z = k.spot.z; } }   // à sa place, puis assis quelques secondes avant de revoir la tournée
+      else if (k.st === 'seated') { k.ang = k.spot.face; k.t -= gdt; if (k.t <= 0) k.st = 'idle'; }
       else if (k.st === 'fetch') go(k.goal[0], k.goal[1], 'load');
       else if (k.st === 'load') { k.t += gdt; if (k.t > 1.2) { k.carry = true; k.st = 'carry'; } }
       else if (k.st === 'carry') { const s = this.sites[k.target]; if (!s || !s.free) { k.carry = false; k.st = 'idle'; if (s) s.claim = 0; continue; } go(s.x + 0.9, s.z + 0.6, 'tend'); }
@@ -121,13 +135,20 @@ export class Campfires {
       if (Math.random() < dt * 1.2) this.smoke.add({ x: s.x, y: 1.3 * sz, z: s.z, vx: 0.35, vy: 0.8, vz: 0.1, t: 0, life: 4, a: 0.22, r: 0.42, gr: 0.4, b: 0.4, s: 0.9, grow: 2.2 });
     });
     for (const m of [this.stoneM, this.ashM, this.logM]) { m.count = ns; m.instanceMatrix.needsUpdate = true; }
+    // feux de veillée : toujours entretenus (on y cuisine le jour, on s'y réchauffe la nuit)
+    CAMPS.list.forEach((c, i) => { d.position.set(c.x, 0, c.z); d.rotation.set(0, 0, 0); d.scale.setScalar(1); d.updateMatrix(); for (const m of [this.campBench, this.campRing, this.campTipi, this.campAsh]) m.setMatrixAt(i, d.matrix);
+      const sz = night ? 1.45 : 1.1; this.flames.add(c.x, 0.12, c.z, sz, i * 1.7, night ? 1.3 : 0.35);
+      if (Math.random() < dt * (night ? 6 : 2.5)) this.fx.add({ x: c.x + (Math.random() - 0.5) * 0.5, y: 1.1 * sz, z: c.z + (Math.random() - 0.5) * 0.5, vx: (Math.random() - 0.5) * 0.7, vy: 1.8 + Math.random() * 2, vz: (Math.random() - 0.5) * 0.7, t: 0, life: 1.3 + Math.random(), a: 1, r: 1, gr: 0.62, b: 0.22, s: 0.17 });
+      if (Math.random() < dt * 1.4) this.smoke.add({ x: c.x, y: 1.5 * sz, z: c.z, vx: 0.35, vy: 0.9, vz: 0.1, t: 0, life: 4.5, a: 0.24, r: 0.42, gr: 0.4, b: 0.4, s: 1.0, grow: 2.4 }); });
+    for (const m of [this.campBench, this.campRing, this.campTipi, this.campAsh]) { m.count = CAMPS.list.length; m.instanceMatrix.needsUpdate = true; }
     this.depots.forEach(([x, z], i) => { d.position.set(x, 0, z); d.rotation.set(0, i * 0.7, 0); d.scale.setScalar(1); d.updateMatrix(); this.pileM.setMatrixAt(i, d.matrix); }); this.pileM.instanceMatrix.needsUpdate = true;
     // allumeurs (cachés pendant les vagues : ils se mettent à l'abri)
     this.rig.begin(); let nb = 0, nt = 0;
     if (!assault) for (const k of this.keepers) {
-      const moving = k.st === 'fetch' || k.st === 'carry' || k.st === 'stroll', kneel = k.st === 'tend' || k.st === 'load', sw = moving && sp ? Math.sin(t * 9 + k.ph) * 0.7 : 0;
-      d.position.set(k.x, kneel ? -0.25 : 0, k.z); d.rotation.set(0, k.ang, 0); d.scale.setScalar(1.75); d.updateMatrix();
-      this.rig.push(d.matrix, this.white || (this.white = new THREE.Color(1, 1, 1)), [0, kneel ? -1.2 : sw, kneel ? 0.2 : -sw, kneel ? -1.1 + 0.3 * Math.sin(t * 6 + k.ph) : (k.carry ? -2.6 : sw * 0.8)]);
+      const moving = k.st === 'fetch' || k.st === 'carry' || k.st === 'stroll' || k.st === 'rest', kneel = k.st === 'tend' || k.st === 'load', sw = moving && sp ? Math.sin(t * 9 + k.ph) * 0.7 : 0;
+      const seat = k.st === 'seated', sit = seat && k.spot.sit;   // assis sur le banc (jambes vers le feu), ou debout derrière
+      d.position.set(k.x, kneel ? -0.25 : sit ? CAMPS.seatH - 0.72 * 1.75 : 0, k.z); d.rotation.set(0, k.ang, 0); d.scale.setScalar(1.75); d.updateMatrix();
+      this.rig.push(d.matrix, this.white || (this.white = new THREE.Color(1, 1, 1)), sit ? [0, -1.25, -1.15, -0.7 + 0.15 * Math.sin(t * 1.3 + k.ph)] : [0, kneel ? -1.2 : sw, kneel ? 0.2 : -sw, kneel ? -1.1 + 0.3 * Math.sin(t * 6 + k.ph) : (k.carry ? -2.6 : seat ? -0.6 : sw * 0.8)]);
       const ca = Math.cos(k.ang), sa = Math.sin(k.ang);
       if (k.carry) { d.position.set(k.x + ca * 0.55 * 1.75 * 0.3, 1.75 * 1.55, k.z - sa * 0.55 * 1.75 * 0.3); d.rotation.set(0, k.ang + Math.PI / 2, 0); d.scale.setScalar(1); d.updateMatrix(); this.bundleM.setMatrixAt(nb++, d.matrix); }
       if (night) { const hx = k.x - ca * 0.6 + sa * 0.5, hz = k.z + sa * 0.6 + ca * 0.5; d.position.set(hx, 1.75, hz); d.rotation.set(0.25, k.ang, 0); d.scale.setScalar(1); d.updateMatrix(); this.torchM.setMatrixAt(nt++, d.matrix); this.flames.add(hx, 2.1, hz, 0.32, k.ph, 0.45); }

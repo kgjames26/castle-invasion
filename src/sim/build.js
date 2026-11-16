@@ -8,6 +8,9 @@ import { sectorOfX, wallOff } from './constants.js';
 const tmp = new Int32Array(512);
 const WORKING = s => s.state === 'site' || s.state === 'upgrading' || s.state === 'moving';
 const ACTIVE = s => s.state === 'built' || s.state === 'upgrading';
+// (v11) bâtiments multiples : maisons, tours, et autant de carrières / mines que la carte offre de gisements libres
+export const MULTI = new Set(['house', 'tower', 'quarry', 'mine']);
+export const ORE_BUILDING = { quarry: r => r === 'stone', mine: r => r !== 'stone' };   // carrière sur la pierre, mine sur le fer ou l'or
 
 export class Build {
   constructor(sim) { this.sim = sim; this.items = []; this.nextId = 1; this.version = 0; this.reset(); }
@@ -31,6 +34,7 @@ export class Build {
   maxLevel(s) { return STRUCT[s.type].max || ECON.maxLevel; }
   newCost(type) {
     if (type === 'house') return BUILD.houseCost(this.count('house'));
+    if (ORE_BUILDING[type]) { const n = this.count(type), c = {}; for (const r in STRUCT[type].cost) c[r] = Math.round(STRUCT[type].cost[r] * (1 + BUILD.oreExtraCost * n)); return c; }   // chaque carrière / mine de plus coûte un peu plus
     return { ...STRUCT[type].cost };
   }
   upCost(s) {
@@ -49,10 +53,14 @@ export class Build {
     for (const r of ['stone', 'iron', 'gold']) { const T = TASKS[r]; out.push({ res: r, x: T.site.x, z: T.site.z }); for (const e of E.extra[r]) out.push({ res: r, x: e.x, z: e.z }); }
     return out;
   }
-  // aimante une mine sur le gisement de fer/or le plus proche (sinon null)
-  snapOre(x, z) {
+  // gisement déjà occupé par une carrière ou une mine (sauf ignoreId)
+  oreTaken(o, ignoreId = 0) { return this.items.some(s => s.id !== ignoreId && ORE_BUILDING[s.type] && Math.hypot(s.x - o.x, s.z - o.z) < 3.5); }
+  // gisements libres pour ce type (carrière → pierre, mine → fer / or)
+  freeOres(type, ignoreId = 0) { const ok = ORE_BUILDING[type]; return ok ? this.ores().filter(o => ok(o.res) && !this.oreTaken(o, ignoreId)) : []; }
+  // aimante une carrière / une mine sur le gisement libre le plus proche (sinon null)
+  snapOre(x, z, type = 'mine', ignoreId = 0) {
     let best = null, bd = BUILD.oreSnap;
-    for (const o of this.ores()) if (o.res !== 'stone') { const d = Math.hypot(x - o.x, z - o.z); if (d < bd) { bd = d; best = o; } }
+    for (const o of this.freeOres(type, ignoreId)) { const d = Math.hypot(x - o.x, z - o.z); if (d < bd) { bd = d; best = o; } }
     return best;
   }
   canPlace(type, x, z, rot, ignoreId = 0) {
@@ -64,7 +72,11 @@ export class Build {
     const minZ = type === 'tower' ? BUILD.towerMinZ : BUILD.minZ;
     if (z - hd < minZ) return { ok: false, why: type === 'tower' ? 'trop près de la muraille' : 'trop près de la muraille (zone de garnison)' };
     if (z + hd > BUILD.maxZ) return { ok: false, why: 'hors de la zone' };
-    if (type === 'mine') { if (!this.ores().some(o => o.res !== 'stone' && Math.hypot(x - o.x, z - o.z) < 3.5)) return { ok: false, why: 'à poser sur un gisement de fer ou d\'or' }; }
+    if (ORE_BUILDING[type]) {
+      const near = this.ores().filter(o => ORE_BUILDING[type](o.res) && Math.hypot(x - o.x, z - o.z) < 3.5);
+      if (!near.length) return { ok: false, why: type === 'mine' ? 'à poser sur un gisement de fer ou d\'or' : 'à poser sur un gisement de pierre' };
+      if (near.every(o => this.oreTaken(o, ignoreId))) return { ok: false, why: 'gisement déjà exploité' };
+    }
     else for (const o of this.ores()) {
       const cx = Math.max(x - hw, Math.min(o.x, x + hw)), cz = Math.max(z - hd, Math.min(o.z, z + hd));
       if ((o.x - cx) ** 2 + (o.z - cz) ** 2 < BUILD.oreR * BUILD.oreR) return { ok: false, why: 'sur un gisement (réservé aux mines)' };
@@ -85,6 +97,7 @@ export class Build {
     const def = STRUCT[type]; if (!def) return { ok: false, why: 'inconnu' };
     if (type === 'house') { if (this.count('house') >= ECON.housesMax) return { ok: false, why: 'maximum atteint' }; }
     else if (type === 'tower') { if (this.items.filter(s => s.type === 'tower' && !s.fixed).length >= BUILD.maxTowers) return { ok: false, why: 'maximum atteint' }; }
+    else if (ORE_BUILDING[type]) { if (!this.freeOres(type).length) return { ok: false, why: type === 'mine' ? 'aucun gisement de fer ou d\'or libre : prospecte ou défriche' : 'aucun gisement de pierre libre : prospecte ou défriche' }; }
     else if (this.items.some(s => s.type === type && s.id !== ignoreId)) return { ok: false, why: 'déjà construit' };
     return { ok: true, why: '' };
   }
@@ -119,11 +132,11 @@ export class Build {
   }
   // ——— niveaux dérivés ———
   syncLevels() {
-    const E = this.sim.eco; for (const b in BUILDINGS) E.level[b] = 0;
+    const E = this.sim.eco; for (const b in BUILDINGS) E.level[b] = 0; const sum = E.levelSum = {};
     let houses = 0, hn = 0;
     for (const s of this.items) {
       if (s.type === 'house') { if (ACTIVE(s)) { houses += BUILD.houseUnits[s.level] || 1; hn++; } }   // une maison de niv. 4 loge autant que 7 chaumières
-      else if (s.type !== 'tower' && ACTIVE(s)) E.level[s.type] = s.level;
+      else if (s.type !== 'tower' && ACTIVE(s)) { E.level[s.type] = Math.max(E.level[s.type] || 0, s.level); sum[s.type] = (sum[s.type] || 0) + s.level; }   // plusieurs carrières / mines : niveau = la meilleure, places = la somme
     }
     E.houses = houses; E.houseCount = hn;
   }
@@ -191,7 +204,7 @@ export class Build {
     let moved = 0;
     for (const s of this.items) {
       if (s.fixed || this.canPlace(s.type, s.x, s.z, s.rot, s.id).ok) continue;
-      if (s.type === 'mine') { const o = this.ores().find(q => q.res !== 'stone' && !this.items.some(t => t !== s && t.type === 'mine' && Math.hypot(t.x - q.x, t.z - q.z) < 3)); if (o) { s.x = o.x; s.z = o.z; moved++; } continue; }
+      if (ORE_BUILDING[s.type]) { const o = this.freeOres(s.type, s.id).sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))[0]; if (o) { s.x = o.x; s.z = o.z; moved++; } continue; }   // sans gisement libre : reste où elle est
       search: for (let r = 2; r <= 120; r += 2) for (let k = 0; k < 24; k++) {
         const a = k / 24 * Math.PI * 2, x = Math.round((s.x + Math.cos(a) * r) * 2) / 2, z = Math.round((s.z + Math.sin(a) * r) * 2) / 2;
         if (this.canPlace(s.type, x, z, s.rot, s.id).ok) { s.x = x; s.z = z; moved++; break search; }

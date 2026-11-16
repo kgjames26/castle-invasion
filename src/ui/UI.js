@@ -6,7 +6,9 @@ import { PHASES, UNITS, UNIT_ORDER, SIEGE, SIEGE_ORDER, SIEGE_RULES, FORMATIONS,
 import { MAGE_TIERS } from '../render/Heroes.js';
 import { FORMATS, idealFormat, quality } from '../render/config.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
+import { MULTI, ORE_BUILDING } from '../sim/build.js';
 import { installExtrasUI } from './ExtrasUI.js';
+import { installArmyUI, sqColor } from './ArmyUI.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
@@ -69,7 +71,7 @@ export class UI {
     this.cam.ghostMove = (x, z) => this.moveGhost(x, z);
     this.prefs = { difficulty: 'normal', autoRepair: true, shake: true, fx: true, hints: true, ...loadPrefs() }; this.applyPrefs(true);
     this.refresh(true);
-    this.buildMinimap(); this.startTuto();   // (v4.0) mini-carte et tutoriel guidé
+    this.buildMinimap(); this.buildRoster(); this.startTuto();   // (v4.0) mini-carte et tutoriel guidé
     { const fx = document.createElement('button'); fx.id = 'fpvx'; fx.textContent = '✕ Quitter la vue'; fx.addEventListener('click', () => { this.act('x:fpvx'); }); document.getElementById('app').appendChild(fx); }
   }
   // réglages persistants (difficulté, réparation auto, secousses, effets) : appliqués à la partie et au rendu
@@ -111,12 +113,15 @@ export class UI {
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) return;
     const k = e.key.toLowerCase(), sim = this.sim;
     if (k === ' ') { e.preventDefault(); $('#b-pause').click(); return; }
+    if (e.key === 'Tab') { e.preventDefault(); this.cycleSquad(e.shiftKey ? -1 : 1); return; }   // (v11) troupe suivante / précédente
+    if (k === 'g') { this.toggleRoster(); return; }
+    if (k === 'f' && this.card?.kind === 'squad') { this.setFollow(this.followId === this.card.id ? 0 : this.card.id); return; }
     if ('1234'.includes(k) && k.length === 1) { this.pace = [1, 2, 4, 8][+k - 1]; if (sim.speed) sim.speed = this.pace; this.syncTime(); this.toast(`⏩ Vitesse ${this.pace}×`, 'info'); return; }
     const sh = { b: 'build', t: 'army', v: 'folk', k: 'tech' }[k]; if (sh && SHEETS[sh]) { this.toggleSheet(sh); return; }
-    if (k === 'h' || k === '?') this.toast('⌨ Espace pause · 1-4 vitesse · B bâtir · T armée · V villageois · K savoir · R pivoter · ZQSD/flèches caméra · Échap fermer', 'info');
+    if (k === 'h' || k === '?') this.toast('⌨ Espace pause · 1-4 vitesse · B bâtir · T armée · V villageois · K savoir · G qui est où · Tab troupe suivante · F suivre · R pivoter · ZQSD/flèches caméra · Échap fermer', 'info');
   }
   toggleSheet(n) { if (this.sheet === n) this.closeSheet(); else this.openSheet(n); }
-  openSheet(n, sub) { if (n === 'menu') this.volSnap = this.hooks.audio ? { ...this.hooks.audio.vol } : {}; if (this.mode !== 'idle') this.cancelPlace(); this.closeCard(); this.sheet = n; if (sub) { this.asub = sub; if (this.nav[n] !== undefined) this.nav[n] = sub; } else if (this.nav[n] !== undefined) this.nav[n] = null; this.sheetEl.classList.add('on'); this.html.sheet = ''; this.refresh(true); }
+  openSheet(n, sub) { if (this.rosterOn) this.toggleRoster(false); if (n === 'menu') this.volSnap = this.hooks.audio ? { ...this.hooks.audio.vol } : {}; if (this.mode !== 'idle') this.cancelPlace(); this.closeCard(); this.sheet = n; if (sub) { this.asub = sub; if (this.nav[n] !== undefined) this.nav[n] = sub; } else if (this.nav[n] !== undefined) this.nav[n] = null; this.sheetEl.classList.add('on'); this.html.sheet = ''; this.refresh(true); }
   closeSheet() { this.sheet = null; this.rallying = false; this.sheetEl.classList.remove('on'); this.setTargeting(false); this.refresh(true); }
   setTargeting(on) { this.targeting = on; this.rd.setTargeting(on); }
   pickSquad(id) { this.selSq = id; this.rd.setSquad(id); this.refresh(true); }
@@ -237,9 +242,10 @@ export class UI {
     this.closeSheet(); this.closeCard();
     const [hw, hd] = B.half(type, rot), minZ = (type === 'tower' ? BUILD.towerMinZ : BUILD.minZ) + hd + 2;
     let x = s ? s.x : Math.min(BUILD.maxX - hw, Math.max(BUILD.minX + hw, this.cam.tx)), z = s ? s.z : Math.min(BUILD.maxZ - hd, Math.max(minZ, this.cam.tz));
-    if (type === 'mine') { const o = B.snapOre(x, z) || B.ores().find(q => q.res !== 'stone'); if (o && !s) { x = o.x; z = o.z; this.cam.focusOn(x, z); } }
-    this.mode = moveId ? 'move' : 'place'; this.place = { type, x: type === 'mine' ? x : snap(x), z: type === 'mine' ? z : snap(z), rot, workers: 1, moveId };
-    if (!s && type !== 'mine') this.nearestFree();
+    const ore = !!ORE_BUILDING[type];   // carrière / mine : aimantée sur le gisement libre le plus proche de la vue
+    if (ore && !s) { const o = B.snapOre(x, z, type) || B.freeOres(type).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0]; if (o) { x = o.x; z = o.z; this.cam.focusOn(x, z); } }
+    this.mode = moveId ? 'move' : 'place'; this.place = { type, x: ore ? x : snap(x), z: ore ? z : snap(z), rot, workers: 1, moveId };
+    if (!s && !ore) this.nearestFree();
     this.placeEl.classList.add('on'); this.html.place = ''; this.syncGhost(); this.refresh(true);
   }
   nearestFree() {
@@ -249,7 +255,7 @@ export class UI {
       if (B.canPlace(p.type, x, z, p.rot, p.moveId).ok) { p.x = x; p.z = z; return; }
     }
   }
-  moveGhost(x, z) { if (!this.place) return; if (this.place.type === 'mine') { const o = this.sim.build.snapOre(x, z); if (o) { x = o.x; z = o.z; } this.place.x = x; this.place.z = z; this.syncGhost(); this.refresh(true); return; } this.place.x = snap(x); this.place.z = snap(z); this.syncGhost(); this.refresh(true); }
+  moveGhost(x, z) { if (!this.place) return; if (ORE_BUILDING[this.place.type]) { const o = this.sim.build.snapOre(x, z, this.place.type, this.place.moveId); if (o) { x = o.x; z = o.z; } this.place.x = x; this.place.z = z; this.syncGhost(); this.refresh(true); return; } this.place.x = snap(x); this.place.z = snap(z); this.syncGhost(); this.refresh(true); }
   syncGhost() {
     const p = this.place; if (!p) { this.rd.struct.setGhost(null); return; }
     p.check = this.sim.build.canPlace(p.type, p.x, p.z, p.rot, p.moveId);
@@ -338,6 +344,9 @@ export class UI {
       case 'pref': { const p = this.prefs; if (x === 'difficulty') p.difficulty = y; else p[x] = !p[x]; this.applyPrefs(); this.html.sheet = ''; break; }
       case 'guide': this.guideOn = !this.guideOn; this.html.sheet = ''; break;
       case 'secgo': this.cam.focusOn(+x * 40 + 20, 150); this.openCard({ kind: 'sector', id: +x }); break;
+      case 'sqcyc': this.cycleSquad(+x); break;
+      case 'sqfollow': if (this.card?.kind === 'squad') this.setFollow(this.followId === this.card.id ? 0 : this.card.id); break;
+      case 'cyc': { const l = sim.build.all(x).filter(t => !t.fixed); if (!l.length) break; this.cycK = this.cycK || {}; const i = (this.cycK[x] = ((this.cycK[x] ?? -1) + 1) % l.length), t = l[i]; this.closeSheet(); this.cam.focusOn(t.x, t.z); this.openCard({ kind: 'struct', id: t.id }); break; }
       case 'goto': { const t = sim.build.of(x); if (t) { this.cam.focusOn(t.x, t.z); this.openCard({ kind: 'struct', id: t.id }); } else this.startPlace(x); break; }
     }
   }
@@ -367,6 +376,7 @@ export class UI {
   buzz(p) { if (UI_FLAGS.haptics && navigator.vibrate) try { navigator.vibrate(p); } catch { /* non supporté */ } }
   onEvent(e) {
     const sim = this.sim; this.extrasEvent(e);
+    if (e.type === 'trained') this.trainedEvent(e);
     if (e.type === 'bitten') { if (!this.lastBite || performance.now() - this.lastBite > 2500) { this.lastBite = performance.now(); this.toast(`🧟 ${UNITS[e.unit].name} mordu${e.tackle ? ', plaqué au sol' : ''} ! ${this.sim.infection.prison(this.sim) ? 'Il doit rejoindre la zone de quarantaine' : 'La quarantaine est pleine : il erre près de la placette…'}`, 'warn'); } }
     else if (e.type === 'cured') this.toast(`⛪ Le prêtre a guéri un ${UNITS[e.unit].name.toLowerCase()} mordu : il retourne en réserve`, 'ok');
     else if (e.type === 'turned') { this.toast(`☠ Un ${UNITS[e.unit].name.toLowerCase()} mordu s'est transformé en zombie !`, 'danger'); this.buzz([60, 40, 60]); }
@@ -522,7 +532,7 @@ export class UI {
   }
   tick(dt) {
     this.watchSquads();
-    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.watchRepairs(); this.refresh(false); this.drawMinimap(); this.renderEvent(false); this.tickTuto(); this.tickQuest(); this.renderAdvice(); if ((this.achT = (this.achT || 0) + 1) % 10 === 0) this.checkAch(); }
+    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.watchRepairs(); this.refresh(false); this.drawMinimap(); this.renderEvent(false); this.tickTuto(); this.tickQuest(); this.renderAdvice(); this.renderRoster(); this.watchHurt(); if ((this.achT = (this.achT || 0) + 1) % 10 === 0) this.checkAch(); }
     const vw = innerWidth, vh = innerHeight;
     for (let s = 0; s < SECTORS; s++) {
       const p = this.rd.project(s * 40 + 20, 8, 143 + wallOff(s * 40 + 20)), b = this.badges[s];
@@ -530,7 +540,7 @@ export class UI {
       b.style.display = b.dataset.show && onScr ? '' : 'none'; b.style.left = p.x + 'px'; b.style.top = p.y + 'px';
       this.edgeArrow(s, p, onScr, vw, vh);
     }
-    this.bigBars(vw, vh); this.upMarks(vw, vh); this.squadTags(vw, vh); this.palMarks(vw, vh);
+    this.bigBars(vw, vh); this.upMarks(vw, vh); this.squadTags(vw, vh); this.palMarks(vw, vh); this.reserveFlag(vw, vh);
     const c = this.card; if (!c) return;
     let a;
     if (c.kind === 'struct') { const s = this.sim.build.get(c.id); if (!s) return; a = this.rd.project(s.x, 4, s.z); }
@@ -555,8 +565,8 @@ export class UI {
     const sim = this.sim, pool = this.sqPool || (this.sqPool = []); let k = 0;
     if (!document.body.classList.contains('fpv')) for (const q of sim.army.squads) { if (!q.n || k >= 24) continue; const p = this.rd.project(q.x, 3.6, q.z); if (!p.vis || p.x < 10 || p.x > vw - 10 || p.y < 100 || p.y > vh - 100) continue;
       let e = pool[k]; if (!e) { e = pool[k] = el('button', 'sqtag'); e.addEventListener('click', ev => { ev.stopPropagation(); const id = +e.dataset.id; if (sim.squad(id)) this.openCard({ kind: 'squad', id }); }); document.getElementById('app').appendChild(e); }
-      const hp = Math.max(0, Math.min(1, q.hp / Math.max(1, q.n * sim.army.unitHp(q.type)))), txt = `${UNITS[q.type].ico} ${q.n}`;
-      e.dataset.id = q.id; if (e.dataset.t !== txt) { e.dataset.t = txt; e.innerHTML = `<span>${txt}</span><i style="width:${Math.round(hp * 100)}%"></i>`; } else e.lastChild.style.width = Math.round(hp * 100) + '%';
+      const hp = Math.max(0, Math.min(1, q.hp / Math.max(1, q.n * sim.army.unitHp(q.type)))), txt = `${q.num}|${UNITS[q.type].ico} ${q.n}${this.followId === q.id ? ' 🎥' : ''}`;
+      e.dataset.id = q.id; if (e.dataset.t !== txt) { e.dataset.t = txt; e.style.background = sqColor(q); e.innerHTML = `<b class="tn">${q.num}</b><span>${UNITS[q.type].ico} ${q.n}${this.followId === q.id ? ' 🎥' : ''}</span><i style="width:${Math.round(hp * 100)}%"></i>`; } else e.lastChild.style.width = Math.round(hp * 100) + '%';
       e.classList.toggle('sel', this.card?.kind === 'squad' && this.card.id === q.id); e.style.display = ''; e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; k++; }
     for (let j = k; j < pool.length; j++) pool[j].style.display = 'none';
   }
@@ -793,7 +803,7 @@ export class UI {
     const sim = this.sim, B = sim.build, E = sim.eco, cats = this.buildCats(), cur = cats.find(c => c.k === this.nav.build);
     if (!cur) {
       return `<div class="hint small">Choisis un <b>type de construction</b>. Des villageois <b>libres</b> viennent bâtir (👥 ${E.idleCount()} libres).</div>` + this.cats('build', cats.map(c => {
-        const built = c.ids.filter(id => id === 'house' ? B.count('house') : id === 'tower' ? B.items.some(s => s.type === 'tower' && !s.fixed) : B.of(id)).length, can = c.ids.some(id => (id === 'house' || id === 'tower' || !B.of(id)) && E.afford(B.newCost(id)));
+        const built = c.ids.filter(id => id === 'tower' ? B.items.some(s => s.type === 'tower' && !s.fixed) : B.of(id)).length, can = c.ids.some(id => B.canBuildType(id).ok && E.afford(B.newCost(id)));
         return { ...c, badge: c.ids.length > 1 ? `${built}/${c.ids.length}` : '', sub: c.sub + (can ? '' : ' · ressources insuffisantes'), off: !can && !built };
       }));
     }
@@ -802,9 +812,11 @@ export class UI {
   buildList(ids) {
     const sim = this.sim, B = sim.build, E = sim.eco; let h = '<div class="blist">';
       for (const id of ids) {
-        const def = STRUCT[id], ex = B.of(id), multi = id === 'house' || id === 'tower', cost = B.newCost(id);
+        const def = STRUCT[id], ex = B.of(id), multi = MULTI.has(id), cost = B.newCost(id);
         let st = '', cls = 'brow', act = 'bld:' + id, btn;
-        if (multi) { const n = id === 'house' ? B.count('house') : B.items.filter(s => s.type === 'tower' && !s.fixed).length; st = n ? `${n} construite${n > 1 ? 's' : ''}` : 'à construire'; btn = this.btn('Construire', `${this.cost(cost)} · ⏱ ${def.time} s`, act, !E.afford(cost), 'act slim'); }
+        if (multi) { const n = id === 'tower' ? B.items.filter(s => s.type === 'tower' && !s.fixed).length : B.count(id), ck = B.canBuildType(id), free = ORE_BUILDING[id] ? B.freeOres(id).length : -1;
+          st = (n ? `${n} construite${n > 1 ? 's' : ''}` : 'à construire') + (free >= 0 ? ` · ${free} gisement${free > 1 ? 's' : ''} libre${free > 1 ? 's' : ''}` : '');
+          btn = this.btn('Construire', ck.ok ? `${this.cost(cost)} · ⏱ ${def.time} s` : ck.why, act, !ck.ok || !E.afford(cost), 'act slim') + (n && id !== 'house' && id !== 'tower' ? this.btn('Voir', `${n} sur la carte`, 'cyc:' + id, false, 'act slim sec') : ''); }
         else if (ex) { cls += ' done'; st = ex.state === 'site' ? `chantier ${Math.round(ex.progress * 100)} %` : ex.state === 'built' ? `niv. ${ex.level}` : ex.state === 'upgrading' ? 'amélioration…' : 'déplacé…'; btn = this.btn('Voir', 'améliorer, déplacer', 'go:' + ex.id, false, 'act slim sec'); }
         else { st = 'à construire'; btn = this.btn('Construire', `${this.cost(cost)} · ⏱ ${def.time} s`, act, !E.afford(cost), 'act slim'); }
         h += `<div class="${cls}"><span class="ci">${def.ico}</span><div class="bt"><b>${def.name}</b> <span class="lvl">${st}</span><small>${def.info || ''}</small></div>${btn}</div>`;
@@ -851,7 +863,7 @@ export class UI {
     if (!army.squads.length) h += '<div class="hint">Aucune escouade. Recrute des soldats (Recruter), puis forme une escouade avec ta réserve.</div>';
     h += '<div class="blist">' + army.squads.map(q => {
       const U = UNITS[q.type], st = q.mode === 'field' ? (q.fight > 0 ? '⚔ au combat' : q.way.length ? '🚶 en route vers le front' : '⚔ sur le champ de bataille') : (q.way.length ? '🚶 en route' : q.custom ? '🛡 à son poste' : `🛡 garde ${SECTOR_AT[q.sector]}`), r = army.hpRatio(q);
-      return `<button class="brow sqrow${r < 0.4 ? ' hurt' : ''}" data-a="nav:army:sq.${q.id}"><span class="ci">${U.ico}</span><div class="bt"><b>${this.unitName(q)}</b> <small class="cnt">${q.n}/${army.maxN(q.type, q)}</small> <span class="lvl">${st}</span> <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '⚜ autonome' : '📯 tes ordres'}</span><div class="bar"><i style="width:${Math.round(r * 100)}%"></i></div></div><span class="go">›</span></button>`;
+      return `<button class="brow sqrow${r < 0.4 ? ' hurt' : ''}" data-a="nav:army:sq.${q.id}">${this.numChip(q)}<span class="ci">${U.ico}</span><div class="bt"><b>${this.unitName(q)}</b> <small class="cnt">${q.n}/${army.maxN(q.type, q)}</small> <span class="lvl">${this.squadWhere(q).txt}</span> <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '⚜ autonome' : '📯 tes ordres'}</span><div class="bar"><i style="width:${Math.round(r * 100)}%"></i></div></div><span class="go">›</span></button>`;
     }).join('') + '</div>';
     h += `<div class="row">${this.btn('🎯 Placer les troupes', this.sim.phase === 'assault' ? 'après la vague' : 'jeu en pause, place chaque escouade', 'deploy', this.sim.phase === 'assault' || !army.squads.length, 'act')}${this.btn('➕ Nouvelle troupe', 'escouade, peloton ou escadron', 'nav:army:newsq', army.squads.length >= SQUAD.maxSquads, 'act sec')}</div>`;
     h += `<div class="hint small">⚜ Sans ordre de ta part, chaque escouade est <b>autonome</b> : elle garde le secteur le plus menacé, court colmater les brèches, et les cavaliers, chevaliers et lourds en forme font de courtes sorties. Dès que tu donnes un ordre, elle t'obéit (📯). Après chaque vague, les troupes disponibles forment d'elles-mêmes de nouvelles escouades.</div>`;
@@ -889,8 +901,11 @@ export class UI {
   squadCard(q) {
     const army = this.sim.army, U = UNITS[q.type], mx = army.maxN(q.type, q), field = q.mode === 'field';
     const where = field ? '⚔ Sur le champ' : q.custom ? '🛡 À son poste' : '🛡 Garde ' + SECTOR_AT[q.sector];
-    return `<div class="ptitle">${U.ico} ${this.unitName(q)} <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '⚜' : '📯'}</span><span class="lvl">${where}${q.way.length ? ' · en marche' : ''}</span></div>
+    const W = this.squadWhere(q), fol = this.followId === q.id, many = army.squads.length > 1;
+    return `<div class="ptitle">${this.numChip(q)} ${U.ico} ${this.unitName(q)} <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '⚜' : '📯'}</span></div>
+      <div class="hint small where">📍 ${W.txt}</div>
       <div class="hpline"><div class="bar big"><i style="width:${Math.min(100, army.hpRatio(q) * 100)}%"></i></div><span>${q.n}/${mx}</span></div>
+      <div class="sqnav">${many ? '<button class="chipb" data-a="sqcyc:-1" title="Troupe précédente (Maj+Tab)">‹</button>' : ''}<button class="chipb${fol ? ' on' : ''}" data-a="sqfollow" title="La caméra suit la troupe (F)">🎥 ${fol ? 'Suivie' : 'Suivre'}</button>${many ? '<button class="chipb" data-a="sqcyc:1" title="Troupe suivante (Tab)">›</button>' : ''}</div>
       <div class="bigacts">${this.bigAct('⚔', 'Combattre', 'touche ensuite le champ', 'sqgo:sortie')}${field ? this.bigAct('↩', 'Rentrer', 'à son poste', 'gar:' + q.sector) : this.bigAct('📍', 'Déplacer', 'touche ensuite la carte', 'sqgo:move')}${this.bigAct('⚙', 'Ordres', 'organisation, effectif…', 'sqorders')}</div>
       <div class="fgrid mini">${Object.keys(FORMATIONS).map(f => `<button class="fbtn ${q.form === f ? 'on' : ''}" data-a="form:${f}" title="${FORMATIONS[f].info}"><b>${FORMATIONS[f].ico}</b>${FORMATIONS[f].name}</button>`).join('')}</div>`;
   }
@@ -1061,3 +1076,4 @@ export class UI {
 }
 
 installExtrasUI(UI);
+installArmyUI(UI);

@@ -125,7 +125,7 @@ export const ECON = {
 };
 // Prospection : un villageois libre explore la campagne ; au bout de `time` secondes il découvre un NOUVEAU gisement (pierre, fer ou or) ailleurs sur la carte.
 // Gisements présents dès le début (bords de la zone constructible, hors des chemins de construction)
-export const START_DEPOSITS = { stone: [{ x: 188, z: 296, amount: 3000 }], iron: [{ x: 22, z: 272, amount: 2600 }, { x: 176, z: 276, amount: 2600 }], gold: [{ x: 12, z: 300, amount: 2200 }] };
+export const START_DEPOSITS = { stone: [{ x: 186, z: 258, amount: 3000 }], iron: [{ x: 22, z: 272, amount: 2600 }, { x: 176, z: 276, amount: 2600 }], gold: [{ x: 12, z: 300, amount: 2200 }] };
 export const PROSPECT = { cost: { gold: 40, food: 30 }, time: 45, amount: [2200, 3800], maxPerRes: 4, res: ['stone', 'iron', 'gold'], zone: { x0: 12, x1: 188, z0: 218, z1: 292 }, clear: 16 };
 // Tâches : chaque villageois sait quoi faire ; le joueur ne règle que les effectifs.
 export const TASKS = {
@@ -145,8 +145,8 @@ export const BARRACKS_ICO = '<svg class="isvg" viewBox="0 0 32 32" aria-label="C
 export const SAWMILL_ICO = '<svg class="isvg" viewBox="0 0 32 32" aria-label="Scierie"><rect x="4" y="21" width="24" height="7" rx="3.5" fill="#8a5a2b"/><ellipse cx="26.5" cy="24.5" rx="2.4" ry="3.4" fill="#c99a62"/><path d="M16 1.5l1.6 2.6 2.9-1.1 .8 3 3.1.1-.3 3.1 2.9 1.2-1.4 2.8 2.2 2.1-2.4 2-.1.2 1 3-3.1.5-.5 3.1-3-.8-1.4 2.8-2.3-2.1-2.3 2.1-1.4-2.8-3 .8-.5-3.1-3.1-.5 1-3-2.5-2.2 2.2-2.1-1.4-2.8 2.9-1.2-.3-3.1 3.1-.1.8-3 2.9 1.1z" fill="#c9ced6" stroke="#6a7080" stroke-width=".8"/><circle cx="16" cy="14" r="5.6" fill="#e8ecf0"/><circle cx="16" cy="14" r="2.2" fill="#d9a63a"/></svg>';
 export const BUILDINGS = {   // group: 'eco' (onglet Village) ou 'army' (onglet Armée)
   sawmill:   { time: 25, base: 3, name: 'Scierie',   ico: SAWMILL_ICO, group: 'eco', start: 0, cost: { wood: 60 },             pos: { x: 40,  z: 262 }, size: [9, 5, 7],  color: 0x9b6a3a, info: 'Emplacements bûcherons · +15 % de rendement par niveau' },
-  quarry:    { time: 25, base: 3, name: 'Carrière',  ico: '⛏', group: 'eco', start: 0, cost: { wood: 60 },             pos: { x: 160, z: 262 }, size: [9, 5, 7],  color: 0x8a8d92, info: 'Emplacements carriers · +15 % de rendement par niveau' },
-  mine:      { time: 40, base: 0, name: 'Mine',      ico: '⛓', group: 'eco', start: 0, cost: { wood: 100, stone: 60 }, pos: { x: 182, z: 243 }, size: [8, 6, 8],  color: 0x4f5a72, info: 'Emplacements fer + or (partagés) · +15 %/niveau' },
+  quarry:    { time: 25, base: 3, name: 'Carrière',  ico: '⛏', group: 'eco', start: 0, cost: { wood: 60 },             pos: { x: 160, z: 262 }, size: [9, 5, 7],  color: 0x8a8d92, info: 'Sur un gisement de pierre · autant que de gisements · +5 places carriers par niveau' },
+  mine:      { time: 40, base: 0, name: 'Mine',      ico: '⛓', group: 'eco', start: 0, cost: { wood: 100, stone: 60 }, pos: { x: 182, z: 243 }, size: [8, 6, 8],  color: 0x4f5a72, info: 'Sur un gisement de fer ou d\'or · autant que de gisements · +5 places mineurs par niveau' },
   farm:      { time: 30, base: 3, name: 'Ferme',     ico: '🌾', group: 'eco', start: 0, cost: { wood: 70 },             pos: { x: 100, z: 244 }, size: [16, 1.2, 10], color: 0xc9b24a, max: 6, info: 'Emplacements fermiers · +15 % de rendement par niveau · s\'agrandit (champs, poulailler, verger, silo, pâture)' },
   mill:      { time: 30, base: 0, name: 'Moulin',    ico: '🌀', group: 'eco', start: 0, cost: { wood: 90, stone: 40 },  pos: { x: 128, z: 258 }, size: [6, 9, 6],  color: 0xcfc3a1, max: 5, info: 'Nourriture +20 % par niveau · s\'agrandit (fournil, socle de pierre, roue à aubes)' },
   granary:   { time: 28, base: 0, name: 'Grenier',   ico: '🏚', group: 'eco', start: 0, cost: { wood: 80, stone: 30 },  pos: { x: 66,  z: 270 }, size: [9, 6, 7],  color: 0xb08a4a, info: 'Stock de nourriture +400 par niveau' },
@@ -228,8 +228,8 @@ export const BUILD = {
   refund: 0.8, moveWork: 6, workerExp: 0.85, maxWorkers: 4, upgradeTime: 0.7,
   houseUnits: [0, 1, 2.5, 4.5, 7], houseUpCost: lv => ({ wood: 60 + 70 * lv, stone: 30 + 60 * lv, ...(lv >= 2 ? { gold: 25 * lv } : {}) }),
   maxTowers: 14, houseCost: n => ({ wood: 40 + 4 * n, stone: 8 + 2 * n }), towerUpCost: lv => ({ wood: 50 * lv, stone: 90 * lv }),
-  blockers: [...STREAM.filter((_, k) => k % 2 === 0).map(([x, z]) => ({ x, z, r: 3.2 })), { x: 100, z: 298, r: 30 }, { x: 75, z: 276, r: 4 }, { x: 125, z: 276, r: 4 }, { x: 75, z: 318, r: 4 }, { x: 125, z: 318, r: 4 }, { x: 162, z: 292, r: 6.5 }],
-  oreR: 6.5, oreSnap: 16,      // gisements : seules les mines s'y posent (centrées dessus) ; aucun autre bâtiment ne peut les recouvrir
+  blockers: [...STREAM.filter((_, k) => k % 2 === 0).map(([x, z]) => ({ x, z, r: 3.2 })), { x: 100, z: 298, r: 30 }, { x: 75, z: 276, r: 4 }, { x: 125, z: 276, r: 4 }, { x: 75, z: 318, r: 4 }, { x: 125, z: 318, r: 4 }, { x: 162, z: 292, r: 6.5 }, { x: 84, z: 270, r: 4.2 }, { x: 116, z: 270, r: 4.2 }],   // + feux de veillée (sim/camps.js)
+  oreR: 6.5, oreSnap: 16, oreExtraCost: 0.3,      // gisements : seules les mines s'y posent (centrées dessus) ; aucun autre bâtiment ne peut les recouvrir
 };
 // Tours de défense : tirent seules ; les 6 tours de la muraille existent dès le départ.
 export const TOWER = { range: 44, rangePerLevel: 3, dmg: 22, dmgPerLevel: 0.4, rate: 1.2, ratePerLevel: 0.1, wallXs: [3, 40, 80, 120, 160, 197], wallZ: 146 };

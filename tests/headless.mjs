@@ -9,7 +9,7 @@ const maxWaves = +process.argv[2] || 8, mode = process.argv[3] || 'smart';
 const E = sim.eco;
 let t0 = performance.now(), maxZ = 0, ticks = 0, lastWave = 1, log = [];
 // Joueur automatique : construit dans un ordre raisonnable avec la construction libre (ouvriers = villageois libres).
-const PLAN = [['sawmill', 40, 262], ['farm', 100, 244], ['house'], ['quarry', 150, 274], ['range', 100, 224], ['house'], ['barracks', 36, 224], ['mine', 182, 236], ['granary', 66, 270], ['house'], ['warehouse', 134, 272], ['tower', 60, 168], ['tower', 140, 168], ['mill', 128, 258], ['forge', 66, 236], ['house'], ['stable', 164, 224], ['workshop', 136, 236], ['tower', 100, 168], ['tower', 22, 168], ['tower', 178, 168]];
+const PLAN = [['sawmill', 40, 262], ['farm', 100, 244], ['house'], ['quarry', 160, 255], ['range', 100, 224], ['house'], ['barracks', 36, 224], ['mine', 182, 236], ['granary', 66, 270], ['house'], ['warehouse', 134, 272], ['tower', 60, 168], ['tower', 140, 168], ['mill', 128, 258], ['forge', 66, 236], ['house'], ['stable', 164, 224], ['workshop', 136, 236], ['tower', 100, 168], ['tower', 22, 168], ['tower', 178, 168]];
 const SPOTS = []; for (let z = 224; z <= 236; z += 12) for (let x = 14; x <= 190; x += 9) SPOTS.push([x, z]);
 function house() { for (const [x, z] of SPOTS) if (sim.place('house', x, z, 0, 2)) return true; return false; }
 let step = 0;

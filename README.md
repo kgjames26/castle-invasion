@@ -417,3 +417,15 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - Bâtiments : matières déduites de la couleur (planches jointives, pierres appareillées avec joints, tuiles en rangs, chaume strié), pied des murs assombri.
 - Douves défensives : même eau réaliste que celles du château. Fleurs de printemps plus fines et plus nombreuses.
 - Arbres défrichables plus détaillés : sapins à quatre étages irréguliers, feuillus à quatre houppiers bosselés, dégradé sombre → clair.
+
+## Phase 53 — v11.0 : menus en cases, qui est où, carrières et mines illimitées, feux de veillée
+- **Menus compacts et centrés** : chaque feuille (Bâtir, Armée, Villageois, Savoir, Paramètres) s'ouvre au centre de l'écran, largeur limitée (740 px). Les listes deviennent des **cases** : nom, état et description en haut, le bouton d'action **dans la case**, en bas (plus de bouton à l'autre bout de l'écran). Tâches des villageois : − n + centrés sous le nom. Le tutoriel passe au-dessus du dock quand une feuille est ouverte.
+- **Qui est où ?**
+  - Chaque troupe porte un **numéro** stable (le plus petit libre, sauvegardé) et une **couleur** : fanion sur la carte, pastille numérotée sur la mini-carte, listes, fiche.
+  - **Registre 🎌** (bouton sous la mini-carte, touche G) : toutes les troupes avec leur lieu en clair (« cour, derrière la grande porte », « champ de bataille, devant le mur gauche → … »), effectif et vie ; archers par pan de muraille ; réserve au point de ralliement ; unités en formation. Filtres par type, ‹ › pour passer d'une troupe à l'autre.
+  - **Suivre une troupe** 🎥 (fiche, registre ou touche F) : la caméra l'accompagne jusqu'à ce qu'on fasse glisser la carte ; bandeau « Suit … ✕ ».
+  - **Tab / Maj+Tab** : troupe suivante / précédente. Trajet en pointillés de la troupe choisie (et des troupes en sortie) sur la mini-carte.
+  - **Drapeau 🚩 Réserve** au point de ralliement (effectifs par type) ; message à chaque recrue formée : où elle attend et combien il en manque pour une escouade. Alerte quand une troupe passe sous 35 % de vie.
+- **Carrières et mines illimitées** : autant que de gisements libres (carrière sur la pierre, mine sur le fer ou l'or — aimantées). Chaque nouvelle coûte +30 %. Les places s'additionnent (+5 par niveau de chaque bâtiment), le rendement suit le meilleur niveau, les ouvriers travaillent en priorité sur les gisements équipés. Bâtir › Ressources indique les gisements libres ; « Voir » passe d'un bâtiment à l'autre. Gisement de pierre de départ déplacé hors du ruisseau (186, 258).
+- **Feux de veillée** (`src/sim/camps.js`) : deux feux devant le château pour les villageois sans travail, deux de part et d'autre de la placette pour les allumeurs au repos ; 4 bancs de bûches (12 places assises), puis cercles debout. Places stables, un debout s'assoit quand une place se libère. Villageois GLB assis par déformation des jambes dans le shader (`SIT` dans Characters.js), tournés vers les flammes.
+- Tests : `node tests/gisements.mjs` (carrières/mines multiples).

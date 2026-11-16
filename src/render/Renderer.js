@@ -1,5 +1,6 @@
 // Rendu Three.js : lit l'état de la simulation, ne le modifie jamais. Géométrie provisoire (low-poly basique).
 import * as THREE from 'three';
+import { SIT } from './Characters.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { buildCastleFort } from './Castle.js';
 import { buildBorder, westEdge, eastEdge, outsidePlay } from './Border.js';
@@ -422,8 +423,9 @@ export class Renderer {
       const v = vs[i], x = v.px + (v.x - v.px) * alpha, z = v.pz + (v.z - v.pz) * alpha, dx = v.x - v.px, dz = v.z - v.pz, mv = dx * dx + dz * dz > 2e-6;
       v.rmv = (v.rmv || 0) + ((mv ? 1 : 0) - (v.rmv || 0)) * 0.25;
       const key = v.job ? 'build' : v.task === 'repair' ? 'repair' : (TASK_LOOK[v.task] || v.task || 'idle'), working = v.state === 'gather' || v.state === 'building' || v.state === 'repairing';
-      let want = v.rrot ?? Math.PI;
+      let want = v.rrot ?? Math.PI; const sit = !mv && v.sit > 0;
       if (mv) want = Math.atan2(dx, dz);
+      else if (v.face != null && (v.sit > 0 || v.camp >= 0)) want = v.face;   // au feu de veillée : tourné vers les flammes
       else if (v.state === 'building') { const s = this.sim.build.get(v.job); if (s) want = Math.atan2(s.x - v.x, s.z - v.z); }
       else if (v.state === 'repairing') want = Math.PI;
       else if (v.state === 'gather' && v.sx !== null && v.sx !== undefined) want = Math.atan2(v.sx - v.x, v.sz - v.z);
@@ -749,6 +751,7 @@ export class Renderer {
     for (const k of vg.tints) {
       const im = new THREE.InstancedMesh(vg.geos[k], vg.mat, cap); im.frustumCulled = false; im.count = 0;
       im.anim = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); im.anim.setUsage(THREE.DynamicDrawUsage); vg.geos[k].setAttribute('aAnim', im.anim); this.scene.add(im); vv.meshes[k] = im;
+      im.sit = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1); im.sit.setUsage(THREE.DynamicDrawUsage); vg.geos[k].setAttribute('aSit', im.sit);   // (v11) assis au feu de veillée
       const [tool, hat] = GEAR[k] || GEAR.idle, mkG = geo => { if (!geo) return null; const g = new THREE.InstancedMesh(geo, gm, cap); g.frustumCulled = false; g.count = 0; this.scene.add(g); return g; };
       vv.tools[k] = mkG(tool && toolGeometry(tool, vg.handPos)); vv.hats[k] = mkG(hatGeometry(hat, vg.headPos));
     }
@@ -776,17 +779,18 @@ export class Renderer {
     for (let i = 0; i < vs.length; i++) {
       const v = vs[i], x = v.px + (v.x - v.px) * alpha, z = v.pz + (v.z - v.pz) * alpha, dx = v.x - v.px, dz = v.z - v.pz, mv = dx * dx + dz * dz > 2e-6;
       const key = v.job ? 'build' : v.task === 'repair' ? 'repair' : (TASK_LOOK[v.task] || v.task || 'idle'), working = v.state === 'gather' || v.state === 'building' || v.state === 'repairing', carrying = v.carry > 0;
-      let want = v.rrot ?? Math.PI;
+      let want = v.rrot ?? Math.PI; const sit = !mv && v.sit > 0;
       if (mv) want = Math.atan2(dx, dz);
+      else if (v.face != null && (v.sit > 0 || v.camp >= 0)) want = v.face;   // au feu de veillée : tourné vers les flammes
       else if (v.state === 'building') { const s = this.sim.build.get(v.job); if (s) want = Math.atan2(s.x - v.x, s.z - v.z); }
       else if (v.state === 'repairing') want = Math.PI;
       else if (v.state === 'gather' && v.sx !== null && v.sx !== undefined) want = Math.atan2(v.sx - v.x, v.sz - v.z);
       v.rrot = lerpAng(v.rrot ?? Math.PI, want, mv ? 0.3 : 0.15);
       const LD = carrying ? LOADS[v.carryRes] : null, cclip = this.cart || !LD ? 'carry' : (vg.clips[LD.clip] ? LD.clip : 'carry');   // portage : devant (pierre, paniers, brouette) ou sur l'épaule (rondins, sac)
       const clip = working && !mv ? 'work' : carrying ? cclip : mv ? 'walk' : 'idle', [c0, cn] = vg.clips[clip];
-      const spd = clip === 'work' ? (WORK[key] || 0.9) : SPEED[clip] || 1, ph = (t * spd + i * 0.37) % 1, an = c0 + ph * cn, k = vv.cnt[key]++, im = vv.meshes[key];
-      d.position.set(x, 0, z); d.scale.set(SC, SC, SC); d.rotation.set(0, v.rrot, 0); d.updateMatrix();
-      im.setMatrixAt(k, d.matrix); im.anim.array[k] = an;
+      const spd = clip === 'work' ? (WORK[key] || 0.9) : SPEED[clip] || 1, ph = (t * spd + i * 0.37) % 1, an = sit ? c0 + 0.5 : c0 + ph * cn, k = vv.cnt[key]++, im = vv.meshes[key];
+      d.position.set(x, sit ? -SIT.drop * SC : 0, z); d.scale.set(SC, SC, SC); d.rotation.set(0, v.rrot, 0); d.updateMatrix();
+      im.setMatrixAt(k, d.matrix); im.anim.array[k] = an; im.sit.array[k] = sit ? 1 : 0;
       const f0 = Math.min(vg.head.length - 1, Math.max(0, Math.floor(an) || 0)), tl = vv.tools[key], ht = vv.hats[key];   // (v8.0) index d'image borné
       if (tl) { this._gm.copy(d.matrix).multiply(this._ty); if (carrying) this._gm.multiply(vg.spine[f0]).multiply(this._back); else this._gm.multiply(vg.hand[f0]); tl.setMatrixAt(k, this._gm); }   // en portant : outil rangé dans le dos
       if (v.task === 'fire' && this.sim.night.light() < 0.75) { this.fx.glowNow(x + Math.sin(v.rrot) * 0.4, 2.2, z + Math.cos(v.rrot) * 0.4, 0.55 + 0.08 * Math.sin(t * 9 + i), 1, 0.55, 0.15); }   // torche de l'allumeur
@@ -801,7 +805,7 @@ export class Renderer {
         nc++;
       }
     }
-    for (const k in vv.meshes) { const n = vv.cnt[k], im = vv.meshes[k]; im.count = n; im.instanceMatrix.needsUpdate = true; im.anim.needsUpdate = true; for (const g of [vv.tools[k], vv.hats[k]]) if (g) { g.count = n; g.instanceMatrix.needsUpdate = true; } }
+    for (const k in vv.meshes) { const n = vv.cnt[k], im = vv.meshes[k]; im.count = n; im.instanceMatrix.needsUpdate = true; im.anim.needsUpdate = true; im.sit.needsUpdate = true; for (const g of [vv.tools[k], vv.hats[k]]) if (g) { g.count = n; g.instanceMatrix.needsUpdate = true; } }
     this.cMesh.count = 0; this.endLoads();
     if (this.cart) { this.cart.mesh.count = nc; this.cart.mesh.instanceMatrix.needsUpdate = true; }
   }

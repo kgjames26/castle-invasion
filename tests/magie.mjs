@@ -9,7 +9,7 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
 {
   const sim = new Simulation(); rich(sim);
   ok(!sim.summonMage(), 'pas de magicien sans Maison du sorcier');
-  built(sim, 'wizard', 176, 258, 4);
+  built(sim, 'wizard', 140, 240, 4);
   ok(sim.summonMage(), 'invocation lancée'); run(sim, 20); ok(sim.mages.list.length === 1, 'le magicien est arrivé');
   sim.wave = 7; sim.skipPrep(); const seen = new Set(); let last = 0;
   for (let i = 0; i < 20 * 90; i++) { sim.tick(); for (const b of sim.blasts) if (b.id > last) { seen.add(b.kind); last = b.id; } }
@@ -19,7 +19,7 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
 }
 // 2) soin et rempart magique
 {
-  const sim = new Simulation(); rich(sim); built(sim, 'wizard', 176, 258, 3); sim.summonMage(); run(sim, 20);
+  const sim = new Simulation(); rich(sim); built(sim, 'wizard', 140, 240, 3); sim.summonMage(); run(sim, 20);
   sim.army.reserve.soldier = 15; const q = sim.formSquad('soldier', 15, 2); q.hp = q.n * 140 * 0.3; const h0 = q.hp;
   sim.wall.hp[12] = 0; sim.onBreach(12); run(sim, 70);
   ok(q.hp > h0, `escouade soignée (${Math.round(h0)} → ${Math.round(q.hp)})`);
@@ -54,7 +54,7 @@ const built = (sim, t, x, z, lv) => { const o = sim.place(t, x, z, 0, 1); o.stat
 {
   const a = new Simulation(), b = new Simulation(); b.setDifficulty('hard'); a.skipPrep(); b.skipPrep(); run(a, 14); run(b, 14);
   ok(b.spawn.total > a.spawn.total, `difficile : plus de zombies (${a.spawn.total} → ${b.spawn.total})`);
-  const sim = new Simulation(); rich(sim); built(sim, 'wizard', 176, 258, 2); sim.summonMage(); run(sim, 20); sim.setDifficulty('easy');
+  const sim = new Simulation(); rich(sim); built(sim, 'wizard', 140, 240, 2); sim.summonMage(); run(sim, 20); sim.setDifficulty('easy');
   const st = JSON.parse(JSON.stringify(serialize(sim))), s2 = new Simulation(); restore(s2, st);
   ok(s2.mages.list.length === 1 && s2.difficulty === 'easy', 'sauvegarde : magicien et difficulté restaurés');
 }

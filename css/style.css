@@ -335,3 +335,65 @@ body.fpv .upm, body.fpv .sqtag, body.fpv .zbar, body.fpv .edgea, body.fpv #advic
 .palm { position:fixed; z-index:4; transform:translate(-50%,-100%); padding:5px 11px; border-radius:16px; font-size:12px; font-weight:800; color:#fff; background:linear-gradient(180deg,#f08a3a,#b8401a); border:1px solid #7a2a10; box-shadow:0 2px 8px rgba(0,0,0,.4); white-space:nowrap; animation:upbob 1.4s ease-in-out infinite; }
 .palm.lit { background:rgba(40,20,10,.8); border-color:#f08a3a; color:#ffcf8a; animation:none; }
 body.fpv .palm, body.isover .palm { display:none !important; }
+/* ——— v11 : menus compacts et centrés, disposition en CASES (l'action est dans la case, plus à l'autre bout de l'écran) ——— */
+#sheet { left:50%; right:auto; top:calc(50% + 4px); bottom:auto; width:min(740px, calc(100vw - 12px)); max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 196px); border-radius:18px; transform:translate(-50%,-44%) scale(.96); }
+#sheet.on { transform:translate(-50%,-50%); }
+@media (max-height:520px) { #sheet { max-height:calc(100dvh - 104px); top:calc(50% + 6px); width:min(760px, calc(100vw - 150px)); } }
+#sheet .sb { flex-direction:row; flex-wrap:wrap; align-content:flex-start; }
+#sheet .sb > * { flex:1 1 100%; min-width:0; }
+/* cartes simples (bâtiment à construire, arme de siège, amélioration…) : une case, bouton en bas */
+#sheet .sb > .card:not(.col) { flex:1 1 200px; flex-direction:column; align-items:stretch; }
+#sheet .sb > .card:not(.col) > .act, #sheet .sb > .card:not(.col) > .btn { width:100%; margin-top:auto; }
+#sheet .sb > .card:not(.col) > .max { text-align:center; margin-top:auto; }
+/* tâches (− n +) : une case, réglage centré sous le nom */
+:is(#sheet .sb, #sheet .vols) > .row.step { flex:1 1 200px; flex-wrap:wrap; justify-content:center; gap:6px 10px; background:#fff6e0aa; border:1px solid #b8955a88; border-radius:13px; padding:8px 10px; }
+:is(#sheet .sb, #sheet .vols) > .row.step .lab { flex:1 0 100%; text-align:center; }
+:is(#sheet .sb, #sheet .vols) > .row.step > .act.slim { min-width:0; }
+/* listes de bâtiments / troupes : grille de cases, icône en haut à droite, boutons en bas */
+#sheet .blist { display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:8px; }
+#sheet .brow { position:relative; flex-direction:column; align-items:stretch; gap:6px; padding:9px 10px 10px; height:100%; }
+#sheet .brow .ci { position:absolute; right:8px; top:6px; width:auto; font-size:24px; }
+#sheet .brow .bt { padding-right:30px; } #sheet .brow .bt .lvl { display:block; margin-top:1px; }
+#sheet .brow > .act { flex:none; min-width:0; width:100%; } #sheet .brow > .bt + .act { margin-top:auto; }
+#sheet .brow .go { display:none; } #sheet .brow.sqrow { padding-left:38px; } #sheet .brow > .sqn { position:absolute; left:9px; top:10px; }
+#sheet .pop { justify-content:center; flex-wrap:wrap; text-align:center; }
+#sheet .sb > .row:not(.step) { justify-content:center; flex-wrap:wrap; } #sheet .sb > .row > .act:not(.slim) { flex:1 1 170px; max-width:300px; }
+#sheet .smith { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:6px; } #sheet .smith .srow { grid-template-columns:1fr auto; } #sheet .smith .srow > b { grid-column:1/-1; }
+#sheet .card.col .row.wrapr { justify-content:center; }
+#placebar { max-width:440px; }
+/* ——— v11 : qui est où (registre, numéros, couleurs, suivi) ——— */
+.sqn { display:inline-flex; align-items:center; justify-content:center; min-width:20px; height:20px; padding:0 5px; border-radius:10px; color:#fff; font:800 12px/1 system-ui,sans-serif; font-style:normal; border:1.5px solid #fff; box-shadow:0 1px 3px #0006; vertical-align:middle; }
+.sqtag .tn { display:inline-block; min-width:14px; margin-right:4px; padding:0 3px; border-radius:6px; background:#fff; color:#222; font-size:10.5px; text-align:center; }
+.sqtag { border-color:#fff; }
+#b-roster { position:fixed; left:8px; top:calc(env(safe-area-inset-top) + 238px); z-index:5; display:flex; flex-direction:column; align-items:center; gap:0; width:58px; padding:5px 2px 4px; border-radius:12px; background:var(--paper); border:1px solid var(--line); box-shadow:var(--sh); font-size:20px; line-height:1.1; color:var(--ink); }
+#b-roster span { font-size:10.5px; font-weight:800; } #b-roster.on { background:linear-gradient(180deg,#f3d98c,#d4a640); border-color:#8a6420; }
+@media (min-width:700px) { #b-roster { top:calc(env(safe-area-inset-top) + 280px); } }
+@media (max-height:520px) { #b-roster { top:calc(env(safe-area-inset-top) + 190px); } }
+body:has(#minimap.off) #b-roster { top:calc(env(safe-area-inset-top) + 94px); }
+body.fpv #b-roster, body.fpv #roster, body.fpv .rflag, body.fpv #followpill { display:none !important; }
+#roster { position:fixed; left:8px; top:calc(env(safe-area-inset-top) + 92px); z-index:7; width:min(330px, calc(100vw - 16px)); max-height:calc(100dvh - env(safe-area-inset-top) - 190px); overflow:auto; display:none; flex-direction:column; gap:6px; padding:8px 10px 10px; border-radius:16px; background:var(--paper); border:1px solid var(--line); box-shadow:var(--sh); color:var(--ink); }
+#roster.on { display:flex; }
+#roster .rh { display:flex; justify-content:space-between; align-items:center; font:700 16px var(--serif); } #roster .rx { width:30px; height:30px; border-radius:50%; background:#5a431f1f; }
+#roster .rf { display:flex; gap:4px; flex-wrap:wrap; } #roster .rf button { min-width:40px; height:32px; border-radius:10px; background:#5a431f1a; font-weight:800; font-size:15px; } #roster .rf button.on { background:linear-gradient(180deg,#f0d27a,#cf9d38); }
+#roster .rr { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:12px; background:#fff6; border:1px solid #a8844a55; cursor:pointer; text-align:left; }
+#roster .rr.sel { border-color:#c99a2a; box-shadow:0 0 0 2px #e8c24a88 inset; } #roster .rr.hurt { background:#f7d9cf99; }
+#roster .rt { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; } #roster .rt b { font-size:13.5px; } #roster .rt b small { font-weight:700; color:var(--ink2); } #roster .rt > small { font-size:11.5px; color:var(--ink2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#roster .hb { display:block; height:4px; border-radius:2px; background:#0002; overflow:hidden; margin-top:2px; } #roster .hb i { display:block; height:100%; }
+#roster .rfo { width:34px; height:34px; border-radius:10px; background:#5a431f1a; font-size:16px; flex:none; } #roster .rfo.on { background:linear-gradient(180deg,#f0d27a,#cf9d38); }
+#roster .rgl { font-size:12.5px; padding:6px 8px; border-radius:10px; background:#5a431f12; position:relative; } #roster .rgl.click { cursor:pointer; padding-right:22px; } #roster .rgl .go { position:absolute; right:8px; top:50%; transform:translateY(-50%); font-size:18px; color:var(--ink2); }
+#roster .rsec { display:grid; grid-template-columns:repeat(5,1fr); gap:4px; } #roster .rsec button { display:flex; flex-direction:column; align-items:center; padding:4px 2px; border-radius:9px; background:#fff7; border:1px solid #a8844a44; } #roster .rsec small { font-size:9.5px; color:var(--ink2); line-height:1.1; } #roster .rsec b { font-size:15px; } #roster .rsec .none b { color:var(--bad); }
+#roster .rbtn { align-self:center; } #roster .rcy { display:flex; gap:6px; } #roster .rcy button { flex:1; height:34px; border-radius:10px; background:#5a431f1a; font-weight:800; }
+.rflag { position:fixed; z-index:3; transform:translate(-50%,-100%); padding:3px 9px; border-radius:9px; font-size:12px; font-weight:800; color:#3a2a10; background:linear-gradient(180deg,#f6dc8a,#d9a93a); border:1px solid #8a6420; box-shadow:0 2px 5px #0005; white-space:nowrap; }
+#followpill { position:fixed; left:50%; top:calc(env(safe-area-inset-top) + 98px); transform:translateX(-50%); z-index:6; display:none; align-items:center; gap:5px; padding:5px 12px; border-radius:16px; background:rgba(30,26,20,.85); color:#fff; font-weight:700; font-size:13px; border:1px solid #e8c24a; }
+#followpill.on { display:flex; } #followpill b { margin-left:4px; opacity:.8; }
+#card .where { margin-top:-3px; } #card .sqnav { display:flex; gap:6px; justify-content:center; } #card .sqnav .chipb { min-height:34px; }
+/* feuille centrée : le tutoriel passe en bas (au-dessus du dock), la feuille remonte un peu pour lui laisser la place ; l'objectif déplié s'efface */
+body:has(#sheet.on) #tuto { top:auto !important; bottom:calc(env(safe-area-inset-bottom) + 84px) !important; z-index:8; }
+body:has(#sheet.on):has(#tuto.on) #sheet { top:calc(50% - 22px); max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 262px); }
+body:has(#sheet.on) #quest:not(.mini) { display:none !important; }
+@media (max-width:480px) { :is(#sheet .sb, #sheet .vols) > .row.step, #sheet .sb > .card:not(.col) { flex-basis:150px; } :is(#sheet .sb, #sheet .vols) > .row.step .lab .sub { font-size:10.5px; } #sheet .blist { grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); } }
+#sheet .sb { justify-content:center; } #sheet .sb > .card:not(.col), :is(#sheet .sb, #sheet .vols) > .row.step { max-width:360px; }
+:is(#sheet .sb, #sheet .vols) > .row.step { flex-wrap:wrap; } :is(#sheet .sb, #sheet .vols) > .row.step .val { min-width:30px; } :is(#sheet .sb, #sheet .vols) > .row.step > .sq { width:44px; height:44px; flex:none; }
+@media (max-width:480px) { :is(#sheet .sb, #sheet .vols) > .row.step { gap:4px 4px; padding:7px 6px; } }
+#sheet .vols { display:flex; flex-direction:row; flex-wrap:wrap; gap:8px; justify-content:center; align-content:flex-start; } #sheet .vols > * { flex:1 1 100%; min-width:0; }
+:is(#sheet .sb, #sheet .vols) > .row.step > .act.slim { flex:1 1 0; }

@@ -47,6 +47,18 @@ function patchVat(shader, v) {
       int vf0 = int( floor( aAnim ) ) % uF; int vf1 = ( vf0 + 1 ) % uF; float vt = fract( aAnim );
       vec3 transformed = mix( vatPos( gl_VertexID, vf0 ), vatPos( gl_VertexID, vf1 ), vt );`);
 }
+// (v11) villageois ASSIS (feu de veillée) : déformation des jambes dans le shader, sur l'image de repos — cuisse pivotée de 90° vers l'avant
+// autour de la hanche, tibia vertical sous le genou (unités du modèle : hauteur ≈ 189, avant = +z). L'instance est abaissée de SIT.drop.
+export const SIT = { hip: 92, knee: 51, halfW: 22, drop: 41 };
+function patchSit(shader) {
+  shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float aSit;')
+    .replace('vec3 transformed = mix( vatPos( gl_VertexID, vf0 ), vatPos( gl_VertexID, vf1 ), vt );', `vec3 transformed = mix( vatPos( gl_VertexID, vf0 ), vatPos( gl_VertexID, vf1 ), vt );
+      if ( aSit > 0.5 && transformed.y < ${SIT.hip.toFixed(1)} && abs( transformed.x ) < ${SIT.halfW.toFixed(1)} ) {
+        float sdy = transformed.y - ${SIT.hip.toFixed(1)}, sdz = transformed.z;
+        if ( transformed.y > ${SIT.knee.toFixed(1)} ) { transformed.y = ${SIT.hip.toFixed(1)} + sdz; transformed.z = -sdy; }
+        else { transformed.y += ${(SIT.hip - SIT.knee).toFixed(1)}; transformed.z += ${(SIT.hip - SIT.knee).toFixed(1)}; }
+      }`);
+}
 function vatMaterial(v) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   m.onBeforeCompile = sh => { patchVat(sh, v); patchNorthFog(sh); }; m.customProgramCacheKey = () => 'vat-nfog'; return m;
@@ -97,7 +109,7 @@ async function loadVillager(url) {
   for (const k of hdr.tints) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', colorAttr(cols[k], 1)); g.setIndex(new THREE.BufferAttribute(idx, 1)); g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 95, 0), 200); geos[k] = g; }
   const v = { tex: t, rows, F, mn: hdr.mn, mx: hdr.mx };
   const mat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
-  mat.onBeforeCompile = sh => { patchVat(sh, v); patchNorthFog(sh); unitDetail(sh, 0.0095); }; mat.customProgramCacheKey = () => 'vat-nfog-dbl';
+  mat.onBeforeCompile = sh => { patchVat(sh, v); patchSit(sh); patchNorthFog(sh); unitDetail(sh, 0.0095); }; mat.customProgramCacheKey = () => 'vat-nfog-dbl-sit';
   const mats = (arr) => arr.map(a => new THREE.Matrix4().fromArray(a));
   return { geos, mat, F, clips: hdr.clips, tints: hdr.tints, hand: mats(hdr.hand), head: mats(hdr.head), spine: mats(hdr.spine || hdr.head.map(() => new THREE.Matrix4().toArray())), handPos: hdr.handPos, headPos: hdr.headPos, miny: hdr.miny, height: hdr.height };
 }

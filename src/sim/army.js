@@ -100,7 +100,7 @@ export class Army {
       const q = this.queues[b], lv = sim.eco.level[b]; if (!q.length || lv < 1) continue;
       const par = Math.min(q.length, TRAIN.parallel[Math.min(3, lv)] || 1);       // plusieurs recrues formées en même temps
       for (let i = 0; i < par; i++) q[i].t -= dt;
-      for (let i = par - 1; i >= 0; i--) if (q[i].t <= 0) { this.reserve[q[i].type]++; q.splice(i, 1); }
+      for (let i = par - 1; i >= 0; i--) if (q[i].t <= 0) { this.reserve[q[i].type]++; sim.events.push({ type: 'trained', unit: q[i].type, b }); q.splice(i, 1); }   // (v11) la recrue rejoint la réserve au point de ralliement
     }
   }
   // ——— recrues : chaque unité créée sort de son bâtiment et marche jusqu'au point de ralliement (placette par défaut) ———
@@ -129,6 +129,13 @@ export class Army {
   // porte la plus proche de x (gauche, centre ou droite)
   gateNear(x) { let best = 0, bd = Infinity; GATE_XS.forEach((gx, g) => { const d = Math.abs(gx - x); if (d < bd) { bd = d; best = g; } }); return best; }
   // ——— escouades ———
+  // (v11) chaque troupe porte un NUMÉRO stable (le plus petit libre) : sa couleur, son fanion, sa place sur la mini-carte
+  numberSquads() {
+    const used = new Set(); let need = false;
+    for (const q of this.squads) { if (q.num > 0 && !used.has(q.num)) used.add(q.num); else need = true; }
+    if (!need) return; const seen = new Set();
+    for (const q of this.squads) { if (q.num > 0 && !seen.has(q.num)) { seen.add(q.num); continue; } let n = 1; while (used.has(n)) n++; q.num = n; used.add(n); seen.add(n); }
+  }
   unitHp(type) { return UNITS[type].hp; }
   maxN(type, q) { return GRADES[q && q.grade || 'escouade'].size; }   // effectif maximal selon le grade (escouade 15, peloton 50, escadron 150)
   formSquad(type, size, sector = 2, grade = null) {
@@ -160,9 +167,9 @@ export class Army {
   split(q, to = null) {
     const g = to || (q.grade === 'escadron' ? 'peloton' : 'escouade'), part = GRADES[g].size, hpPer = q.hp / Math.max(1, q.n); let made = 0;
     if (q.n < part * 2 && !(q.n >= part + 15)) return 0;
-    while (q.n - part >= part && this.squads.length < SQUAD.maxSquads) { const o = { ...q, id: this.nextId++, n: part, hp: part * hpPer, grade: g, way: [], custom: q.custom ? { x: q.custom.x + 7 * (made + 1), z: q.custom.z } : null, fresh: false, auto: q.auto }; o.x += 5 * (made + 1); q.n -= part; q.hp -= part * hpPer; this.squads.push(o); made++; }
+    while (q.n - part >= part && this.squads.length < SQUAD.maxSquads) { const o = { ...q, id: this.nextId++, num: 0, n: part, hp: part * hpPer, grade: g, way: [], custom: q.custom ? { x: q.custom.x + 7 * (made + 1), z: q.custom.z } : null, fresh: false, auto: q.auto }; o.x += 5 * (made + 1); q.n -= part; q.hp -= part * hpPer; this.squads.push(o); made++; }
     // le reste : une escouade si ≥ 15, sinon en réserve
-    if (q.n > part) { const rest = q.n - part; if (rest >= 15 && g !== 'escouade' && this.squads.length < SQUAD.maxSquads) { const k = rest - (rest % 15); for (let i = 0; i < k / 15; i++) { const o = { ...q, id: this.nextId++, n: 15, hp: 15 * hpPer, grade: 'escouade', way: [], custom: null, fresh: false }; o.x += 5 * (made + 1); this.squads.push(o); made++; } q.n -= k; q.hp -= k * hpPer; }
+    if (q.n > part) { const rest = q.n - part; if (rest >= 15 && g !== 'escouade' && this.squads.length < SQUAD.maxSquads) { const k = rest - (rest % 15); for (let i = 0; i < k / 15; i++) { const o = { ...q, id: this.nextId++, num: 0, n: 15, hp: 15 * hpPer, grade: 'escouade', way: [], custom: null, fresh: false }; o.x += 5 * (made + 1); this.squads.push(o); made++; } q.n -= k; q.hp -= k * hpPer; }
       const left = q.n - part; if (left > 0) { this.reserve[q.type] += left; q.n -= left; q.hp -= left * hpPer; } }
     q.grade = g; this.layoutPosts(); return made;
   }
@@ -240,7 +247,7 @@ export class Army {
   // ——— tick ———
   update(dt, sim) {
     const Z = sim.zombies, hash = sim.hash, eco = sim.eco, w = eco.up.weapons, ar = eco.up.archery;
-    this.trainTick(dt, sim); this.syncWalkers(sim); this.updateGate(dt);
+    this.trainTick(dt, sim); this.syncWalkers(sim); this.updateGate(dt); this.numberSquads();
     // archers
     const AU = UNITS.archer, range = (AU.range + 3 * ar) * (sim.extras ? sim.extras.rangeMult() : 1), adm = AU.dmg * eco.atkMult('archer') * this.rank(sim, 'archer').force;
     const assault = sim.phase === 'assault';
@@ -324,7 +331,7 @@ export class Army {
   serialize() {
     return {
       reserve: { ...this.reserve }, archers: this.archers.map(a => a.n), nextId: this.nextId, rally: { ...this.rally },
-      squads: this.squads.map(q => ({ id: q.id, type: q.type, n: q.n, hp: Math.round(q.hp), form: q.form, grade: q.grade, mode: q.mode, sector: q.sector, x: +q.x.toFixed(2), z: +q.z.toFixed(2), tx: q.tx, tz: q.tz, stance: q.stance, custom: q.custom || null, auto: q.auto })), autoArchers: this.autoArchers,
+      squads: this.squads.map(q => ({ id: q.id, num: q.num || 0, type: q.type, n: q.n, hp: Math.round(q.hp), form: q.form, grade: q.grade, mode: q.mode, sector: q.sector, x: +q.x.toFixed(2), z: +q.z.toFixed(2), tx: q.tx, tz: q.tz, stance: q.stance, custom: q.custom || null, auto: q.auto })), autoArchers: this.autoArchers,
       queues: Object.fromEntries(TRAIN_BUILDINGS.map(b => [b, this.queues[b].map(i => ({ type: i.type, t: +i.t.toFixed(2), full: i.full }))])),
     };
   }
@@ -334,9 +341,9 @@ export class Army {
     if (st.rally) { this.rally.x = st.rally.x; this.rally.z = st.rally.z; } this.walkers = [];
     this.squads = [];
     for (const o of st.squads) { const q = this.formSquadRaw(o); this.squads.push(q); }
-    this.layoutPosts();
+    this.layoutPosts(); this.numberSquads();
     for (const q of this.squads) { const o = st.squads.find(s => s.id === q.id); q.x = q.px = o.x; q.z = q.pz = o.z; q.fresh = false; if (o.mode === 'field') this.route(q, o.tx, o.tz); else this.route(q, q.postX, q.postZ); }
     for (const b of TRAIN_BUILDINGS) this.queues[b] = (st.queues?.[b] || []).map(i => ({ ...i }));
   }
-  formSquadRaw(o) { return { id: o.id, type: o.type, n: o.n, grade: o.grade || gradeFor(o.n), hp: o.hp, form: o.form, mode: o.mode, sector: o.sector, x: o.x, z: o.z, px: o.x, pz: o.z, postX: 0, postZ: 0, tx: o.tx, tz: o.tz, custom: o.custom || null, auto: o.auto !== false, way: [], stance: o.stance || 'hold', atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: false, rad: 3 }; }
+  formSquadRaw(o) { return { id: o.id, num: o.num || 0, type: o.type, n: o.n, grade: o.grade || gradeFor(o.n), hp: o.hp, form: o.form, mode: o.mode, sector: o.sector, x: o.x, z: o.z, px: o.x, pz: o.z, postX: 0, postZ: 0, tx: o.tx, tz: o.tz, custom: o.custom || null, auto: o.auto !== false, way: [], stance: o.stance || 'hold', atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: false, rad: 3 }; }
 }
