@@ -269,7 +269,7 @@ export const ZOMBIE_PACE = { farMin: 0.42, farMax: 0.75, rushMin: 1.3, rushMax: 
 
 // Composition d'une vague (indicatif, équilibrable sans toucher au moteur)
 // Colosses : à partir de la vague 6, une chance sur deux d'en voir un (un de plus toutes les 6 vagues)
-export const giantsFor = (v, r) => v >= 6 && r < 0.55 ? 1 + ((v - 6) / 6 | 0) : 0;
+export const giantsFor = (v, r) => v >= 6 && (r < 0.55 || v > FURY.from) ? 1 + ((v - 6) / 6 | 0) + (furyOf(v) / 4 | 0) : 0;   // après la vague 15 : toujours des géants, de plus en plus
 export const PACK = { base: 5, perWave: 1.6, jitter: 6, spread: 0.9 };
 // ——— v4.0 : systèmes additionnels ———
 export const EXTRA = {
@@ -296,16 +296,22 @@ export const EXTRA = {
   caravan: [ { give: { gold: 120 }, units: { soldier: 6 } }, { give: { gold: 110 }, units: { archer: 6 } }, { give: { wood: 200 }, get: { stone: 160 } } ],
   bossEvery: 10, bossReward: { gold: 400, iron: 200, stone: 200 },
 };
+// (v11.2) après la vague 15, le joueur est organisé : les hordes grossissent plus vite et deviennent plus AGRESSIVES (FURY)
+export const FURY = { from: 15, growth: 1.045, nMax: 2600, aggr: 0.035, aggrMax: 1.9, hp: 0.025, hpMax: 1.8, eliteFrac: 0.012 };
+export const furyOf = v => Math.max(0, v - FURY.from);
+export const aggrOf = v => Math.min(FURY.aggrMax, 1 + FURY.aggr * furyOf(v));
 export function waveSpec(v) {
-  const n = Math.round(30 * Math.pow(1.18, Math.min(v, 6) - 1) * Math.pow(1.1, Math.max(0, v - 6)));
+  const f = furyOf(v), n0 = Math.round(30 * Math.pow(1.18, Math.min(v, 6) - 1) * Math.pow(1.1, Math.max(0, v - 6)) * Math.pow(FURY.growth, f)); const n = Math.min(n0, FURY.nMax);
   const frac = [0, 0, 0, 0, 0];
   frac[1] = v >= 2 ? Math.min(0.25, 0.05 * (v - 1)) : 0;
   frac[2] = v >= 3 ? Math.min(0.15, 0.04 * (v - 2)) : 0;
   frac[4] = v >= 4 ? Math.min(0.08, 0.03 * (v - 3)) : 0;
   frac[3] = v >= 5 ? Math.min(0.05, 0.02 * (v - 4)) : 0;
+  if (f) { frac[1] = Math.min(0.32, frac[1] + FURY.eliteFrac * f); frac[2] = Math.min(0.24, frac[2] + FURY.eliteFrac * f); frac[4] = Math.min(0.14, frac[4] + 0.006 * f); frac[3] = Math.min(0.1, frac[3] + 0.004 * f); }   // plus de rapides, de coriaces, de casseurs
   frac[0] = 1 - frac[1] - frac[2] - frac[3] - frac[4];
   const sectors = 1 + Math.min(4, Math.floor(v / 3));
   // (v4.0) nouveaux types : chiens dès la vague 4, cracheurs dès 6, gonflés dès 7, grimpeurs dès 8 (indices 8 à 11)
   const extra = { 11: v >= 4 ? Math.min(0.12, 0.03 * (v - 3)) : 0, 9: v >= 6 ? Math.min(0.06, 0.015 * (v - 5)) : 0, 10: v >= 7 ? Math.min(0.05, 0.012 * (v - 6)) : 0, 8: v >= 8 ? Math.min(0.06, 0.015 * (v - 7)) : 0 };
-  return { n, frac, extra, sectors, boss: v % EXTRA.bossEvery === 0 ? 1 : 0, duration: Math.min(60, 20 + n / 14), reward: { gold: 30 + 10 * v, stone: 20 + 5 * v, iron: 10 + 3 * v } };
+  if (f) { extra[11] = Math.min(0.2, extra[11] + 0.006 * f); extra[9] = Math.min(0.12, extra[9] + 0.004 * f); extra[10] = Math.min(0.1, extra[10] + 0.004 * f); extra[8] = Math.min(0.12, extra[8] + 0.004 * f); }
+  return { n, frac, extra, sectors, boss: v % EXTRA.bossEvery === 0 ? 1 : 0, duration: Math.min(f ? 60 - Math.min(20, f) : 60, 20 + n / 14), aggr: aggrOf(v), hp: Math.min(FURY.hpMax, 1 + FURY.hp * f), reward: { gold: 30 + 10 * v, stone: 20 + 5 * v, iron: 10 + 3 * v } };
 }

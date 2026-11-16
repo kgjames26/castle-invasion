@@ -413,3 +413,4 @@ body:has(#selbar.on) #tuto, body:has(#selbar.on) #quest:not(.mini) { display:non
 #card .gmem { margin-top:-2px; } #card .tgrp { margin-top:2px; }
 .gm .lnk { background:none; border:0; color:var(--ink2); text-decoration:underline; padding:0 2px; }
 #sheet .sqnav { display:flex; gap:6px; justify-content:center; } #sheet .sqnav .chipb { min-height:38px; }
+#card .sqnav { flex-wrap:wrap; } #card .sqnav .chipb small { font-size:10px; opacity:.8; }

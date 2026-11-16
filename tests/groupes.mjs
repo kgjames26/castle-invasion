@@ -24,3 +24,12 @@ const m2 = A.mergeWith(big, sol); ok(m2.group && A.members(m2.group).length >= 4
 A.dissolve(m2.group); ok(A.squads.every(q => !q.gid), 'séparer par type : chaque troupe redevient indépendante');
 const snapG = A.merge(A.squads.filter(q => q.type !== 'soldier')); const snap = JSON.parse(JSON.stringify(serialize(sim))); const s2 = new Simulation(); restore(s2, snap);
 ok(s2.army.groups.length === 1 && s2.army.members(s2.army.groups[0]).length === A.members(snapG.group).length, 'sauvegarde/restauration des groupes');
+// (v11.2) escadrons de 150 : compléter, tout regrouper, recrues versées directement ; fureur après la vague 15
+{ const sim = new Simulation(), A = sim.army; Object.assign(A.reserve, { soldier: 175 }); const a = A.take('soldier', 20), b = A.take('soldier', 30), c = A.take('soldier', 25);
+  const k = A.fillTo(a); ok(a.n === 150 && k === 130 && A.reserve.soldier === 0, `compléter à 150 : réserve puis petites troupes (+${k})`);
+  ok(A.squads.filter(q => q.type === 'soldier').reduce((s, q) => s + q.n, 0) === 175, 'personne ne disparaît : 175 au total');
+  A.reserve.soldier = 140; const L = A.packAll('soldier'); ok(L.length === 3 && L.filter(q => q.n === 150).length === 2 && !A.groups.length, `tout regrouper par 150 : ${L.map(q => q.n).join(' + ')}, sans groupe`);
+  const small = L.find(q => q.n < 150); small.feed = true; const n0 = small.n; A.queues.barracks.push({ type: 'soldier', t: 0, full: 8 }); sim.eco.level.barracks = 1; A.trainTick(0.1, sim);
+  ok(small.n === n0 + 1 && A.reserve.soldier === 0, 'recrue versée directement dans la troupe choisie'); }
+{ const { waveSpec, aggrOf } = await import('../src/content/medieval.js');
+  ok(waveSpec(14).aggr === 1 && aggrOf(25) > 1.3 && waveSpec(25).n > waveSpec(15).n * 3, `fureur : vague 25 = ${waveSpec(25).n} zombies (×${(waveSpec(25).n / waveSpec(15).n).toFixed(1)}), agressivité ${aggrOf(25).toFixed(2)}`); }

@@ -18,7 +18,7 @@ export class ZombieSwarm {
     this.grp = new Int32Array(n); this.ox = new Float32Array(n); this.oz = new Float32Array(n); this.slow = new Float32Array(n); this.slam = new Float32Array(n); this.slams = [];
     // morsures (v2.4) : bite = temps restant de l'animation, biteK = 1 morsure debout, 2 plongeon, 3 déchirement (géant), 4 coup (lourd) ; turned = ancien soldat
     this.bite = new Float32Array(n); this.biteK = new Uint8Array(n); this.rush = new Uint8Array(n); this.rushD = new Float32Array(n); this.rushK = new Float32Array(n); this.farK = new Float32Array(n); this.turned = new Uint8Array(n); this.atkT = new Float32Array(n);
-    this.gx = new Float32Array(GROUPS); this.gz = new Float32Array(GROUPS); this.gn = new Int32Array(GROUPS); this.hpMult = 1;
+    this.gx = new Float32Array(GROUPS); this.gz = new Float32Array(GROUPS); this.gn = new Int32Array(GROUPS); this.hpMult = 1; this.aggr = 1;
     this.n = 0; this.kills = 0; this.fallen = []; this.killsBySector = new Float32Array(SECTORS); this.climb = new Float32Array(n); this.flash = new Float32Array(n); this.burnT = new Float32Array(n);   // burnT (v9.8) : secondes pendant lesquelles le zombie brûle   // (v5.0) éclair blanc quand il est touché (vue seulement)
     this.near = new Int16Array(SECTORS);      // zombies proches (z>95) par secteur ciblé
     this.attacking = new Int16Array(SECTORS);
@@ -35,8 +35,9 @@ export class ZombieSwarm {
     // allure (v3.1) : chaque horde a sa propre distance de charge (de 12 à 105 m de la muraille), chaque zombie s'en écarte ;
     // quelques isolés chargent n'importe quand → les uns traînent encore quand les autres se ruent déjà
     const gh = ((Math.imul(grp + 7, 2654435761) >>> 0) % 1000) / 1000, P = ZOMBIE_PACE;
-    this.rushD[i] = rng() < 0.12 ? P.minD + rng() * (P.maxD - P.minD) : (P.minD + gh * (P.maxD - P.minD)) * (0.65 + rng() * 0.7);
-    this.rushK[i] = P.rushMin + rng() * (P.rushMax - P.rushMin); this.farK[i] = P.farMin + rng() * (P.farMax - P.farMin);
+    const A = this.aggr || 1;   // (v11.2) agressivité : chargent de plus loin, plus souvent, traînent moins
+    this.rushD[i] = rng() < 0.12 + 0.25 * (A - 1) ? P.minD + rng() * (P.maxD - P.minD) : (P.minD + gh * (P.maxD - P.minD)) * (0.65 + rng() * 0.7) * (1 + 0.6 * (A - 1));
+    this.rushK[i] = P.rushMin + rng() * (P.rushMax - P.rushMin); this.farK[i] = (P.farMin + rng() * (P.farMax - P.farMin)) * (1 + 0.5 * (A - 1)); this.rushK[i] *= 1 + 0.25 * (A - 1);
     return true;
   }
   // multiplicateur d'allure selon la distance à la muraille : traîne (< 1) au loin, charge (> 1) une fois sa distance franchie
@@ -99,7 +100,7 @@ export class ZombieSwarm {
         // (v4.0) un zombie dans le village mord les villageois qu'il croise : ils se relèvent zombies
         if ((this.atkT[i] -= dt) <= 0) { this.atkT[i] = 0.4; const vs = sim.eco.villagers; for (let q = 0; q < vs.length; q++) { const v = vs[q]; if ((v.x - x) ** 2 + (v.z - z) ** 2 < 1.6) { sim.eco.killVillager(v); if (this.spawn(0, v.x, v.z, sectorOfX(Math.min(W - 1, Math.max(0, v.x))), sim.rng)) this.turned[this.n - 1] = 1; sim.events.push({ type: 'villagerBitten', x: v.x, z: v.z }); break; } } }
         const vx = tx - x, vz = tz - z, d = Math.hypot(vx, vz) || 1;
-        if (ts && d < ts.rad + 0.8) { if (ts.attackers < ts.cap) { ts.attackers++; this.swing(i, dt, sim.rng); army.hurtSquad(sim, ts, t.unit * dt, i); } continue; }
+        if (ts && d < ts.rad + 0.8) { if (ts.attackers < ts.cap) { ts.attackers++; this.swing(i, dt, sim.rng); army.hurtSquad(sim, ts, t.unit * this.aggr * dt, i); } continue; }
         if (!ts && d < CASTLE.r * 0.6 + 1.2) { sim.hurtCastle(t.wall * 0.5 * dt); continue; }
         X[i] = x + vx / d * speed * dt; Z[i] = z + vz / d * speed * dt;
         continue;
@@ -116,7 +117,7 @@ export class ZombieSwarm {
       if (engaged) {
         const ex = engaged.x - x, ez = engaged.z - z, ed = Math.hypot(ex, ez) || 1;
         if (ed < engaged.rad + 0.8) {                       // au contact : frappe si une place est libre sur le front de l'escouade
-          if (engaged.attackers < engaged.cap) { engaged.attackers++; this.swing(i, dt, sim.rng); army.hurtSquad(sim, engaged, t.unit * dt, i); this.state[i] = 1; if (Z[i] > 95) this.near[s]++; continue; }
+          if (engaged.attackers < engaged.cap) { engaged.attackers++; this.swing(i, dt, sim.rng); army.hurtSquad(sim, engaged, t.unit * this.aggr * dt, i); this.state[i] = 1; if (Z[i] > 95) this.near[s]++; continue; }
           dx = 0; dz = 0;
         } else { dx = ex / ed; dz = ez / ed; }
       } else if (flow.sample(s, x, z)) {
@@ -149,17 +150,17 @@ export class ZombieSwarm {
       // palissade (v4.0) : arrête la horde plus au nord tant qu'elle tient
       if (sim.extras && !engaged && sim.extras.palisade(nx, nz, t.wall, dt, i)) { nz = Math.min(nz, z); attacking = true; X[i] = nx; Z[i] = nz; this.state[i] = 1; this.attacking[s]++; continue; }
       // cracheur (9) : s'arrête à distance et ronge la pierre à l'acide
-      if (ty === 9 && nz > WSZ - 13 && wall.hp[segOfX(nx)] > 0) { nz = Math.min(nz, WSZ - 13); const seg = segOfX(nx); if ((this.slam[i] -= dt) <= 0) { this.slam[i] = 1.6; if (wall.damage(seg, t.wall * 1.6)) sim.onBreach(seg); if (sim.extras && sim.extras.spits.length < 40) sim.extras.spits.push({ x0: nx, z0: nz, x1: nx, z1: WSZ + 0.5, t: 0 }); } X[i] = nx; Z[i] = nz; this.state[i] = 1; this.attacking[s]++; continue; }
+      if (ty === 9 && nz > WSZ - 13 && wall.hp[segOfX(nx)] > 0) { nz = Math.min(nz, WSZ - 13); const seg = segOfX(nx); if ((this.slam[i] -= dt) <= 0) { this.slam[i] = 1.6; if (wall.damage(seg, t.wall * this.aggr * 1.6)) sim.onBreach(seg); if (sim.extras && sim.extras.spits.length < 40) sim.extras.spits.push({ x0: nx, z0: nz, x1: nx, z1: WSZ + 0.5, t: 0 }); } X[i] = nx; Z[i] = nz; this.state[i] = 1; this.attacking[s]++; continue; }
       if (nz > WSZ && nz < WALL_Z1 + wo + 0.5) {
         const seg = segOfX(nx);
         if (wall.hp[seg] > 0) {
           nz = Math.min(nz, WSZ); attacking = true;
-          if (wall.damage(seg, t.wall * dt)) sim.onBreach(seg);
+          if (wall.damage(seg, t.wall * this.aggr * dt)) sim.onBreach(seg);
         }
       } else if (nz >= WSZ - 0.3 && nz <= WSZ + 0.05) {
         // reste au contact : continue d'attaquer
         const seg = segOfX(nx);
-        if (wall.hp[seg] > 0) { attacking = true; if (wall.damage(seg, t.wall * dt)) sim.onBreach(seg); }
+        if (wall.hp[seg] > 0) { attacking = true; if (wall.damage(seg, t.wall * this.aggr * dt)) sim.onBreach(seg); }
       }
       // rochers : glissement par axe
       if (terrainType(terrain, Math.min(GW - 1, Math.max(0, (nx / CELL) | 0)), Math.min(159, (z / CELL) | 0)) === T.ROCK) nx = x;

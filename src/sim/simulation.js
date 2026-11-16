@@ -9,7 +9,7 @@ import { ZombieSwarm } from './zombies.js';
 import { Army, archerPos } from './army.js';
 import { Siege } from './siege.js';
 import { Extras } from './extras.js';
-import { ZOMBIES, START, UNITS, TIMING, waveSpec, giantsFor, golemsFor, GOLEM, PACK, FIRE, DIFFICULTY } from '../content/medieval.js';
+import { ZOMBIES, START, UNITS, TIMING, furyOf, waveSpec, giantsFor, golemsFor, GOLEM, PACK, FIRE, DIFFICULTY } from '../content/medieval.js';
 import { Mages } from './mage.js';
 import { Priest } from './priest.js';
 import { Infection } from './infection.js';
@@ -167,7 +167,7 @@ export class Simulation {
     this.targets = [...new Set(this.lanes.map(x => sectorOfX(x)))].sort();
   }
   startAssault() {
-    const spec = waveSpec(this.wave), D = DIFFICULTY[this.difficulty] || DIFFICULTY.normal; spec.n = Math.round(spec.n * D.n); this.zombies.hpMult = D.hp;
+    const spec = waveSpec(this.wave), D = DIFFICULTY[this.difficulty] || DIFFICULTY.normal; spec.n = Math.round(spec.n * D.n); this.zombies.hpMult = D.hp * (spec.hp || 1); this.zombies.aggr = spec.aggr || 1;   // (v11.2) fureur après la vague 15
     const counts = spec.frac.map(f => Math.round(f * spec.n));
     counts[0] += spec.n - counts.reduce((a, b) => a + b, 0);
     const giants = giantsFor(this.wave, this.rng()), golems = golemsFor(this.wave); counts[5] = giants; counts[6] = golems; counts[7] = spec.boss || 0; if (this.extras.mode.mods?.includes('giants')) counts[5] = Math.max(1, counts[5]);
@@ -202,7 +202,7 @@ export class Simulation {
         { const r = this.army.autoForm(this); if (r.formed || r.filled || r.merged) this.events.push({ type: 'autoFormed', formed: r.formed, filled: r.filled, merged: r.merged }); }   // les troupes disponibles forment des escouades
         this.phase = 'calm'; this.timer = TIMING.calm; this.spawn = null;
       }
-    } else if (this.phase === 'calm' && this.timer <= 0) { this.wave++; this.phase = 'prep'; this.timer = TIMING.prep; this.targets = []; this.extras.prepStart(); }
+    } else if (this.phase === 'calm' && this.timer <= 0) { this.wave++; this.phase = 'prep'; this.timer = Math.max(110, TIMING.prep - 4 * furyOf(this.wave)); this.targets = []; this.extras.prepStart(); }   // (v11.2) répit plus court après la vague 15
   }
   packSize(n) { return Math.max(4, Math.round(PACK.base + this.wave * PACK.perWave + this.rng() * PACK.jitter)); }
   // Un groupe : même secteur cible, même type dominant (ils avancent à la même allure), placés en masse serrée

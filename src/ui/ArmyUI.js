@@ -100,6 +100,7 @@ export function installArmyUI(UI) {
   };
   // recrues formées : un message groupé qui dit OÙ elles attendent et ce qu'il manque pour une troupe
   P.trainedEvent = function (e) {
+    if (e.into) { const q = this.sim.squad(e.into); if (q && q.n % 10 === 0) this.toast(`📥 ${UNITS[q.type].ico} Troupe ${q.num} : ${q.n}/150`, 'ok'); return; }
     const T = this.trainAcc || (this.trainAcc = {}); T[e.unit] = (T[e.unit] || 0) + 1; clearTimeout(this.trainTo);
     this.trainTo = setTimeout(() => {
       const A = this.sim.army, parts = Object.keys(T).map(t => `${UNITS[t].ico} ${T[t]} ${UNITS[t].name.toLowerCase()}${T[t] > 1 ? 's' : ''}`), where = this.whereName(A.rally.x, A.rally.z);
@@ -194,6 +195,12 @@ export function installArmyUI(UI) {
     h += `<div class="row wrapr">${this.btn('⬇ Séparer par type', 'chaque troupe redevient seule', 'gdis', false, 'act slim sec')}</div>` + (others.length ? `<div class="tgrp">Fusionner avec…</div><div class="mlist">${others.map(o => `<button class="chipb" data-a="mergeto:${o.id}">${o.label}</button>`).join('')}</div>` : '');
     return h;
   };
+  // bloc « escadron de 150 » : compléter, recrues versées directement, tout regrouper
+  P.fullHtml = function (q, inCard) {
+    const A = this.sim.army, pool = A.fillPool(q), room = 150 - q.n;
+    if (inCard) return `${room > 0 ? `<button class="chipb" data-a="fill150"${pool ? '' : ' disabled'} title="Compléter avec la réserve et les petites troupes du même type">⬆ 150${pool ? ` <small>+${Math.min(room, pool)}</small>` : ''}</button>` : ''}<button class="chipb${q.feed ? ' on' : ''}" data-a="feed" title="Les nouvelles recrues rejoignent directement cette troupe">📥</button>`;
+    return `<div class="tgrp">⬆ Escadron de 150 · ${q.n}/150</div><div class="row wrapr">${this.btn('⬆ Compléter à 150', room <= 0 ? 'complet' : pool ? `+${Math.min(room, pool)} (réserve et petites troupes)` : 'personne de disponible', 'fill150', room <= 0 || !pool, 'act slim')}${this.btn(`${q.feed ? '✅' : '⬜'} 📥 Recrues directes`, 'les nouvelles recrues la rejoignent', 'feed', false, 'act slim' + (q.feed ? '' : ' sec'))}${this.btn(`🔗 Tous les ${UNITS[q.type].name.toLowerCase()}s par 150`, 'regroupe les troupes isolées', 'pack:' + q.type, false, 'act slim sec')}</div>`;
+  };
   // troupes et groupes avec lesquels on peut fusionner (autres que celui de q)
   P.mergeTargets = function (q) {
     if (!q) return []; const A = this.sim.army, g = A.groupOf(q), seen = new Set(), out = [];
@@ -204,6 +211,9 @@ export function installArmyUI(UI) {
     const sim = this.sim, A = sim.army, q = sim.squad(this.selSq), g = A.groupOf(q);
     switch (v) {
       case 'gform': if (g) A.setGroupForm(g, x); return true;
+      case 'fill150': { if (!q) return true; const k = A.fillTo(q); this.toast(k ? `⬆ ${this.unitName(q)} : ${q.n}/150 (+${k})` : 'Personne de disponible pour la compléter', k ? 'ok' : 'warn'); return true; }
+      case 'feed': { if (!q) return true; for (const o of A.squads) if (o !== q && o.type === q.type) o.feed = false; q.feed = !q.feed; this.toast(q.feed ? `📥 Les nouvelles recrues (${UNITS[q.type].name.toLowerCase()}s) rejoignent la troupe ${q.num} jusqu'à 150` : '📥 Les recrues retournent à la réserve', 'info'); return true; }
+      case 'pack': { const L = A.packAll(x); this.toast(L.length ? `🔗 ${UNITS[x].ico} ${L.map(o => o.n).join(' + ')} : regroupés par 150` : 'Rien à regrouper', L.length ? 'ok' : 'warn'); return true; }
       case 'grot': { if (!q) return true; const base = g ? (g.face ?? Math.PI) : (q.face ?? Math.PI), f = +x === 0 ? Math.PI : base + (+x) * Math.PI / 4; A.rotate(q, f); this.toast(`↻ ${this.dirName(f)}`, 'info'); return true; }
       case 'gdis': if (g) { A.dissolve(g); this.toast('⬇ Groupe séparé : chaque troupe redevient indépendante', 'ok'); } return true;
       case 'gdet': { const o = sim.squad(+x); if (o) { A.detach(o); this.toast(`Troupe ${o.num} sortie du groupe`, 'info'); } return true; }
