@@ -2,14 +2,15 @@
 // Cycle de vie : 'site' (chantier initial) → 'built' ; 'upgrading' (amélioration, le bâtiment reste visible) ; 'moving' (déplacé : bloqué
 // jusqu'au passage d'un ouvrier). Les ouvriers sont des villageois LIBRES (sans tâche) : le joueur règle leur nombre par chantier.
 // La simulation ignore tout du rendu ; `eco.level` et `eco.houses` sont recalculés à partir des structures (source de vérité = ici).
-import { STRUCT, BUILDINGS, BUILD, TOWER, ECON, TASKS, RANK_BUILDINGS, RANK_UP , UPGRADES, QUARANTINE } from '../content/medieval.js';
+import { STRUCT, BUILDINGS, BUILD, TOWER, ECON, TASKS, RANK_BUILDINGS, RANK_UP , UPGRADES, QUARANTINE, marketsOpen } from '../content/medieval.js';
 import { sectorOfX, wallOff } from './constants.js';
 
 const tmp = new Int32Array(512);
 const WORKING = s => s.state === 'site' || s.state === 'upgrading' || s.state === 'moving';
 const ACTIVE = s => s.state === 'built' || s.state === 'upgrading';
 // (v11) bâtiments multiples : maisons, tours, et autant de carrières / mines que la carte offre de gisements libres
-export const MULTI = new Set(['house', 'tower', 'quarry', 'mine']);
+export const MULTI = new Set(['house', 'tower', 'quarry', 'mine', 'sawmill', 'farm', 'mill']);   // (v11.3) scieries, fermes et moulins en plusieurs exemplaires
+const SCALED = new Set(['quarry', 'mine', 'sawmill', 'farm', 'mill']);   // chaque exemplaire de plus coûte +30 %
 export const ORE_BUILDING = { quarry: r => r === 'stone', mine: r => r !== 'stone' };   // carrière sur la pierre, mine sur le fer ou l'or
 
 export class Build {
@@ -34,7 +35,7 @@ export class Build {
   maxLevel(s) { return STRUCT[s.type].max || ECON.maxLevel; }
   newCost(type) {
     if (type === 'house') return BUILD.houseCost(this.count('house'));
-    if (ORE_BUILDING[type]) { const n = this.count(type), c = {}; for (const r in STRUCT[type].cost) c[r] = Math.round(STRUCT[type].cost[r] * (1 + BUILD.oreExtraCost * n)); return c; }   // chaque carrière / mine de plus coûte un peu plus
+    if (SCALED.has(type)) { const n = this.count(type), c = {}; for (const r in STRUCT[type].cost) c[r] = Math.round(STRUCT[type].cost[r] * (1 + BUILD.oreExtraCost * n)); return c; }   // chaque carrière / mine de plus coûte un peu plus
     return { ...STRUCT[type].cost };
   }
   upCost(s) {
@@ -95,9 +96,11 @@ export class Build {
   // vérifie les règles propres au type (unicité, plafonds) — sans la position
   canBuildType(type, ignoreId = 0) {
     const def = STRUCT[type]; if (!def) return { ok: false, why: 'inconnu' };
+    if (def.market && !marketsOpen(this.sim)) return { ok: false, why: `débloqué après la vague 15` };
     if (type === 'house') { if (this.count('house') >= ECON.housesMax) return { ok: false, why: 'maximum atteint' }; }
     else if (type === 'tower') { if (this.items.filter(s => s.type === 'tower' && !s.fixed).length >= BUILD.maxTowers) return { ok: false, why: 'maximum atteint' }; }
     else if (ORE_BUILDING[type]) { if (!this.freeOres(type).length) return { ok: false, why: type === 'mine' ? 'aucun gisement de fer ou d\'or libre : prospecte ou défriche' : 'aucun gisement de pierre libre : prospecte ou défriche' }; }
+    else if (MULTI.has(type)) { /* plusieurs exemplaires autorisés */ }
     else if (this.items.some(s => s.type === type && s.id !== ignoreId)) return { ok: false, why: 'déjà construit' };
     return { ok: true, why: '' };
   }
@@ -139,6 +142,8 @@ export class Build {
       else if (s.type !== 'tower' && ACTIVE(s)) { E.level[s.type] = Math.max(E.level[s.type] || 0, s.level); sum[s.type] = (sum[s.type] || 0) + s.level; }   // plusieurs carrières / mines : niveau = la meilleure, places = la somme
     }
     E.houses = houses; E.houseCount = hn;
+    const sig = this.items.filter(s => (s.type === 'sawmill' || s.type === 'farm') && ACTIVE(s)).map(s => s.id).join(',');   // (v11.3) nouvelle scierie / ferme : les ouvriers se répartissent à nouveau
+    if (sig !== this.sitesSig) { this.sitesSig = sig; for (const v of E.villagers) if (v.task === 'wood' || v.task === 'food') v.sx = null; }
   }
   towerLevel(s) { return ACTIVE(s) ? s.level : 0; }
   towerStats(s, sim) {

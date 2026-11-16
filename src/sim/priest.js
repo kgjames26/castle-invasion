@@ -38,8 +38,9 @@ export class Priest {
     this.healing = 0;
     if (fight) { if ((this.reT = (this.reT || 0) - dt) <= 0 || this.sector < 0) { this.reT = 6; this.sector = this.threat(sim); } tx = this.sector * SECTOR_W + SECTOR_W / 2 + 6; tz = WALL_Z1 + wallOff(tx) + 5; }
     else { this.sector = -1; const h = this.home(sim); tx = h.x; tz = h.z; }
+    const Wt = sim.water; let det = false; if (Wt) { Wt.eject(this); const a = Wt.aim(this, tx, tz); if (a.x !== tx || a.z !== tz) { tx = a.x; tz = a.z; det = true; } }   // (v11.3) contourne l'eau
     const dx = tx - this.x, dz = tz - this.z, d = Math.hypot(dx, dz), st = PRIEST.speed * dt;
-    if (d > st) { this.x += dx / d * st; this.z += dz / d * st; this.face = Math.atan2(dx, dz); this.post = false; }
+    if (d > st || det) { const k = Math.min(st, d); let nx = this.x + dx / (d || 1) * k, nz = this.z + dz / (d || 1) * k; if (Wt) [nx, nz] = Wt.guard(this.x, this.z, nx, nz); this.x = nx; this.z = nz; this.face = Math.atan2(dx, dz); this.post = false; }
     else { this.x = tx; this.z = tz; this.post = fight; if (fight) this.face = Math.PI; }
     if (!this.post) return;
     const Z = sim.zombies;

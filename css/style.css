@@ -414,3 +414,9 @@ body:has(#selbar.on) #tuto, body:has(#selbar.on) #quest:not(.mini) { display:non
 .gm .lnk { background:none; border:0; color:var(--ink2); text-decoration:underline; padding:0 2px; }
 #sheet .sqnav { display:flex; gap:6px; justify-content:center; } #sheet .sqnav .chipb { min-height:38px; }
 #card .sqnav { flex-wrap:wrap; } #card .sqnav .chipb small { font-size:10px; opacity:.8; }
+/* v11.3 : bandeau de déblocage (marchés) */
+#unlockban { position:fixed; left:50%; top:calc(env(safe-area-inset-top) + 100px); transform:translate(-50%,-20px); opacity:0; pointer-events:none; z-index:9; display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:16px; background:linear-gradient(180deg,#f6dc8a,#d9a93a); border:2px solid #8a6420; box-shadow:0 6px 18px #0007; color:#3a2a10; text-align:left; transition:opacity .3s, transform .3s; max-width:calc(100vw - 20px); }
+#unlockban.on { opacity:1; transform:translate(-50%,0); pointer-events:auto; animation:pulse .8s 3 alternate; }
+#unlockban span { font-size:30px; } #unlockban b { display:block; font:700 17px var(--serif); } #unlockban small { font-size:12px; }
+/* v11.3 : population presque pleine */
+#r-pop.near b { color:#d9993a; animation:popnear 2.4s ease-in-out infinite; } @keyframes popnear { 50% { opacity:.55; } }

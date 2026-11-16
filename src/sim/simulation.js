@@ -3,12 +3,14 @@ import { TICK, SECTORS, SECTOR_W, W, CASTLE, SEGS, SEG_W, WALL_Z0, ARCHER_Z, sec
 import { makeRng } from './rng.js';
 import { SpatialHash } from './spatial.js';
 import { generateTerrain } from './terrain.js';
+import { Water } from './water.js';
 import { FlowFields } from './flowfield.js';
 import { Wall } from './wall.js';
 import { ZombieSwarm } from './zombies.js';
 import { Army, archerPos } from './army.js';
 import { Siege } from './siege.js';
 import { Extras } from './extras.js';
+import { MARKET } from '../content/medieval.js';
 import { ZOMBIES, START, UNITS, TIMING, furyOf, waveSpec, giantsFor, golemsFor, GOLEM, PACK, FIRE, DIFFICULTY } from '../content/medieval.js';
 import { Mages } from './mage.js';
 import { Priest } from './priest.js';
@@ -23,7 +25,7 @@ import { Build } from './build.js';
 export class Simulation {
   constructor(seed = 20261114) {
     this.seed = seed;
-    this.terrain = generateTerrain(1337);
+    this.terrain = generateTerrain(1337); this.water = new Water();   // (v11.3) douves et ruisseau : on ne traverse que par un passage
     this.wall = new Wall();
     this.flow = new FlowFields(this.terrain, this.wall);
     this.hash = new SpatialHash(4, 4096);
@@ -97,6 +99,7 @@ export class Simulation {
   buyUpgrade(u) { return this.eco.buyUpgrade(u); }
   setRepairPriority(s) { this.eco.setRepairPriority(s); }
   clearPatch(id) { return this.frontier.order(id); }
+  logPatch(id) { return this.frontier.logOrder(id); }   // (v11.3) abattre le bois d'une parcelle sans la défricher
   cancelClear(id) { return this.frontier.cancel(id); }
   planRoad(x0, z0, x1, z1) { return this.roads.plan(this, x0, z0, x1, z1); }
   summonMage() { return this.mages.startSummon(this); }
@@ -199,6 +202,7 @@ export class Simulation {
         const spec = waveSpec(this.wave);
         for (const r in spec.reward) this.eco.add(r, spec.reward[r]); this.extras.waveEnd(spec.reward);
         this.events.push({ type: 'waveEnd', wave: this.wave, reward: spec.reward });
+        if (this.wave === MARKET.afterWave) this.events.push({ type: 'marketsOpen' });   // (v11.3) les marchés deviennent constructibles
         { const r = this.army.autoForm(this); if (r.formed || r.filled || r.merged) this.events.push({ type: 'autoFormed', formed: r.formed, filled: r.filled, merged: r.merged }); }   // les troupes disponibles forment des escouades
         this.phase = 'calm'; this.timer = TIMING.calm; this.spawn = null;
       }
@@ -241,7 +245,7 @@ export class Simulation {
     this.armyAI.update(dt, this); this.army.update(dt, this);
     this.siege.update(dt, this);
     this.mages.update(dt, this); this.priest.update(dt, this);
-    this.night.update(dt, this); this.roads.update(dt, this);
+    this.night.update(dt, this); this.roads.update(dt, this); this.frontier.grow(dt);
     this.golemSlams(dt);
     this.castleGuard(dt);
     this.burn(dt);

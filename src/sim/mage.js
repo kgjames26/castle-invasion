@@ -51,8 +51,9 @@ export class Mages {
     if (p && p.ready && !flee) { this.begin(m, p, sim); return; }
     let goal = flee || (p && p.goal) || this.idleSpot(m, sim);
     goal = { x: Math.min(196, Math.max(4, goal.x)), z: Math.min(MAX_Z, Math.max(MIN_Z, goal.z)) };
+    const Wt = sim.water; if (Wt) { Wt.eject(m); const a = Wt.aim(m, goal.x, goal.z); goal = { x: a.x, z: a.z }; }   // (v11.3) contourne l'eau
     const dx = goal.x - m.x, dz = goal.z - m.z, d = Math.hypot(dx, dz);
-    if (d > 0.3) { const s = Math.min(d, MAGE.speed * (flee ? 1.3 : 1) * dt); m.x += dx / d * s; m.z += dz / d * s; m.face = Math.atan2(dx, dz); }
+    if (d > 0.3) { const s = Math.min(d, MAGE.speed * (flee ? 1.3 : 1) * dt); m.x += dx / d * s; m.z += dz / d * s; m.face = Math.atan2(dx, dz); if (Wt) [m.x, m.z] = Wt.guard(m.x - dx / d * s, m.z - dz / d * s, m.x, m.z); }
     else if (p && p.tx !== undefined) m.face = Math.atan2(p.tx - m.x, p.tz - m.z);
     m.action = flee ? 'Recule' : p ? p.label : (sim.phase === 'assault' ? 'Surveille' : 'Médite');
     m.tx = goal.x; m.tz = goal.z;

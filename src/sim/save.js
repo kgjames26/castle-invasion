@@ -48,7 +48,7 @@ export function serialize(sim) {
     spawn: sim.spawn ? { ...sim.spawn, counts: [...sim.spawn.counts] } : null, assaultTime: sim.assaultTime,
     wall: { hp: Array.from(sim.wall.hp), level: Array.from(sim.wall.level) },
     army: sim.army.serialize(),
-    siege: sim.siege.serialize(), mages: sim.mages.serialize(), priest: sim.priest.serialize(), infection: sim.infection.serialize(), frontier: sim.frontier.serialize(), roads: sim.roads.serialize(), night: sim.night.serialize(), difficulty: sim.difficulty, format: sim.format, gfx: sim.gfx || null, autoRepair: sim.autoRepair,
+    siege: sim.siege.serialize(), mages: sim.mages.serialize(), priest: sim.priest.serialize(), infection: sim.infection.serialize(), frontier: sim.frontier.serialize(), roads: sim.roads.serialize(), night: sim.night.serialize(), difficulty: sim.difficulty, marketTold: !!sim.marketTold, format: sim.format, gfx: sim.gfx || null, autoRepair: sim.autoRepair,
     fires: sim.fires.map(f => ({ ...f })),
     zombies: zs,
   };
@@ -58,7 +58,8 @@ export function restore(sim, st) {
   sim.castleHp = st.castleHp; sim.stats = { ...st.stats }; sim.over = false;
   sim.spawn = st.spawn; sim.assaultTime = st.assaultTime || 0;
   if (sim.extras) sim.extras.restore(st.extras); if (sim.extras) sim.wall.hpMult = sim.extras.wallHpMult();
-  { const sp = waveSpec(sim.wave); sim.zombies.aggr = sp.aggr || 1; }   // (v11.2) agressivité de la vague en cours
+  { const sp = waveSpec(sim.wave); sim.zombies.aggr = sp.aggr || 1; }
+  sim.marketTold = !!st.marketTold;   // (v11.2) agressivité de la vague en cours
   if (st.eco) sim.eco.restore(st.eco); else { sim.eco.reset(); if (st.legacyRes) { sim.eco.res.gold = st.legacyRes.gold; sim.eco.res.stone = st.legacyRes.stone; } }
   sim.build.restore(st.build);
   sim.wall.hp.set(st.wall.hp); sim.wall.level.set(st.wall.level);

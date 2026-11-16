@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { W, D, SECTORS, SECTOR_W, CASTLE, PLAZA, WALL_STAND_Z, wallOff, wallSlope } from '../sim/constants.js';
 import { EXTRA, ZOMBIES, STREAM } from '../content/medieval.js';
 import { palZ, moatBand } from '../sim/extras.js';
+import { moatProfile, CROSSINGS } from '../sim/water.js';
 import { applyNorthFog, patchNorthFog, fogUniforms, applyWindFog } from './fog.js';
 import { FadeRig, Rig, villagerParts, VILLAGER_STYLES, footParts, PALETTES } from './Troops.js';
 import { golemParts } from './Heroes.js';
@@ -60,6 +61,19 @@ class Decals {
     this.im.count = n; this.im.instanceMatrix.needsUpdate = true; this.uvo.needsUpdate = true; this.fade.needsUpdate = true;
   }
 }
+// (v11.3) bois en 2D : planches dessinées sur un canevas (sens de la longueur = v), fils du bois, clous aux extrémités
+let WOOD_TEX = null;
+function woodTexture() {
+  if (WOOD_TEX) return WOOD_TEX; const c = document.createElement('canvas'); c.width = 128; c.height = 256; const x = c.getContext('2d'); let sd = 11; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  const cols = ['#8d6438', '#7f5a32', '#96693b', '#85602f'];
+  for (let p = 0; p < 4; p++) { x.fillStyle = cols[p]; x.fillRect(p * 32, 0, 32, 256);
+    for (let k = 0; k < 14; k++) { x.strokeStyle = r() < 0.5 ? 'rgba(60,38,18,.32)' : 'rgba(190,140,80,.25)'; x.lineWidth = 0.8 + r(); const px = p * 32 + 3 + r() * 26; x.beginPath(); x.moveTo(px, 0); x.bezierCurveTo(px + (r() - .5) * 6, 80, px + (r() - .5) * 6, 170, px + (r() - .5) * 4, 256); x.stroke(); }
+    x.fillStyle = 'rgba(50,30,14,.55)'; x.fillRect(p * 32, 0, 1.6, 256); x.fillRect(p * 32 + 30.6, 0, 1.4, 256);
+    x.fillStyle = 'rgba(30,22,16,.85)'; for (const y of [8, 248]) for (const dx of [7, 25]) { x.beginPath(); x.arc(p * 32 + dx, y, 1.6, 0, 7); x.fill(); } }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (WOOD_TEX = t);
+}
+function deckMaterial(wid, len) { const t = woodTexture().clone(); t.repeat.set(Math.max(1, wid / 2.4), Math.max(1, len / 5)); t.needsUpdate = true; return new THREE.MeshLambertMaterial({ map: t }); }
+
 // ——— eau : surface ondulée (normales animées), reflets du soleil ———
 function waterMaterial() {
   const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d'), img = g.createImageData(128, 128);
@@ -122,7 +136,7 @@ export class ExtrasView {
     const noise = th => 0.55 * Math.sin(th * 5 + 1.3) + 0.35 * Math.sin(th * 11 + 0.4) + 0.2 * Math.sin(th * 23 + 2.1);
     // rectangle arrondi (super-ellipse) autour du château, 24 × 19 m de demi-axes au bord intérieur
     const rr = (th, a, b) => { const c = Math.cos(th), s2 = Math.sin(th), p = 4.5; return 1 / Math.pow(Math.pow(Math.abs(c) / a, p) + Math.pow(Math.abs(s2) / b, p), 1 / p); };
-    const ring = []; for (let i = 0; i <= N; i++) { const th = i / N * Math.PI * 2, ri = rr(th, 23.5, 18.5) + 0.6 * noise(th), wdt = 4.2 + 0.9 * (0.55 * Math.sin(th * 2 + 3) + 0.35 * Math.sin(th * 6 + 1.1) + 0.2 * Math.sin(th * 13 + 0.5));   /* (v9.8) fréquences entières : plus de cassure à la jonction θ = 0 / 2π */ ring.push({ th, ri, ro: ri + wdt }); }
+    const ring = []; for (let i = 0; i <= N; i++) { const th = i / N * Math.PI * 2, { ri, ro } = moatProfile(th); ring.push({ th, ri, ro }); }   // (v11.3) profil partagé avec la simulation (sim/water.js)
     const at = (th, r) => [x0 + Math.cos(th) * r, z0 + Math.sin(th) * r];
     // eau : bandes de l'intérieur vers l'extérieur, couleur selon la profondeur (bord clair et vert, milieu sombre)
     const wp = [], wc = [], idx = [], BANDS = 8, shallow = new THREE.Color(0x6a8f6c), deep = new THREE.Color(0x173a50), cc = new THREE.Color();
@@ -151,7 +165,7 @@ export class ExtrasView {
     put(stones, lam(0x7d7a72)); put(reeds, applyWindFog(new THREE.MeshLambertMaterial({ color: 0x6f8a3a, flatShading: true }), 0.5)); put(pads, lam(0x4f7f3a));
     // pont-levis au sud (là où la douve est traversée), chaînes vers la porte
     const S = ring[Math.round(N * 0.75)], bw = S.ro - S.ri + 2.6, bz = z0 - (S.ri + S.ro) / 2;   // (v9.9) château retourné : pont-levis au nord, face au village
-    const bridge = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.32, bw), lam(0x6b4a2c)); bridge.position.set(x0, 0.36, bz); bridge.castShadow = bridge.receiveShadow = true; scene.add(bridge);
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.32, bw), deckMaterial(4.6, bw)); bridge.position.set(x0, 0.36, bz); bridge.castShadow = bridge.receiveShadow = true; scene.add(bridge);
     for (let k = -4; k <= 4; k++) { const pl = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, bw), lam(0x4a3220)); pl.position.set(x0 + k * 0.5, 0.53, bz); scene.add(pl); }
     for (const sx of [-1, 1]) { const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 6, 4), lam(0x3a3c42)); ch.position.set(x0 + sx * 2, 3, z0 - S.ri - 0.8); ch.rotation.x = -0.55; scene.add(ch); for (const e of [-1, 1]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 1.2, 6), lam(0x5a3a24)); post.position.set(x0 + sx * 2.4, 0.4, bz + e * bw / 2); scene.add(post); } }
     // (v8.0) canards qui glissent sur les douves : corps + tête + bec, petit sillage
@@ -164,6 +178,7 @@ export class ExtrasView {
       this.ducks = Array.from({ length: 7 }, (_, k) => ({ u: k < 4 ? 0.02 + k * 0.012 : 0.42 + (k - 4) * 0.03, f: 0.45 + (k % 3) * 0.06, sp: (k < 4 ? 0.0028 : 0.0022) * (k >= 4 ? -1 : 1), ph: k * 1.7, sc: k < 4 && k > 0 ? 0.7 : 1 })); }
     // ruisseau : part de la douve vers l'est, serpente jusqu'à la lisière
     this.buildStream(at(0, (ring[0].ri + ring[0].ro) / 2), rn);
+    this.buildCrossings();
   }
   // (v9.8) eau réaliste : deux couches de vaguelettes en coordonnées monde qui dérivent en sens contraires (+ le courant
   // pour le ruisseau), reflet du ciel selon l'angle, éclats du soleil sur les crêtes, écume qui ourle les berges.
@@ -193,6 +208,16 @@ export class ExtrasView {
             outgoingLight = mix( outgoingLight, vec3( 0.8, 0.86, 0.84 ) * clamp( lum * 2.0 + 0.2, 0.3, 0.9 ), clamp( foam, 0.0, 1.0 ) * 0.4 ); }
           #include <opaque_fragment>`); };
     m.customProgramCacheKey = () => stream ? 'water-nat-s' : 'water-nat'; m.userData.n = n; return m;
+  }
+  // (v11.3) passerelles de bois : tablier plat à planches 2D (texture dessinée), deux longerons, appuyé sur les deux berges
+  buildCrossings() {
+    for (const b of CROSSINGS) {
+      if (b.kind !== 'plank') continue;
+      const g = new THREE.Group(), deck = new THREE.Mesh(new THREE.BoxGeometry(b.wid, 0.14, b.len), deckMaterial(b.wid, b.len)); deck.position.y = 0.3; deck.castShadow = deck.receiveShadow = true; g.add(deck);
+      for (const sx of [-1, 1]) { const beam = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, b.len + 0.3), lam(0x4a3220)); beam.position.set(sx * (b.wid / 2 - 0.05), 0.24, 0); beam.castShadow = true; g.add(beam); }
+      for (const e of [-1, 1]) for (const sx of [-1, 1]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.5, 0.14), lam(0x4a3220)); post.position.set(sx * (b.wid / 2 + 0.02), 0.48, e * (b.len / 2 - 0.2)); g.add(post); }
+      g.position.set(b.x, 0, b.z); g.rotation.y = Math.atan2(b.dx, b.dz); this.scene.add(g);
+    }
   }
   buildStream([sx, sz], rn) {
     const pts = [[sx, sz], ...STREAM.filter(p => p[0] > sx + 1)];   // tracé partagé avec la simulation (aucun bâtiment dessus)

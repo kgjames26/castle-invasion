@@ -7,6 +7,7 @@ import { MAGE_TIERS } from '../render/Heroes.js';
 import { FORMATS, idealFormat, quality } from '../render/config.js';
 import { TRAIN_BUILDINGS } from '../sim/army.js';
 import { MULTI, ORE_BUILDING } from '../sim/build.js';
+import { MARKET, marketsOpen } from '../content/medieval.js';
 import { installExtrasUI } from './ExtrasUI.js';
 import { installArmyUI, sqColor } from './ArmyUI.js';
 
@@ -209,14 +210,19 @@ export class UI {
   }
   patchCard(p) {
     const sim = this.sim, F = sim.frontier, E = sim.eco, can = F.canClear(p);
-    let h = `<div class="ptitle">🌲 Forêt vierge<span class="lvl">${p.state === 'clearing' ? 'défrichage ' + Math.round(100 * (1 - p.wood / FRONTIER.wood)) + ' %' : p.state === 'open' ? 'défrichée' : 'intacte'}</span></div>`;
-    h += `<div class="hint small">${RES_INFO.wood.ico} ${Math.round(p.wood)} bois à abattre. Le sol défriché devient constructible ; il cache peut-être un gisement de pierre, de fer ou d'or…</div>`;
-    if (p.state === 'clearing') {
+    const logOk = F.canLog(p), tp = Math.round(100 * p.t / FRONTIER.timber);
+    let h = `<div class="ptitle">🌲 Forêt vierge<span class="lvl">${p.state === 'clearing' ? 'défrichage ' + Math.round(100 * (1 - p.wood / FRONTIER.wood)) + ' %' : p.state === 'logging' ? 'coupe ' + (100 - tp) + ' %' : p.state === 'open' ? 'défrichée' : tp < 100 ? 'repousse ' + tp + ' %' : 'intacte'}</span></div>`;
+    if (p.state !== 'open') h += `<div class="hint small">🪵 <b>Abattre le bois</b> : ${RES_INFO.wood.ico} jusqu'à <b>${Math.round(p.t)}</b> bois, la forêt reste et repousse. 🪓 <b>Défricher</b> : seulement ${RES_INFO.wood.ico} ${Math.round(p.wood)} bois, mais le sol devient constructible (et peut cacher un gisement).</div>`;
+    if (p.state === 'logging') {
+      h += `<div class="hpline"><div class="bar big"><i style="width:${100 - tp}%"></i></div><span>🪵 ${E.assign.clear} bûcheron${E.assign.clear > 1 ? 's' : ''} · reste ${Math.round(p.t)}</span></div>`;
+      if (!E.assign.clear) h += '<div class="warn">Personne n\'y travaille : ajoute des ouvriers ci-dessous (ou dans 👥 Villageois).</div>';
+      h += `<div class="row">${this.btn('🪵 +2 ouvriers', '', 'as:clear:2', false, 'act slim')}${this.btn('Arrêter', '', 'unclear:' + p.id, false, 'act slim sec')}</div>`;
+    } else if (p.state === 'clearing') {
       h += `<div class="hpline"><div class="bar big"><i style="width:${100 * (1 - p.wood / FRONTIER.wood)}%"></i></div><span>🪓 ${E.assign.clear} défricheur${E.assign.clear > 1 ? 's' : ''}</span></div>`;
       if (!E.assign.clear) h += '<div class="warn">Aucun défricheur : ajoute-en ci-dessous (ou dans 👥 Villageois).</div>';
       h += `<div class="row">${this.btn('🪓 +2 défricheurs', '', 'as:clear:2', false, 'act slim')}${this.btn('Arrêter', '', 'unclear:' + p.id, false, 'act slim sec')}</div>`;
     } else if (p.state === 'forest') {
-      h += can ? `<div class="row">${this.btn('🪓 Défricher cette parcelle', 'les défricheurs s\'en chargent', 'clear:' + p.id, false)}</div>` : '<div class="warn">Trop loin : défriche d\'abord une parcelle voisine du village.</div>';
+      h += can ? `<div class="row">${this.btn('🪵 Abattre le bois', logOk ? `+${Math.round(p.t)} bois, la forêt repousse` : 'la forêt repousse encore', 'logp:' + p.id, !logOk)}${this.btn('🪓 Défricher', `+${Math.round(p.wood)} bois, terrain libre`, 'clear:' + p.id, false, 'act sec')}</div>` : '<div class="warn">Trop loin : défriche d\'abord une parcelle voisine du village.</div>';
     }
     return h;
   }
@@ -344,6 +350,7 @@ export class UI {
       case 'disb': sim.squadDisband(this.selSq); this.selSq = 0; this.rd.setSquad(0); this.setTargeting(false); if (this.card?.kind === 'squad') this.closeCard(); break;
       case 'sqcard': { const q = sim.squad(+x); if (q) { this.cam.focusOn(q.x, q.z); this.openSquad(q.id); } break; }
       case 'clear': if (sim.clearPatch(+x)) { if (!sim.eco.assign.clear) sim.assignVillagers('clear', 2); this.toast('🪓 Défrichage lancé', 'ok'); } break;
+      case 'logp': if (sim.logPatch(+x)) { if (!sim.eco.assign.clear) sim.assignVillagers('clear', 4); this.toast('🪵 Coupe lancée : beaucoup plus de bois qu\'en défrichant', 'ok'); } break;
       case 'unclear': sim.cancelClear(+x); break;
       case 'road': this.roadMode = {}; this.closeCard(); this.toast('🛤 Touche le point de départ de la route', 'info'); break;
       case 'summon': if (!sim.summonMage()) this.toast('Invocation impossible (or, vivres, une place de population)'); else this.toast('🔮 Invocation du magicien…', 'ok'); break;
@@ -386,6 +393,7 @@ export class UI {
   onEvent(e) {
     const sim = this.sim; this.extrasEvent(e);
     if (e.type === 'trained') this.trainedEvent(e);
+    if (e.type === 'marketsOpen') this.marketsNews();
     if (e.type === 'feedFull') { const q = sim.squad(e.id); if (q) this.toast(`🎖 Troupe ${q.num} au complet : 150 ${UNITS[q.type].name.toLowerCase()}s — les recrues retournent à la réserve`, 'ok'); }
     if (e.type === 'bitten') { if (!this.lastBite || performance.now() - this.lastBite > 2500) { this.lastBite = performance.now(); this.toast(`🧟 ${UNITS[e.unit].name} mordu${e.tackle ? ', plaqué au sol' : ''} ! ${this.sim.infection.prison(this.sim) ? 'Il doit rejoindre la zone de quarantaine' : 'La quarantaine est pleine : il erre près de la placette…'}`, 'warn'); } }
     else if (e.type === 'cured') this.toast(`⛪ Le prêtre a guéri un ${UNITS[e.unit].name.toLowerCase()} mordu : il retourne en réserve`, 'ok');
@@ -401,6 +409,7 @@ export class UI {
     else if (e.type === 'discovered') { this.toast(`🧭 Nouveau gisement de ${RES_INFO[e.res].name.toLowerCase()} découvert (${e.amount}) !`); this.cam.focusOn(e.x, e.z); }
     else if (e.type === 'golem') { this.toast(`🗿 Un golem secoue la muraille : ${e.fell} archer${e.fell > 1 ? 's' : ''} tombé${e.fell > 1 ? 's' : ''}${e.dead ? ` (${e.dead} mort${e.dead > 1 ? 's' : ''})` : ''}`, 'danger'); this.buzz(40); }
     else if (e.type === 'oreFound') this.toast(`⛏ Défrichage : un gisement de ${RES_INFO[e.res].name.toLowerCase()} découvert !`, 'ok');
+    else if (e.type === 'logged') this.toast('🪵 Parcelle coupée : la forêt va repousser', 'info');
     else if (e.type === 'cleared') this.toast('🌲 Parcelle défrichée : terrain constructible', 'info');
     else if (e.type === 'fireLit' && e.zone === 'plain') { if (!this.plainLitShown) { this.plainLitShown = true; this.toast('🔥 La nuit tombe : l\'équipe des feux allume les bûchers de la plaine', 'ok'); } }
     else if (e.type === 'fireOut') { if (e.zone !== 'village' && (!this.lastFireOut || performance.now() - this.lastFireOut > 4000)) { this.lastFireOut = performance.now(); this.toast(e.zone === 'plain' ? '🔥 Les zombies ont éteint un feu de la plaine !' : '🔥 Un feu s\'est éteint', 'danger'); } }
@@ -419,7 +428,7 @@ export class UI {
     this.trackIncome();
     for (const r of RES) { const e = $('#r-' + r); e.querySelector('b').textContent = fmt(E.res[r]); { const g = Math.round(this.incomeOf(r)), sm = e.querySelector('small') || e.appendChild(el('small')); sm.textContent = g > 0 ? '+' + g : ''; } e.classList.toggle('full', E.res[r] >= E.cap(r) - 0.5); e.classList.toggle('low', r === 'food' && E.famine); }
     if (this.plainLitShown && this.sim.night.light() > 0.97) this.plainLitShown = false;
-    const pop = $('#r-pop'); pop.querySelector('b').textContent = `${E.population()}/${E.popCap()}`; pop.classList.toggle('max', E.popRoom() <= 0);
+    const pop = $('#r-pop'); pop.querySelector('b').textContent = `${E.population()}/${E.popCap()}`; pop.classList.toggle('max', E.popRoom() <= 0); pop.classList.toggle('near', E.popRoom() > 0 && E.popRoom() <= Math.max(3, Math.round(E.popCap() * 0.06)));   // (v11.3) presque plein : puce discrètement ambrée
     $('#wave-title').textContent = `Vague ${sim.wave}`;
     const zl = sim.zombies.n + (sim.spawn ? sim.spawn.left : 0);
     $('#wave-phase').textContent = `${sim.extras.season().ico}${{ clear: '', rain: '🌧', fog: '🌫', snow: '❄' }[sim.extras.weather]} ` + (sim.phase === 'assault' ? `⚔ ${zl} zombie${zl > 1 ? "s" : ""}${sim.zombies.kills - (this.killsAt ?? sim.zombies.kills) > 0 ? ` · 💀${sim.zombies.kills - this.killsAt}` : ''}` : sim.phase === 'alert' ? `🔔 Ils arrivent ${Math.ceil(Math.max(0, sim.timer))}s` : sim.phase === 'calm' ? '🕊 Répit' : `🌿 ${Math.floor(Math.max(0, sim.timer) / 60)}:${String(Math.floor(Math.max(0, sim.timer) % 60)).padStart(2, '0')}`);
@@ -542,7 +551,7 @@ export class UI {
   }
   tick(dt) {
     this.watchSquads();
-    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.watchRepairs(); this.refresh(false); this.drawMinimap(); this.renderEvent(false); this.tickTuto(); this.tickQuest(); this.renderAdvice(); this.renderRoster(); this.watchHurt(); if (this.msel) this.renderMulti(); if ((this.achT = (this.achT || 0) + 1) % 10 === 0) this.checkAch(); }
+    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.watchRepairs(); this.refresh(false); this.drawMinimap(); this.renderEvent(false); this.tickTuto(); this.tickQuest(); this.renderAdvice(); this.renderRoster(); this.watchHurt(); this.watchMarkets(); this.watchHousing(); if (this.msel) this.renderMulti(); if ((this.achT = (this.achT || 0) + 1) % 10 === 0) this.checkAch(); }
     const vw = innerWidth, vh = innerHeight;
     for (let s = 0; s < SECTORS; s++) {
       const p = this.rd.project(s * 40 + 20, 8, 143 + wallOff(s * 40 + 20)), b = this.badges[s];
@@ -687,6 +696,7 @@ export class UI {
     if (s.type === 'infirmary' && s.level) h += `<div class="rank">🏥 Soins : <b>${(INFIRMARY.heal[s.level] * 100).toFixed(1)} %</b> des PV par seconde aux escouades en garnison hors combat · <b>${INFIRMARY.save[s.level] * 100} %</b> des combattants tombés sont sauvés (retour en réserve)${this.sim.army.saved ? ` · ${this.sim.army.saved} sauvés` : ''}</div>`;
     if (s.type === 'university' && s.level) h += this.btn('🎓 Améliorations des villageois', '', 'sheet:tech', false, 'act sec') + this.researchHtml();
     if (s.type === 'barracks' && s.level) h += this.heroHtml();
+    if (STRUCT[s.type].market && s.level) { const r = STRUCT[s.type].market; h += `<div class="hint small">🏪 Produit seul <b>${RES_INFO[r].ico} ${(MARKET.base[r] * MARKET.mult[s.level] * 60) | 0}/min</b> (sans villageois)${this.sim.eco.res[r] >= this.sim.eco.cap(r) - 0.5 ? ' · <b>stock plein</b> : bâtis ou améliore un entrepôt' : ''}</div>`; }
     if (s.type === 'forge' && s.level) h += `<div class="hint small">Plafond attaque/défense : ${this.sim.eco.smithMax()}</div>`;
     if (RANK_BUILDINGS.includes(s.type)) { const t = UNIT_ORDER.filter(u => UNITS[u].from === s.type), r = RANKS[Math.max(0, s.level - 1)], nx = RANKS[s.level]; h += `<div class="rank">⭐ Rang <b>${r.name}</b>${nx ? ` → <b>${nx.name}</b> au niv. ${s.level + 1} : force ×${nx.force}, résistance ×${nx.res}, tenue plus riche` : ' — rang maximum'}<small>${t.map(u => UNITS[u].ico).join(' ')} toutes les unités de ce bâtiment</small></div>`; }
     const uc = B.upCost(s), canMove = !s.fixed;
@@ -711,6 +721,7 @@ export class UI {
       case 'forge': g.push(`🔨 Plafond attaque / défense : <b>${[0, 2, 4, 6][L]}</b> → <b>${[0, 2, 4, 6][N]}</b>`); break;
       case 'publicworks': g.push(`🛤 Toutes les routes : <b>${ROADWORKS.names[N]}</b> (villageois +${pct(ROADWORKS.speed[N])})`); break;
       case 'infirmary': g.push(`🏥 Soins : ${(INFIRMARY.heal[L] * 100).toFixed(1)} % → <b>${(INFIRMARY.heal[N] * 100).toFixed(1)} %</b> PV/s · blessés sauvés <b>${pct(INFIRMARY.save[N])}</b>`); break;
+      case 'market_wood': case 'market_stone': case 'market_iron': case 'market_food': case 'market_gold': { const r = STRUCT[s.type].market; g.push(`🏪 Production : ${RES_INFO[r].ico} <b>${(MARKET.base[r] * MARKET.mult[L] * 60) | 0}/min</b> → <b>${(MARKET.base[r] * MARKET.mult[N] * 60) | 0}/min</b>`); g.push(['', '', '⛺ un deuxième étal', '🐴 une caravane', '🏛 une halle couverte', '🚩 une grande foire'][N] || ''); break; }
       case 'university': g.push(`🎓 Plafond des améliorations des villageois : <b>${L + 1}</b> → <b>${N + 1}</b>`); break;
       case 'wizard': g.push(`🔮 Magicien niv. <b>${N}</b> : sorts plus puissants, plus de mana`); break;
       case 'workshop': g.push(`🛠 +2 armes déployables${N === 2 ? ' · débloque la <b>catapulte</b>' : N === 3 ? ' · débloque le <b>trébuchet</b>' : ''}`); break;
@@ -807,6 +818,7 @@ export class UI {
       { k: 'care', ico: '⛪', name: 'Soins et foi', ids: ['infirmary', 'church', 'prison'], sub: 'soigner, guérir, isoler' },
       { k: 'town', ico: '🏛', name: 'Ville et savoir', ids: ['university', 'publicworks'], sub: 'améliorations, routes' },
       { k: 'def', ico: '🗼', name: 'Défense', ids: ['tower'], sub: 'tours de tir' },
+      { k: 'market', ico: '🏪', name: 'Marchés', ids: MARKET.res.map(r => 'market_' + r), sub: marketsOpen(this.sim) ? 'ressources produites seules' : '🔒 après la vague 15', lock: !marketsOpen(this.sim) },
     ];
   }
   buildSheet() {
@@ -814,7 +826,8 @@ export class UI {
     if (!cur) {
       return `<div class="hint small">Choisis un <b>type de construction</b>. Des villageois <b>libres</b> viennent bâtir (👥 ${E.idleCount()} libres).</div>` + this.cats('build', cats.map(c => {
         const built = c.ids.filter(id => id === 'tower' ? B.items.some(s => s.type === 'tower' && !s.fixed) : B.of(id)).length, can = c.ids.some(id => B.canBuildType(id).ok && E.afford(B.newCost(id)));
-        return { ...c, badge: c.ids.length > 1 ? `${built}/${c.ids.length}` : '', sub: c.sub + (can ? '' : ' · ressources insuffisantes'), off: !can && !built };
+        if (c.lock) return { ...c, badge: '🔒', off: true };
+        return { ...c, badge: c.ids.length > 1 ? `${built}/${c.ids.length}` : '', sub: c.sub + (can ? '' : ' · ressources insuffisantes'), off: !can && !built, alert: c.k === 'market' && !built };
       }));
     }
     return this.back('build', `${cur.ico} ${cur.name}`) + this.buildList(cur.ids);

@@ -49,7 +49,7 @@ export class FrontierView {
     const F = this.F, d = this.d, c = this.c; let nf = 0, no = 0, ns = 0, nm = 0;
     // arbres : une parcelle en cours perd ses arbres au rythme du bois abattu
     for (const t of this.trees) {
-      const p = F.patches[t.p], left = p.state === 'open' ? 0 : p.wood / FRONTIER.wood, alive = t.k / this.per < left;
+      const p = F.patches[t.p], left = p.state === 'open' ? 0 : (p.wood / FRONTIER.wood) * (0.3 + 0.7 * Math.min(1, p.t / FRONTIER.timber)), alive = t.k / this.per < left;
       d.position.set(t.x, 0, t.z); d.rotation.set(0, t.ry, 0);
       if (alive) { d.scale.setScalar(t.s); d.updateMatrix(); const im = t.oak ? this.oak : this.fir, n = t.oak ? no++ : nf++; im.setMatrixAt(n, d.matrix); im.setColorAt(n, c.setScalar(t.tint)); }
       else if (p.state !== 'forest') { d.scale.setScalar(0.8 + t.s * 0.3); d.updateMatrix(); this.stump.setMatrixAt(ns, d.matrix); this.stump.setColorAt(ns, c.setScalar(t.tint)); ns++; }
@@ -64,7 +64,7 @@ export class FrontierView {
       this.floor.instanceMatrix.needsUpdate = true; this.floor.instanceColor.needsUpdate = true;
     }
     for (const p of F.patches) {
-      const show = p.state === 'clearing' || p.id === this.sel; if (!show) continue;
+      const show = p.state === 'clearing' || p.state === 'logging' || p.id === this.sel; if (!show) continue;
       const pu = 1 + 0.02 * Math.sin(clock * 4 + p.id); d.position.set(p.x, 0.15, p.z); d.rotation.set(0, 0, 0); d.scale.set(pu, 1, pu); d.updateMatrix(); this.marks.setMatrixAt(nm++, d.matrix);
     }
     this.marks.count = nm; this.marks.instanceMatrix.needsUpdate = true;

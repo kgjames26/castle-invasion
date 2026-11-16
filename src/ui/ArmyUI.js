@@ -223,6 +223,20 @@ export function installArmyUI(UI) {
     }
     return false;
   };
+  // (v11.3) marchés débloqués : annonce marquante (bandeau + message), une fois par partie ; aussi pour une partie déjà au-delà de la vague 15
+  P.marketsNews = function () {
+    if (this.sim.marketTold) return; this.sim.marketTold = true; if (this.sim.build.items.some(b => b.type.startsWith('market_'))) return;
+    this.toast('🏪 MARCHÉS DÉBLOQUÉS ! Bâtir › Marchés : un marché par ressource, qui la produit seul — améliorable jusqu\'au niveau 5', 'ok'); this.flashScreen && this.flashScreen('ok'); this.buzz([30, 40, 30]);
+    let b = document.getElementById('unlockban'); if (!b) { b = document.createElement('button'); b.id = 'unlockban'; document.getElementById('app').appendChild(b); b.addEventListener('click', () => { b.classList.remove('on'); this.openSheet('build', 'market'); }); }
+    b.innerHTML = '<span>🏪</span><div><b>Marchés débloqués</b><small>Bois, pierre, fer, vivres, or : produits automatiquement · touche pour bâtir</small></div>'; b.classList.add('on'); clearTimeout(this.unlockT); this.unlockT = setTimeout(() => b.classList.remove('on'), 12000);
+  };
+  // (v11.3) discret : une seule petite alerte quand il ne reste presque plus de place dans les maisons ; ré-armée dès qu'il y a de la marge
+  P.watchHousing = function () {
+    const E = this.sim.eco, room = E.popRoom(), cap = E.popCap(), near = Math.max(3, Math.round(cap * 0.06));
+    if (room <= near && !this.houseWarned && this.sim.wave >= 1 && E.villagers.length > 3) { this.houseWarned = true; this.toast(room <= 0 ? '🏠 Plus de place dans les maisons' : `🏠 Plus que ${room} place${room > 1 ? 's' : ''} dans les maisons`, 'info'); }
+    else if (room > near * 2 + 2) this.houseWarned = false;
+  };
+  P.watchMarkets = function () { if (!this.marketChecked && this.sim.wave > 15) { this.marketChecked = true; this.marketsNews(); } };
   // troupe très blessée : alerte une fois (jusqu'à ce qu'elle se refasse)
   P.watchHurt = function () {
     const A = this.sim.army, W = this.hurtW || (this.hurtW = new Map());

@@ -17,7 +17,8 @@ export const ZOMBIES = [
   { id: 11, name: 'Chien',      hp: 22,  speed: 5.2, wall: 1,  unit: 7,  size: 0.7, color: 0x5a4a3a },    // meute rapide
 ];
 // ——— Carte étendue (v2.0) : forêts vierges à gauche et à droite du village, à défricher parcelle par parcelle ———
-export const FRONTIER = { left: [-200, 0], right: [200, 400], z0: 212, z1: 312, cell: 20, wood: 160, oreChance: 0.38, oreAmount: { stone: 4000, iron: 3000, gold: 2200 } };
+// (v11.3) timber : bois qu'on peut ABATTRE sur une parcelle sans la défricher (≈ 9× le bois du défrichage) ; la forêt repousse de `regrow` par s ; `minLog` : réserve minimale pour recommencer
+export const FRONTIER = { left: [-200, 0], right: [200, 400], z0: 212, z1: 312, cell: 20, wood: 160, timber: 1500, regrow: 2.5, minLog: 200, oreChance: 0.38, oreAmount: { stone: 4000, iron: 3000, gold: 2200 } };
 // ——— Routes : chemins d'origine (réseau de base) ; Travaux publics = qualité de toutes les routes + routes tracées ———
 export const ROADS_BASE = [[[[100, 150], [100, 200], [100, 284]], 9], [[[100, 238], [40, 255]], 5], [[[100, 238], [160, 255]], 5], [[[100, 262], [182, 243]], 4.5], [[[100, 262], [18, 238]], 4.5], [[[8, 205], [192, 205]], 4]];
 export const ROADWORKS = { speed: [0, 0.15, 0.3, 0.45], names: ['Sentier', 'Terre battue', 'Gravier', 'Pavés'], costPerM: { wood: 0.6, stone: 0.8 }, buildSpeed: 3, maxLen: 160 };
@@ -191,6 +192,15 @@ export const QUARANTINE = { x: 13, z: 199 };
 //  surprise : chance qu'un mordu transformé morde un voisin avant que l'escouade réagisse · cells : places par niveau de la quarantaine
 //  biters : types de zombies qui mordent ; killers : types qui tuent sans mordre ; tearers : géants qui déchirent leur proie et boivent son sang
 export const INFECTION = { bite: 0.4, turn: 45, tackle: 0.4, down: 3.2, frenzy: 16, devour: 3, devourTime: 3.5, guard: 0.25, blood: 1.7, surprise: 0.5, cells: 4, prisonSlow: 0.3, heal: 4, biters: [0, 1, 2, 4], killers: [3, 6, 7], tearers: [5] };
+// (v11.3) MARCHÉS : débloqués après la vague 15 (le royaume est organisé, la guerre s'intensifie). Un marché par ressource ;
+// il produit seul sa ressource (marchands, caravanes), sans villageois. Niveaux 1 à 5 : production × MARKET.mult[niveau].
+export const MARKET = { afterWave: 15, res: ['wood', 'stone', 'iron', 'food', 'gold'], base: { wood: 1.6, stone: 1.3, iron: 0.8, food: 1.6, gold: 0.6 }, mult: [0, 1, 1.8, 2.8, 4, 5.5],
+  names: { wood: 'Marché au bois', stone: 'Marché de la pierre', iron: 'Marché du fer', food: 'Marché aux vivres', gold: 'Comptoir de l\'or' },
+  cost: { wood: { stone: 220, gold: 120 }, stone: { wood: 260, gold: 120 }, iron: { wood: 260, stone: 200, gold: 160 }, food: { wood: 240, stone: 160, gold: 100 }, gold: { wood: 320, stone: 300, iron: 120 } },
+  color: { wood: 0x8b5a2b, stone: 0x9aa0a6, iron: 0x5b6b8a, food: 0xd9b43a, gold: 0xe8c040 } };
+for (const r of MARKET.res) ARMY_BUILDINGS['market_' + r] = { time: 60, base: 0, name: MARKET.names[r], ico: '🏪', group: 'eco', start: 0, max: 5, market: r, cost: MARKET.cost[r], pos: { x: 100, z: 250 }, size: [11, 5, 9], color: MARKET.color[r],
+  info: `Produit seul ${RES_INFO[r].ico} ${MARKET.base[r].toFixed(1).replace('.', ',')}/s au niv. 1, jusqu'à ${(MARKET.base[r] * 5.5).toFixed(1).replace('.', ',')}/s au niv. 5 · débloqué après la vague ${MARKET.afterWave}` };
+export const marketsOpen = sim => sim.wave > MARKET.afterWave || (sim.wave === MARKET.afterWave && sim.phase === 'calm') || !!sim.marketOpen;
 Object.assign(BUILDINGS, ARMY_BUILDINGS);
 // ——— Phase 6 : construction libre ———
 // Structures multiples (placées où l'on veut) : maisons et tours de défense. Les autres bâtiments existent en un seul exemplaire (niveaux).

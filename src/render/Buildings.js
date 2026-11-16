@@ -264,7 +264,22 @@ function publicWorksModel() {
 }
 
 // Fabrique le modèle d'une structure. `seed` varie l'aspect des maisons. Renvoie { g, top } ; les pastilles de niveau sont ajoutées par le vue.
+// (v11.3) MARCHÉ : plate-forme de bois, quatre poteaux, auvent rayé à la couleur de la ressource, étals et marchandises ; le niveau ajoute des étals
+const MARKET_GOODS = { wood: [0x9b6a3a, 0x7d5430], stone: [0xa4a8ad, 0x8a8d92], iron: [0x6b7a98, 0x4f5a72], food: [0xd9b43a, 0xc0392b], gold: [0xf0c93a, 0xd4a017] };
+function marketModel(res, lv = 1) {
+  const b = new B(), [c1, c2] = MARKET_GOODS[res] || MARKET_GOODS.wood, wood = 0x6b4a2c;
+  b.box(11, 0.35, 9, 0x8a7a5a, 0, 0, 0);
+  for (const [x, z] of [[-5, -4], [5, -4], [-5, 4], [5, 4]]) b.cyl(0.2, 3.8, wood, x, 0.35, z, 6);
+  for (let i = 0; i < 6; i++) b.box(11.6 / 6, 0.22, 9.6, i % 2 ? 0xf1e8d2 : c1, -5.8 + (i + 0.5) * 11.6 / 6, 4.1, 0);                  // auvent rayé
+  b.box(11.6, 0.5, 0.2, c2, 0, 3.55, 4.7);                                                                                                  // lambrequin
+  b.box(8.4, 0.9, 1.6, wood, 0, 0.35, 2.3); b.box(8.6, 0.12, 1.9, 0xb89a68, 0, 1.25, 2.3);                                                  // comptoir
+  for (let i = 0; i < 4; i++) b.box(1.3, 0.8, 1.1, 0xa4814f, -3.6 + i * 2.4, 1.37, 2.3);                                                  // caisses
+  for (let i = 0; i < 4; i++) b.ball(0.55, i % 2 ? c1 : c2, -3.6 + i * 2.4, 2.4, 2.3);                                                      // marchandise
+  const n = Math.min(5, lv); for (let i = 0; i < n; i++) { b.box(1.6, 1.0, 1.4, 0xa4814f, -4.2 + i * 2.1, 0.35, -2.2); b.ball(0.6, i % 2 ? c2 : c1, -4.2 + i * 2.1, 1.9, -2.2); }   // réserve au fond
+  return { g: b.g, top: 6.6 };
+}
 export function makeModel(type, kit, seed = 0, lv = 1) {
+  if (type.startsWith('market_')) return marketModel(type.slice(7), lv);
   if (type === 'house') return houseModel(kit, seed, lv);
   if (type === 'publicworks') return publicWorksModel();
   if (type === 'wizard') return wizardModel();

@@ -1,5 +1,6 @@
 // Économie : villageois autonomes (aucun ordre individuel). Le joueur fixe seulement les EFFECTIFS par tâche.
 // Chaque villageois sait quoi faire : aller au site → récolter → TOUT rapporter au château → recommencer.
+import { MARKET } from '../content/medieval.js';
 import { TASKS, BUILDINGS, UPGRADES, ECON, START, RES, RES_INFO, PROSPECT, START_DEPOSITS, AUTO_REPAIR, SMITH, FIRE_KEEP, PRIEST } from '../content/medieval.js';
 import { SEGS, SEG_W, SECTORS, SEGS_PER_SECTOR, wallOff } from './constants.js';
 import { WALL } from '../content/medieval.js';
@@ -7,6 +8,7 @@ import { campSpot } from './camps.js';
 const KEEP_BASE = 28;   // feux des allumeurs : 0-13 équipe autonome, 14-27 allumeurs du village (rendu), 28+ villageois affectés aux feux
 
 const TASK_IDS = Object.keys(TASKS);
+const STRUCT_MARKET = Object.fromEntries(MARKET.res.map(r => ['market_' + r, r]));
 const DROPS = { wood: ['warehouse', 'sawmill'], stone: ['warehouse', 'quarry'], iron: ['warehouse', 'mine'], gold: ['warehouse', 'mine'], food: ['granary', 'mill', 'farm'] };
 const GATHER = TASK_IDS.filter(t => TASKS[t].res);
 
@@ -47,21 +49,21 @@ export class Economy {
   }
   gatherRate(t) {
     const T = TASKS[t]; let r = T.rate * (ECON.gatherMult || 1) * (1 + UPGRADES.tools.per * this.up.tools) * (1 + ECON.levelGather * Math.max(0, (T.building ? this.level[T.building] : 1) - 1));
-    if (t === 'food') r *= (1 + UPGRADES.plow.per * this.up.plow) * (1 + ECON.millBonus * this.level.mill);
+    if (t === 'food') r *= (1 + UPGRADES.plow.per * this.up.plow) * (1 + ECON.millBonus * Math.min(8, this.levelSum?.mill ?? this.level.mill));   // plusieurs moulins : leurs niveaux s'additionnent (plafond 8)
     return r * (this.famine ? ECON.famineMult : 1) * (this.sim.extras ? this.sim.extras.gatherMult(t) : 1);   // saisons, moral, spécialistes
   }
   // ——— gisements : site principal + gisements découverts par prospection ———
   siteList(t) {
     const T = TASKS[t], out = [];
     if (T.dyn) return this.sim.frontier.active().map(p => ({ x: p.x + ((p.id * 7) % 9 - 4), z: p.z + ((p.id * 3) % 7 - 3), si: p.id }));   // défrichage : parcelles en cours
-    if (!T.deposit) { const f = t === 'food' ? this.sim.build.of('farm') : null; return f && (f.state === 'built' || f.state === 'upgrading') ? [{ x: f.x, z: f.z, si: -1 }] : [{ x: T.site.x, z: T.site.z, si: -1 }]; }
-    if (this.deposit[t] > 0) out.push({ x: T.site.x, z: T.site.z, si: -1 });
+    if (!T.deposit) { const fs = t === 'food' ? this.sim.build.all('farm').filter(f => f.state === 'built' || f.state === 'upgrading') : []; return fs.length ? fs.map(f => ({ x: f.x, z: f.z, si: -1 })) : [{ x: T.site.x, z: T.site.z, si: -1 }]; }   // (v11.3) les fermiers se répartissent entre les fermes
+    if (this.deposit[t] > 0) { out.push({ x: T.site.x, z: T.site.z, si: -1 }); if (t === 'wood') for (const s of this.sim.build.all('sawmill')) if ((s.state === 'built' || s.state === 'upgrading') && Math.hypot(s.x - T.site.x, s.z - T.site.z) > 14) out.push({ x: s.x, z: s.z + this.sim.build.half('sawmill', s.rot)[1] + 2, si: -1 }); }   // (v11.3) chaque scierie de plus a son bosquet
     const ex = this.extra[t]; if (ex) ex.forEach((e, i) => { if (e.amount > 0) out.push({ x: e.x, z: e.z, si: i }); });
     // (v11) gisements équipés d'une carrière / d'une mine : les ouvriers y travaillent en priorité
     const B = this.sim.build, eq = T.building ? out.filter(o => B.items.some(s => s.type === T.building && (s.state === 'built' || s.state === 'upgrading') && Math.hypot(s.x - o.x, s.z - o.z) < 3.5)) : [];
     return eq.length ? eq : out;
   }
-  amountAt(t, si) { if (TASKS[t].dyn) { const p = this.sim.frontier.patches[si]; return p && p.state === 'clearing' ? p.wood : 0; } return si < 0 ? this.deposit[t] : (this.extra[t][si]?.amount || 0); }
+  amountAt(t, si) { if (TASKS[t].dyn) { const p = this.sim.frontier.patches[si]; return p ? this.sim.frontier.left(p) : 0; } return si < 0 ? this.deposit[t] : (this.extra[t][si]?.amount || 0); }
   totalDeposit(t) { let n = this.deposit[t] || 0; for (const e of this.extra[t] || []) n += e.amount; return n; }
   // ——— prospection ———
   canProspect(r) { return PROSPECT.res.includes(r) && !this.prospect && this.extra[r].length < PROSPECT.maxPerRes && this.idleCount() > 0 && this.afford(PROSPECT.cost); }
@@ -201,9 +203,12 @@ export class Economy {
   release(v) { if (v.task === 'fire' && v.fire >= 0 && this.sim.night) { const F = this.sim.night.fires[v.fire]; if (F && F.claim > 0) F.claim--; } if (v.task === 'fire' && v.carry > 0) { this.add('wood', v.carry); v.carry = 0; v.carryRes = null; } v.fire = -1; v.path = null; v.dropX = null; v.sx = null; v.task = null; v.state = 'idle'; v.leaving = false; v.seg = -1; v.timer = 0; }
   moveTo(v, tx, tz, dt) {
     if ((v.rsT = (v.rsT || 0) - dt) <= 0) { v.rsT = 0.5; v.rs = this.sim.roads ? this.sim.roads.speedMult(this.sim, v.x, v.z) : 1; }   // bonus des routes (réévalué 2× par s)
-    const dx = tx - v.x, dz = tz - v.z, d = Math.hypot(dx, dz), st = this.speed() * (v.rs || 1) * (v.task === 'fire' ? 1 + UPGRADES.firecraft.per * (this.up.firecraft || 0) : 1) * dt;
-    if (d <= st + 0.05) { v.x = tx; v.z = tz; return true; }
-    v.x += dx / d * st; v.z += dz / d * st; return false;
+    const Wt = this.sim.water; let ax = tx, az = tz, det = false;
+    if (Wt) { if (Wt.wet(v.x, v.z)) Wt.eject(v); const p = Wt.aim(v, tx, tz); if (p.x !== tx || p.z !== tz) { ax = p.x; az = p.z; det = true; } }   // (v11.3) contourne l'eau par un passage
+    const dx = ax - v.x, dz = az - v.z, d = Math.hypot(dx, dz), st = this.speed() * (v.rs || 1) * (v.task === 'fire' ? 1 + UPGRADES.firecraft.per * (this.up.firecraft || 0) : 1) * dt;
+    if (d <= st + 0.05) { v.x = ax; v.z = az; return !det; }
+    let nx = v.x + dx / d * st, nz = v.z + dz / d * st; if (Wt) { [nx, nz] = Wt.guard(v.x, v.z, nx, nz); if (nx === v.x && nz === v.z) Wt.stuck(v); }
+    v.x = nx; v.z = nz; return false;
   }
   update(dt) {
     const sim = this.sim;
@@ -212,6 +217,8 @@ export class Economy {
     this.res.food -= eat; if (this.res.food <= 0) { this.res.food = 0; this.famine = true; } else if (this.res.food > 5) this.famine = false;
     for (const t of GATHER) { const T = TASKS[t]; if (T.regen && this.deposit[t] < T.deposit) this.deposit[t] = Math.min(T.deposit, this.deposit[t] + T.regen * dt); }   // la forêt repousse
     this.updateProspect(dt); this.updateLoans(dt);
+    // (v11.3) marchés : chacun produit seul sa ressource selon son niveau
+    for (const b of sim.build.items) { const r = STRUCT_MARKET[b.type]; if (!r || (b.state !== 'built' && b.state !== 'upgrading')) continue; const got = this.add(r, MARKET.base[r] * MARKET.mult[b.level] * dt); this.gross = this.gross || {}; this.gross[r] = (this.gross[r] || 0) + got; this.marketMade = (this.marketMade || 0) + got; }
     this.claims.fill(0); for (const v of this.villagers) if (v.task === 'repair' && v.seg >= 0) this.claims[v.seg]++;
     this.assignCamps(dt);
     for (let i = 0; i < this.villagers.length; i++) this.updateVillager(this.villagers[i], i, dt);

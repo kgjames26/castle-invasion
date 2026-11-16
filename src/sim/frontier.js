@@ -11,7 +11,7 @@ export class Frontier {
     for (const side of ['left', 'right']) {
       const [x0, x1] = F[side];
       for (let gx = x0; gx < x1; gx += F.cell) for (let gz = F.z0; gz < F.z1; gz += F.cell) {
-        const p = { id: this.patches.length, side, x0: gx, z0: gz, x: gx + F.cell / 2, z: gz + F.cell / 2, state: 'forest', wood: F.wood, ore: null };
+        const p = { id: this.patches.length, side, x0: gx, z0: gz, x: gx + F.cell / 2, z: gz + F.cell / 2, state: 'forest', wood: F.wood, t: F.timber, ore: null };
         if (rnd() < F.oreChance) {
           const r = rnd(), res = r < 0.42 ? 'stone' : r < 0.77 ? 'iron' : 'gold';
           p.ore = { res, x: p.x + (rnd() - 0.5) * 8, z: p.z + (rnd() - 0.5) * 8, amount: F.oreAmount[res] * (0.7 + rnd() * 0.6) | 0 };
@@ -32,12 +32,19 @@ export class Frontier {
     return this.neighbors(p).some(q => q.state === 'open');
   }
   canClear(p) { return p && p.state === 'forest' && this.reachable(p); }
+  // (v11.3) abattre le bois sans défricher : la parcelle reste une forêt (qui repousse) et rapporte bien plus de bois
+  canLog(p) { return p && p.state === 'forest' && p.t >= FRONTIER.minLog && this.reachable(p); }
+  logOrder(id) { const p = this.patches[id]; if (!this.canLog(p)) return false; p.state = 'logging'; this.version++; return true; }
+  grow(dt) { for (const p of this.patches) if (p.state === 'forest' && p.t < FRONTIER.timber) p.t = Math.min(FRONTIER.timber, p.t + FRONTIER.regrow * dt); }
   order(id) { const p = this.patches[id]; if (!this.canClear(p)) return false; p.state = 'clearing'; this.version++; return true; }
-  cancel(id) { const p = this.patches[id]; if (!p || p.state !== 'clearing') return false; p.state = 'forest'; this.version++; return true; }
-  active() { return this.patches.filter(p => p.state === 'clearing' && p.wood > 0); }
+  cancel(id) { const p = this.patches[id]; if (!p || (p.state !== 'clearing' && p.state !== 'logging')) return false; p.state = 'forest'; this.version++; return true; }
+  active() { return this.patches.filter(p => (p.state === 'clearing' && p.wood > 0) || (p.state === 'logging' && p.t > 0)); }
+  left(p) { return p.state === 'logging' ? p.t : p.state === 'clearing' ? p.wood : 0; }
   // bois abattu : quand la parcelle est rasée, elle s'ouvre et révèle son gisement éventuel
   chop(id, amount, sim) {
-    const p = this.patches[id]; if (!p || p.state !== 'clearing') return 0;
+    const p = this.patches[id]; if (!p) return 0;
+    if (p.state === 'logging') { const g = Math.min(p.t, amount); p.t -= g; if (p.t <= 0.001) { p.t = 0; p.state = 'forest'; this.version++; sim.events.push({ type: 'logged', x: p.x, z: p.z }); } return g; }
+    if (p.state !== 'clearing') return 0;
     const got = Math.min(p.wood, amount); p.wood -= got;
     if (p.wood <= 0.001) {
       p.wood = 0; p.state = 'open'; this.version++;
@@ -48,6 +55,6 @@ export class Frontier {
     return got;
   }
   openCount() { return this.patches.filter(p => p.state === 'open').length; }
-  serialize() { return this.patches.map(p => [p.state === 'open' ? 2 : p.state === 'clearing' ? 1 : 0, Math.round(p.wood)]); }
-  restore(st) { if (!st) return; st.forEach(([s, w], i) => { const p = this.patches[i]; if (!p) return; p.state = s === 2 ? 'open' : s === 1 ? 'clearing' : 'forest'; p.wood = w; }); this.version++; }
+  serialize() { return this.patches.map(p => [p.state === 'open' ? 2 : p.state === 'clearing' ? 1 : p.state === 'logging' ? 3 : 0, Math.round(p.wood), Math.round(p.t)]); }
+  restore(st) { if (!st) return; st.forEach(([s, w, t], i) => { const p = this.patches[i]; if (!p) return; p.state = s === 2 ? 'open' : s === 1 ? 'clearing' : s === 3 ? 'logging' : 'forest'; p.wood = w; p.t = t ?? FRONTIER.timber; }); this.version++; }
 }
