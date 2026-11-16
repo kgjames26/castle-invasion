@@ -39,6 +39,11 @@ export class CameraController {
     // souris : seul le bouton gauche agit, et un seul pointeur existe (un relâchement perdu — menu contextuel, sortie de fenêtre — laissait un pointeur fantôme qui faisait croire à un pincement : plus de clic possible)
     if (e.pointerType === 'mouse') { if (e.button !== 0) return; this.ptrs.clear(); this.pinch = null; }
     this.dom.setPointerCapture(e.pointerId); this.ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); this.moved = 0; this.focus = null; this.downF = !!this.follow;
+    clearTimeout(this.lpT); this.gesture = null;
+    // (v11.1) appui long : sur une troupe = la faire pivoter (flèche) ; ailleurs = tracer un rectangle de sélection. Maj + glisser (souris) = rectangle tout de suite.
+    if (this.ptrs.size === 1 && this.onLongPress && !this.fpv) { const sx = e.clientX, sy = e.clientY;
+      if (e.pointerType === 'mouse' && e.shiftKey) { const g = this.onLongPress(sx, sy, this.worldAt(sx, sy), 'lasso'); if (g) { this.gesture = g; this.drag = null; return; } }
+      this.lpT = setTimeout(() => { if (this.ptrs.size !== 1 || this.moved > 8 || this.gdrag) return; const g = this.onLongPress(sx, sy, this.worldAt(sx, sy)); if (g) { this.gesture = g; this.drag = null; if (navigator.vibrate) try { navigator.vibrate(18); } catch { /* sans vibreur */ } } }, 420); }
     if (this.ptrs.size === 1) { this.drag = this.worldAt(e.clientX, e.clientY); this.gdrag = !!(this.drag && this.ghostHit && this.ghostHit(this.drag.x, this.drag.z)); if (this.gdrag) this.drag = null; }
     else if (this.ptrs.size === 2) { const [a, b] = [...this.ptrs.values()]; this.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), zoom: this.zoom }; this.drag = null; }
   }
@@ -46,6 +51,8 @@ export class CameraController {
     const p = this.ptrs.get(e.pointerId); if (!p) return;
     if (this.fpv) { this.fpvYaw = Math.max(-1.1, Math.min(1.1, (this.fpvYaw || 0) + (e.clientX - p.x) * 0.004)); p.x = e.clientX; p.y = e.clientY; return; }
     this.moved += Math.abs(e.clientX - p.x) + Math.abs(e.clientY - p.y); p.x = e.clientX; p.y = e.clientY;
+    if (this.gesture) { this.onGesture('move', e.clientX, e.clientY, this.worldAt(e.clientX, e.clientY)); return; }
+    if (this.moved > 8 || this.ptrs.size > 1) clearTimeout(this.lpT);
     if (this.gdrag && this.ptrs.size === 1) { const w = this.worldAt(e.clientX, e.clientY); if (w && this.moved > 4) this.ghostMove(w.x, w.z); return; }   // on glisse le fantôme de construction, pas la caméra
     if (this.ptrs.size === 2 && this.pinch) { const [a, b] = [...this.ptrs.values()]; this.setZoom(this.pinch.zoom * this.pinch.d / (Math.hypot(a.x - b.x, a.y - b.y) || 1)); }
     else if (this.ptrs.size === 1 && this.drag && this.moved > 8) {
@@ -55,6 +62,8 @@ export class CameraController {
     }
   }
   up(e, cancel) {
+    clearTimeout(this.lpT);
+    if (this.gesture) { const g = this.gesture; this.gesture = null; this.ptrs.delete(e.pointerId); this.drag = null; this.onGesture(cancel ? 'cancel' : 'end', e.clientX, e.clientY, this.worldAt(e.clientX, e.clientY), g); return; }
     const wasOne = this.ptrs.size === 1; this.ptrs.delete(e.pointerId); this.gdrag = false;
     if (wasOne && !cancel && this.moved <= 8) { const w = this.worldAt(e.clientX, e.clientY); if (w) this.onTap(w.x, w.z); }
     this.pinch = null; this.drag = this.ptrs.size === 1 ? this.worldAt(...Object.values([...this.ptrs.values()][0])) : null;

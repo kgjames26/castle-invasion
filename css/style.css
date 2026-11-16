@@ -397,3 +397,19 @@ body:has(#sheet.on) #quest:not(.mini) { display:none !important; }
 @media (max-width:480px) { :is(#sheet .sb, #sheet .vols) > .row.step { gap:4px 4px; padding:7px 6px; } }
 #sheet .vols { display:flex; flex-direction:row; flex-wrap:wrap; gap:8px; justify-content:center; align-content:flex-start; } #sheet .vols > * { flex:1 1 100%; min-width:0; }
 :is(#sheet .sb, #sheet .vols) > .row.step > .act.slim { flex:1 1 0; }
+/* ——— v11.1 : gestes, sélection multiple, groupes ——— */
+#gesture { position:fixed; inset:0; width:100vw; height:100vh; z-index:5; pointer-events:none; display:none; } #gesture.on { display:block; }
+#gesture .las { fill:rgba(232,194,74,.16); stroke:#ffe08a; stroke-width:2; stroke-dasharray:7 5; }
+#gesture .rc { fill:rgba(232,194,74,.18); stroke:#ffe08a; stroke-width:2; } #gesture .ra { stroke:#ffe08a; stroke-width:5; stroke-linecap:round; filter:drop-shadow(0 1px 2px #000a); } #gesture .rh { fill:#ffe08a; stroke:#5a3a10; stroke-width:1.5; }
+#gesture .rt { fill:#fff; font:700 13px system-ui; text-anchor:middle; paint-order:stroke; stroke:#0009; stroke-width:3px; }
+#selbar { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(env(safe-area-inset-bottom) + 86px); z-index:8; width:min(560px, calc(100vw - 16px)); display:none; flex-direction:column; gap:6px; padding:8px 10px; border-radius:16px; background:var(--paper); border:1px solid var(--line); box-shadow:var(--sh); color:var(--ink); }
+#selbar.on { display:flex; } #selbar .st { display:flex; flex-direction:column; align-items:center; } #selbar .st small { font-size:11px; color:var(--ink2); }
+#selbar .sc { display:flex; gap:5px; flex-wrap:wrap; justify-content:center; } #selbar .sc button { min-height:36px; padding:0 10px; border-radius:11px; background:#5a431f1a; font-weight:800; font-size:15px; } #selbar .sc small { font-size:10px; font-weight:600; color:var(--ink2); }
+#selbar .sa { display:flex; gap:6px; justify-content:center; } #selbar .sa .act { min-width:0; }
+body:has(#selbar.on) #tuto, body:has(#selbar.on) #quest:not(.mini) { display:none !important; }
+.sqtag.msel { outline:3px solid #ffe08a; outline-offset:1px; } .sqtag.grp { box-shadow:0 0 0 2px #ffe08a99, 0 1px 4px rgba(0,0,0,.35); }
+.gmem { display:flex; flex-wrap:wrap; gap:5px; justify-content:center; } .gm { display:inline-flex; align-items:center; gap:4px; padding:3px 7px; border-radius:10px; background:#5a431f14; font-weight:800; font-size:13px; } .gm .lnk { font-size:11px; }
+.mlist { display:flex; flex-wrap:wrap; gap:5px; justify-content:center; } .mlist .chipb { min-height:34px; font-size:13px; }
+#card .gmem { margin-top:-2px; } #card .tgrp { margin-top:2px; }
+.gm .lnk { background:none; border:0; color:var(--ink2); text-decoration:underline; padding:0 2px; }
+#sheet .sqnav { display:flex; gap:6px; justify-content:center; } #sheet .sqnav .chipb { min-height:38px; }

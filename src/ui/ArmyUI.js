@@ -2,8 +2,8 @@
 // toujours à portée (bouton 🎌 sous la mini-carte), la caméra qui SUIT une troupe, le passage d'une troupe à l'autre (Tab),
 // un drapeau de RÉSERVE au point de ralliement, et des messages qui disent où vont les recrues.
 import { SECTORS, SECTOR_AT, SECTOR_NAMES, SECTOR_W, PLAZA, WALL_Z1, wallOff } from '../sim/constants.js';
-import { UNITS, UNIT_ORDER } from '../content/medieval.js';
-import { TRAIN_BUILDINGS } from '../sim/army.js';
+import { UNITS, UNIT_ORDER, FORMATIONS, GRADES } from '../content/medieval.js';
+import { TRAIN_BUILDINGS, SQUAD_CAP } from '../sim/army.js';
 
 export const SQ_COLORS = ['#3d7bd6', '#d6453d', '#2fa35a', '#d99a1e', '#8a4fd1', '#1fa3a3', '#d6589a', '#6f8a1f', '#c46a2c', '#4a5fd1', '#9a3a3a', '#2b7a8a'];
 export const sqColor = q => SQ_COLORS[((q.num || 1) - 1) % SQ_COLORS.length];
@@ -35,6 +35,7 @@ export function installArmyUI(UI) {
     const p = document.createElement('div'); p.id = 'roster'; document.getElementById('app').appendChild(p); this.rosterEl = p; this.rosterF = 'all';
     p.addEventListener('click', e => { const t = e.target.closest('[data-r]'); if (!t) return; e.stopPropagation(); this.rosterAct(t.dataset.r); });
     this.cam.onUser = () => { if (this.followId) this.setFollow(0); };
+    this.cam.onLongPress = (sx, sy, w, force) => this.longPress(sx, sy, w, force); this.cam.onGesture = (k, sx, sy, w) => this.gestureStep(k, sx, sy, w);
   };
   P.toggleRoster = function (on) {
     this.rosterOn = on ?? !this.rosterOn; this.rosterEl.classList.toggle('on', this.rosterOn); this.rosterBtn.classList.toggle('on', this.rosterOn);
@@ -105,6 +106,112 @@ export function installArmyUI(UI) {
       const t0 = Object.keys(T)[0], r = A.reserve[t0] || 0, more = t0 === 'archer' ? (A.autoArchers ? ' : ils montent sur la muraille' : '') : r >= 15 ? ` · réserve ${r} : de quoi former une troupe (🎌)` : ` · réserve ${r}/15 pour une escouade`;
       this.toast(`${parts.join(', ')} prêt${Object.values(T).reduce((a, b) => a + b, 0) > 1 ? 's' : ''} → ${where}${more}`, 'ok'); this.trainAcc = {};
     }, 1400);
+  };
+
+  // ——— (v11.1) gestes sur la carte : appui long sur une troupe = la faire pivoter ; appui long ailleurs (ou Maj+glisser) = rectangle de sélection ———
+  P.longPress = function (sx, sy, w, force) {
+    if (this.mode !== 'idle' || this.deploy || this.order || this.rallying || this.roadMode || this.trapMode || !w) return null;
+    const id = force === 'lasso' ? 0 : this.squadAt(w.x, w.z);
+    if (id) { const q = this.sim.squad(id); this.rotQ = id; this.closeCard(); this.gfx('rotate', { q, sx, sy }); return 'rotate'; }
+    this.lasso = { x0: sx, y0: sy, x1: sx, y1: sy }; this.gfx('lasso'); return 'lasso';
+  };
+  P.gestureStep = function (k, sx, sy, w) {
+    const sim = this.sim;
+    if (this.lasso) {
+      const L = this.lasso; L.x1 = sx; L.y1 = sy; this.gfx('lasso');
+      if (k === 'end') { this.lasso = null; this.gfx('none'); this.lassoSelect(Math.min(L.x0, L.x1), Math.min(L.y0, L.y1), Math.max(L.x0, L.x1), Math.max(L.y0, L.y1)); }
+      else if (k === 'cancel') { this.lasso = null; this.gfx('none'); }
+      return;
+    }
+    if (this.rotQ) {
+      const q = sim.squad(this.rotQ); if (!q) { this.rotQ = 0; this.gfx('none'); return; }
+      const g = sim.army.groupOf(q), c = g && g.ax != null ? { x: g.ax, z: g.az } : sim.army.destOf(q);
+      this.gfx('rotate', { q, c, sx, sy });
+      if (k === 'end' && w) { const face = Math.atan2(w.x - c.x, w.z - c.z); if (Math.hypot(w.x - c.x, w.z - c.z) > 1.5) { sim.army.rotate(q, face); this.toast(`↻ ${g ? 'Groupe' : 'Troupe'} ${q.num} : ${this.dirName(face)}`, 'info'); this.buzz(12); } }
+      if (k === 'end' || k === 'cancel') { this.rotQ = 0; this.gfx('none'); }
+    }
+  };
+  P.dirName = function (face) { const n = ['vers le sud', 'vers le sud-est', 'vers l\'est', 'vers le nord-est', 'vers le nord (les zombies)', 'vers le nord-ouest', 'vers l\'ouest', 'vers le sud-ouest']; return 'regarde ' + n[((Math.round(face / (Math.PI / 4)) % 8) + 8) % 8]; };
+  // dessin des gestes (rectangle, flèche d'orientation) : un calque SVG au-dessus de la carte
+  P.gfx = function (kind, o = {}) {
+    let el = this.gfxEl; if (!el) { el = this.gfxEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); el.id = 'gesture'; document.getElementById('app').appendChild(el); }
+    if (kind === 'none') { el.innerHTML = ''; el.classList.remove('on'); return; }
+    el.classList.add('on');
+    if (kind === 'lasso') { const L = this.lasso; if (!L) return; const x = Math.min(L.x0, L.x1), y = Math.min(L.y0, L.y1); el.innerHTML = `<rect x="${x}" y="${y}" width="${Math.abs(L.x1 - L.x0)}" height="${Math.abs(L.y1 - L.y0)}" class="las"/>`; return; }
+    if (kind === 'rotate') { const q = o.q, c = o.c || this.sim.army.destOf(q), p = this.rd.project(c.x, 0.5, c.z), tx = o.sx ?? p.x, ty = o.sy ?? p.y - 60, a = Math.atan2(ty - p.y, tx - p.x), len = Math.max(40, Math.hypot(tx - p.x, ty - p.y)), ex = p.x + Math.cos(a) * len, ey = p.y + Math.sin(a) * len;
+      const h1x = ex - Math.cos(a - 0.45) * 22, h1y = ey - Math.sin(a - 0.45) * 22, h2x = ex - Math.cos(a + 0.45) * 22, h2y = ey - Math.sin(a + 0.45) * 22;
+      el.innerHTML = `<circle cx="${p.x}" cy="${p.y}" r="26" class="rc"/><line x1="${p.x}" y1="${p.y}" x2="${ex}" y2="${ey}" class="ra"/><polygon points="${ex},${ey} ${h1x},${h1y} ${h2x},${h2y}" class="rh"/><text x="${p.x}" y="${p.y - 34}" class="rt">Glisse : où regarderont les soldats</text>`; }
+  };
+  // ——— sélection multiple (rectangle, double toucher) : on fusionne, on garde un seul type, ou on annule ———
+  P.lassoSelect = function (x0, y0, x1, y1) {
+    const sim = this.sim, A = sim.army, ids = [], res = {}, inR = p => p.vis && p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+    for (const q of A.squads) if (q.n > 0 && inR(this.rd.project(q.x, 1, q.z))) ids.push(q.id);
+    for (const w of A.walkers) if (inR(this.rd.project(w.x, 1, w.z))) res[w.type] = (res[w.type] || 0) + 1;
+    for (const t in res) res[t] = Math.min(res[t], A.reserve[t] | 0);
+    if (!ids.length && !Object.values(res).some(Boolean)) { this.toast('Aucune troupe dans le rectangle', 'info'); return; }
+    this.setMulti(ids, res);
+  };
+  P.selectSameType = function (id) {
+    const A = this.sim.army, q0 = this.sim.squad(id); if (!q0) return;
+    const ids = A.squads.filter(q => q.type === q0.type && q.n > 0).map(q => q.id), res = {}; if (A.reserve[q0.type] > 0 && q0.type !== 'archer') res[q0.type] = A.reserve[q0.type];
+    this.closeCard(); this.setMulti(ids, res); this.toast(`${UNITS[q0.type].ico} Toutes les troupes de ${UNITS[q0.type].name.toLowerCase()}s sont sélectionnées`, 'info');
+  };
+  // double toucher sur une troupe : toutes les troupes du même type
+  P.dblTap = function (id) { const now = performance.now(), L = this.lastTapSq; this.lastTapSq = { id, t: now }; if (L && L.id === id && now - L.t < 420) { this.lastTapSq = null; this.selectSameType(id); return true; } return false; };
+  P.setMulti = function (ids, res = {}) { this.msel = ids.length || Object.values(res).some(Boolean) ? { ids: new Set(ids), res } : null; this.renderMulti(); };
+  P.renderMulti = function () {
+    let b = this.selBar; if (!b) { b = this.selBar = document.createElement('div'); b.id = 'selbar'; document.getElementById('app').appendChild(b); b.addEventListener('click', e => { const t = e.target.closest('[data-m]'); if (t) { e.stopPropagation(); this.multiAct(t.dataset.m); } }); }
+    const M = this.msel, A = this.sim.army; if (!M) { b.classList.remove('on'); return; }
+    for (const id of [...M.ids]) if (!this.sim.squad(id)) M.ids.delete(id);
+    const by = {}; for (const id of M.ids) { const q = this.sim.squad(id); (by[q.type] ||= { n: 0, k: 0 }); by[q.type].n += q.n; by[q.type].k++; }
+    for (const t in M.res) if (M.res[t] > 0) { (by[t] ||= { n: 0, k: 0 }); by[t].n += M.res[t]; by[t].r = M.res[t]; }
+    const types = Object.keys(by), tot = types.reduce((a, t) => a + by[t].n, 0), many = M.ids.size + Object.values(M.res).filter(Boolean).length;
+    if (!types.length) { this.msel = null; b.classList.remove('on'); return; }
+    b.classList.add('on');
+    b.innerHTML = `<div class="st"><b>Sélection · ${tot} hommes</b><small>${types.length > 1 ? 'touche un type pour ne garder que lui' : 'double toucher = tout ce type · appui long ailleurs = rectangle'}</small></div>
+      <div class="sc">${types.map(t => `<button data-m="keep:${t}" title="Ne garder que ce type">${UNITS[t].ico} ${by[t].n}${by[t].k ? ` <small>${by[t].k} tr.</small>` : ''}${by[t].r ? ' <small>réserve</small>' : ''}</button>`).join('')}</div>
+      <div class="sa"><button class="act slim" data-m="merge"${many < 1 ? ' disabled' : ''}>🔗 ${types.length > 1 ? 'Former un groupe' : many > 1 ? 'Fusionner' : 'Former la troupe'}<small>${types.length > 1 ? 'disposé en tacticien' : `jusqu'à ${SQUAD_CAP} par troupe`}</small></button><button class="act slim sec" data-m="clear">✕</button></div>`;
+  };
+  P.multiAct = function (a) {
+    const [k, t] = a.split(':'), M = this.msel, A = this.sim.army; if (!M) return;
+    if (k === 'clear') { this.setMulti([]); return; }
+    if (k === 'keep') { M.ids = new Set([...M.ids].filter(id => this.sim.squad(id)?.type === t)); for (const r in M.res) if (r !== t) M.res[r] = 0; this.renderMulti(); return; }
+    if (k === 'merge') {
+      const r = A.merge([...M.ids].map(id => this.sim.squad(id)), M.res); this.setMulti([]); if (!r) return;
+      const q = r.squads[0]; this.toast(r.group ? `🔗 Groupe formé : ${r.squads.map(s => `${UNITS[s.type].ico}${s.n}`).join(' ')} — infanterie devant, archers derrière, cavaliers sur les ailes` : `🔗 ${this.unitName(q)} : ${q.n} hommes`, 'ok');
+      this.buzz(15); this.cam.focusOn(q.x, q.z); this.openSquad(q.id);
+    }
+  };
+  // ——— groupes : nom, contenu, actions (bulle et menu Armée) ———
+  P.groupLabel = function (g) { const M = this.sim.army.members(g); return M.map(q => `${UNITS[q.type].ico}${q.n}`).join(' '); };
+  P.groupHtml = function (g, inCard) {
+    const A = this.sim.army, M = A.members(g), tot = M.reduce((a, q) => a + q.n, 0), form = g.form || M[0]?.form, others = this.mergeTargets(M[0]);
+    const mem = `<div class="gmem">${M.map(q => `<span class="gm">${this.numChip(q)} ${UNITS[q.type].ico} ${q.n}${inCard ? '' : `<button class="lnk" data-a="gdet:${q.id}" title="Sortir cette troupe du groupe">détacher</button><button class="lnk" data-a="gsplit:${q.id}" title="Couper cette troupe en deux">½</button>`}</span>`).join('')}</div>`;
+    const forms = `<div class="fgrid mini">${Object.keys(FORMATIONS).map(f => `<button class="fbtn ${form === f ? 'on' : ''}" data-a="gform:${f}" title="${FORMATIONS[f].info}"><b>${FORMATIONS[f].ico}</b>${FORMATIONS[f].name}</button>`).join('')}</div>`;
+    const rot = `<div class="sqnav"><button class="chipb" data-a="grot:-1" title="Pivoter de 45° à gauche">↺</button><button class="chipb" data-a="grot:0" title="Face aux zombies">⬆ Nord</button><button class="chipb" data-a="grot:1" title="Pivoter de 45° à droite">↻</button></div>`;
+    if (inCard) return `<div class="tgrp">🎌 Groupe · ${tot} hommes</div>${mem}${forms}${rot}`;
+    let h = `<div class="tgrp">🎌 Groupe · ${tot} hommes</div>${mem}<div class="hint small">Formation de chaque troupe — le groupe se range en tacticien : infanterie lourde au centre, fantassins de part et d'autre, cavaliers sur les ailes, archers derrière. Il avance à l'allure du plus lent.</div>${forms}${rot}<div class="hint small">Ou appui long sur le groupe, puis glisse : la flèche montre où ils regarderont.</div>`;
+    h += `<div class="row wrapr">${this.btn('⬇ Séparer par type', 'chaque troupe redevient seule', 'gdis', false, 'act slim sec')}</div>` + (others.length ? `<div class="tgrp">Fusionner avec…</div><div class="mlist">${others.map(o => `<button class="chipb" data-a="mergeto:${o.id}">${o.label}</button>`).join('')}</div>` : '');
+    return h;
+  };
+  // troupes et groupes avec lesquels on peut fusionner (autres que celui de q)
+  P.mergeTargets = function (q) {
+    if (!q) return []; const A = this.sim.army, g = A.groupOf(q), seen = new Set(), out = [];
+    for (const o of A.squads) { if (o === q || o.n <= 0 || (g && o.gid === g.id)) continue; const og = A.groupOf(o); if (og) { if (seen.has(og.id)) continue; seen.add(og.id); out.push({ id: o.id, label: `Groupe ${this.groupLabel(og)}` }); } else out.push({ id: o.id, label: `${o.num} · ${UNITS[o.type].ico} ${o.n}` }); }
+    return out.slice(0, 16);
+  };
+  P.armyAct = function (v, x) {
+    const sim = this.sim, A = sim.army, q = sim.squad(this.selSq), g = A.groupOf(q);
+    switch (v) {
+      case 'gform': if (g) A.setGroupForm(g, x); return true;
+      case 'grot': { if (!q) return true; const base = g ? (g.face ?? Math.PI) : (q.face ?? Math.PI), f = +x === 0 ? Math.PI : base + (+x) * Math.PI / 4; A.rotate(q, f); this.toast(`↻ ${this.dirName(f)}`, 'info'); return true; }
+      case 'gdis': if (g) { A.dissolve(g); this.toast('⬇ Groupe séparé : chaque troupe redevient indépendante', 'ok'); } return true;
+      case 'gdet': { const o = sim.squad(+x); if (o) { A.detach(o); this.toast(`Troupe ${o.num} sortie du groupe`, 'info'); } return true; }
+      case 'gsplit': { const o = sim.squad(+x); if (o) { const m = A.splitFree(o, 'half'); this.toast(m.length ? `½ ${UNITS[o.type].name} : ${o.n} + ${m[0].n}` : 'Trop petite pour être coupée', m.length ? 'ok' : 'warn'); } return true; }
+      case 'splitf': { if (!q) return true; const m = A.splitFree(q, isNaN(+x) ? x : +x); this.toast(m.length ? `⬇ ${UNITS[q.type].name} : ${[q, ...m].map(o => o.n).join(' + ')}` : 'Impossible de séparer ainsi', m.length ? 'ok' : 'warn'); return true; }
+      case 'mergeto': { const o = sim.squad(+x); if (q && o) { const r = A.mergeWith(q, o); if (r) { this.toast(r.group ? `🔗 Groupe : ${this.groupLabel(r.group)}` : `🔗 ${r.squads[0].n} hommes`, 'ok'); this.selSq = r.squads[0].id; this.nav.army = 'sq.' + r.squads[0].id; if (this.card?.kind === 'squad') this.openSquad(r.squads[0].id); } } return true; }
+    }
+    return false;
   };
   // troupe très blessée : alerte une fois (jusqu'à ce qu'elle se refasse)
   P.watchHurt = function () {

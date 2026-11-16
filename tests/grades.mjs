@@ -3,7 +3,7 @@ import { Simulation } from '../src/sim/simulation.js';
 import { serialize, restore } from '../src/sim/save.js';
 let fails = 0; const ok = (c, m) => { console.log((c ? 'ok  : ' : 'ÉCHEC : ') + m); if (!c) fails++; };
 const sim = new Simulation(), A = sim.army;
-A.reserve.soldier = 12; ok(!sim.formSquad('soldier', 15, 2), 'moins de 15 hommes : pas d\'escouade, ils restent en réserve');
+A.reserve.soldier = 12; { const s0 = sim.formSquad('soldier', 15, 2); ok(s0 && s0.n === 12, '(v11.1) 12 hommes suffisent : plus d\'effectif minimum'); A.disband(s0); }
 A.reserve.soldier = 45; const a = sim.formSquad('soldier', 15, 2), b = sim.formSquad('soldier', 15, 1); ok(a && b && a.grade === 'escouade' && a.n === 15, 'escouades de 15');
 ok(!A.canRegroup(a, 'peloton'), `45 hommes : pas encore de peloton (${A.poolFor(a)})`);
 A.reserve.soldier = 5; ok(!A.canRegroup(a, 'peloton'), 'pas assez d\'hommes (35) : fusion impossible');

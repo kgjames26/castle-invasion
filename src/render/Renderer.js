@@ -486,15 +486,17 @@ export class Renderer {
     const hh = this.hh; if (hh) for (const k of hh.hg.skins) hh.cnt[k] = 0;
     const lerpAng = (a, b, k) => { let dd = ((b - a + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI; return a + dd * k; };
     for (const q of this.sim.army.squads) {
+      if (q.type === 'archer') continue;   // troupes d'archers : dessinées avec les archers (renderArchers)
       const U = UNITS[q.type], rig = q.type === 'knight' ? (gold ? R.knightGold : R.knight) : (R[q.type] || R.soldier), horse = q.type === 'cavalry', knight = q.type === 'knight', L = formationLayout(q.form, Math.max(1, q.n), U.size);
       const cx = q.px + (q.x - q.px) * alpha, cz = q.pz + (q.z - q.pz) * alpha, dx = q.x - q.px, dz = q.z - q.pz, mv = dx * dx + dz * dz > 1e-4, fight = q.fight > 0;
       q.rmv = (q.rmv || 0) + ((mv ? 1 : 0) - (q.rmv || 0)) * 0.2;
-      q.rrot = mv ? lerpAng(q.rrot ?? Math.PI, Math.atan2(dx, dz), 0.25) : lerpAng(q.rrot ?? Math.PI, Math.PI, 0.05);   // à l'arrêt : face au nord (zombies)
+      const face = q.face ?? Math.PI; q.rf = lerpAng(q.rf ?? face, face, 0.06); const fa = q.rf - Math.PI, fc = Math.cos(fa), fs = Math.sin(fa);   // (v11.1) la formation pivote peu à peu vers son orientation
+      q.rrot = mv ? lerpAng(q.rrot ?? Math.PI, Math.atan2(dx, dz), 0.25) : lerpAng(q.rrot ?? Math.PI, q.rf, 0.08);   // à l'arrêt : dans le sens choisi (par défaut vers le nord, les zombies)
       const sc = SCALE[q.type] || 2.4, mvs = q.rmv, flash = q.hit > 0, isSel = q.id === sel;
       if (flash) tint.setRGB(1.9, 1.2, 1.2); else if (q.healed > 0) tint.setRGB(1.1, 1.7, 1.15); else if (isSel) tint.setRGB(1.3, 1.3, 1.0); else tint.setRGB(1, 1, 1);
       for (let k = 0; k < q.n; k++) {
         const ph = t * (horse ? 11 : 9) + k * 1.7, ph2 = t * 8 + k * 2.3, sw = Math.sin(ph) * (horse ? 0.8 : 0.75) * mvs;
-        d.position.set(cx + L.xs[k], Math.abs(Math.sin(ph)) * (horse ? 0.1 : 0.06) * mvs * sc, cz + L.zs[k]); d.scale.set(sc, sc, sc); d.rotation.set(0, q.rrot, 0); d.updateMatrix();
+        d.position.set(cx + L.xs[k] * fc + L.zs[k] * fs, Math.abs(Math.sin(ph)) * (horse ? 0.1 : 0.06) * mvs * sc, cz - L.xs[k] * fs + L.zs[k] * fc); d.scale.set(sc, sc, sc); d.rotation.set(0, q.rrot, 0); d.updateMatrix();
         if (horse && hh) {
           const hg = hh.hg, spd = Math.hypot(dx, dz), clip = mv ? (spd > 0.22 ? 'gallop' : 'walk') : 'idle', [c0, cn] = hg.clips[clip], cps = clip === 'gallop' ? 1.8 : clip === 'walk' ? 1.0 : 0.4;
           const fr = ((t * cps + q.id * 0.31 + k * 0.173) % 1 + 1) % 1, an = c0 + fr * cn, skin = hg.skins[(q.id * 5 + 3) % hg.skins.length], im = hh.meshes[skin], n = hh.cnt[skin]++;
@@ -727,7 +729,7 @@ export class Renderer {
       im.anim = new THREE.InstancedBufferAttribute(new Float32Array(CC), 1); im.fade = new THREE.InstancedBufferAttribute(new Float32Array(CC), 1); g.setAttribute('aAnim', im.anim); g.setAttribute('aFade', im.fade); this.scene.add(im); return im;
     }); this.zcCount = new Int32Array(this.zc.length);
     this.zTint = ZOMBIES.map(z => new THREE.Color(0xffffff).lerp(new THREE.Color(z.color), 0.62).multiplyScalar(1.45));   // (v8.0) plus clairs : on distingue les types sur le champ de bataille   // types plus reconnaissables
-    const mk = geo => { const im = new THREE.InstancedMesh(geo, ch.archerMat, SECTORS * ARCHER_SLOTS + 150); im.frustumCulled = false; im.count = 0; this.scene.add(im); return im; };
+    const mk = geo => { const im = new THREE.InstancedMesh(geo, ch.archerMat, SECTORS * ARCHER_SLOTS + 650); im.frustumCulled = false; im.count = 0; this.scene.add(im); return im; };
     this.ab = mk(ch.archer.body); this.abow = mk(ch.archer.bow); this.aMesh.visible = false;
     ch.archer.body.computeBoundingBox(); this.archerBB = ch.archer.body.boundingBox.clone(); this.aGear = null; this.aGearTier = -1;
     this.vMesh.geometry = ch.villagerGeo; this.vMesh.material = ch.villagerMat;
@@ -882,7 +884,7 @@ export class Renderer {
     if (tier >= 3) { B(0.5, 0.95, 0.05, tier >= 4 ? 0x7a1f6a : 0x2f5f3a, 0, -1.05, -0.2); B(0.52, 0.06, 0.06, G, 0, -1.5, -0.2); }
     if (tier >= 4) B(0.06, 0.3, 0.3, G, 0, 0.12, -0.02);
     if (!list.length) return null;
-    const m = new THREE.InstancedMesh(mergeGeometries(list, false), this.chars.archerMat, SECTORS * ARCHER_SLOTS + 150); m.frustumCulled = false; m.count = 0; this.scene.add(m); this.aGear = m; return m;
+    const m = new THREE.InstancedMesh(mergeGeometries(list, false), this.chars.archerMat, SECTORS * ARCHER_SLOTS + 650); m.frustumCulled = false; m.count = 0; this.scene.add(m); this.aGear = m; return m;
   }
   renderArchers(alpha) {
     const sim = this.sim, d = this.dummy, W = sim.army.walkers; let ai = 0, k = 0; const slot = { x: 0, z: 0 };
@@ -892,6 +894,10 @@ export class Renderer {
       d.position.set(p.x, p.y + bob, p.z); d.scale.set(ASC, ASC, ASC); d.rotation.set(0, p.rot, 0); d.updateMatrix(); spots.push([p.x, p.y, p.z]);
       this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); if (gear) gear.setMatrixAt(ai, d.matrix); ai++;
     } }
+    // (v11.1) troupes d'archers sur le terrain : même modèle, disposés selon la formation et l'orientation
+    for (const q of sim.army.squads) { if (q.type !== 'archer') continue; const L = formationLayout(q.form, Math.max(1, q.n), 1), cx = q.px + (q.x - q.px) * alpha, cz = q.pz + (q.z - q.pz) * alpha, dx = q.x - q.px, dz = q.z - q.pz, mv = dx * dx + dz * dz > 1e-4;
+      const face = q.face ?? Math.PI; q.rf = q.rf == null ? face : q.rf + ((((face - q.rf + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) - Math.PI) * 0.06; const fa = q.rf - Math.PI, fc = Math.cos(fa), fs = Math.sin(fa), rot = mv ? Math.atan2(dx, dz) : q.rf;
+      for (let k = 0; k < q.n && ai < this.ab.instanceMatrix.count - 1; k++) { d.position.set(cx + L.xs[k] * fc + L.zs[k] * fs, mv ? Math.abs(Math.sin(this.clock * 9 + k)) * 0.08 : 0, cz - L.xs[k] * fs + L.zs[k] * fc); d.scale.set(ASC, ASC, ASC); d.rotation.set(0, rot, 0); d.updateMatrix(); this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); if (gear) gear.setMatrixAt(ai, d.matrix); ai++; } }
     this.renderWalkers(alpha, 'archer', (x, z, rot, mv) => { d.position.set(x, mv ? Math.abs(Math.sin(this.clock * 9 + ai)) * 0.08 : 0, z); d.scale.set(ASC, ASC, ASC); d.rotation.set(0, rot, 0); d.updateMatrix(); this.ab.setMatrixAt(ai, d.matrix); this.abow.setMatrixAt(ai, d.matrix); if (gear) gear.setMatrixAt(ai, d.matrix); ai++; });
     // archers projetés du chemin de ronde par un golem : chute en vrille vers la cour, puis restent au sol (morts) ou se relèvent
     for (const f of sim.fallers || []) {

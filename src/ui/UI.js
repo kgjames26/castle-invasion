@@ -157,9 +157,17 @@ export class UI {
     // ordre en attente (choisi dans la bulle ou la fiche) : ce toucher est la destination
     if (this.order) {
       const o = this.order, q = sim.squad(o.id); if (!q) { this.endOrder(); return; }
-      if (o.kind === 'sortie') { if (z >= SQUAD.sortieZ[0] - 6 && z <= SQUAD.sortieZ[1] + 4) { sim.squadSortie(o.id, x, z); this.rd.orderPing(x, z, true); this.toast(`⚔ ${UNITS[q.type].name} ×${q.n} : sortie !`, 'warn'); this.endOrder(); this.refresh(true); } else this.toast('⚠ Touche le champ de bataille, devant la muraille', 'warn'); return; }
+      const grp = sim.army.groupOf(q);
+      if (grp) {   // (v11.1) un groupe : chaque troupe prend sa place tactique autour du point touché
+        if (o.kind === 'sortie' && !(z >= SQUAD.sortieZ[0] - 6 && z <= SQUAD.sortieZ[1] + 4)) { this.toast('⚠ Touche le champ de bataille, devant la muraille', 'warn'); return; }
+        sim.army.orderGroup(grp, x, z, o.kind === 'sortie'); this.rd.orderPing(x, z, o.kind === 'sortie'); this.toast(o.kind === 'sortie' ? `⚔ Le groupe attaque : ${this.groupLabel(grp)}` : `📍 Le groupe se met en place : ${this.groupLabel(grp)}`, o.kind === 'sortie' ? 'warn' : 'info'); this.endOrder(); this.refresh(true); return;
+      }
+      if (o.kind === 'sortie') { if (z >= SQUAD.sortieZ[0] - 6 && z <= SQUAD.sortieZ[1] + 4) { q.stance = 'charge'; sim.squadSortie(o.id, x, z); this.rd.orderPing(x, z, true); this.toast(`⚔ ${UNITS[q.type].name} ×${q.n} : sortie !`, 'warn'); this.endOrder(); this.refresh(true); } else this.toast('⚠ Touche le champ de bataille, devant la muraille', 'warn'); return; }
       this.orderSquad(o.id, x, z); this.endOrder(); return;
     }
+    if (near && this.msel) { const M = this.msel; M.ids.has(near) ? M.ids.delete(near) : M.ids.add(near); this.renderMulti(); return; }   // sélection en cours : toucher une troupe l'ajoute ou la retire
+    if (near && this.dblTap(near)) return;   // double toucher : toutes les troupes du même type
+    if (this.msel) this.setMulti([]);
     if (this.card?.kind === 'squad' && near && near !== this.card.id) { this.openSquad(near); return; }
     const s = this.pickStruct(x, z);
     if (s) { this.openCard({ kind: 'struct', id: s.id }); return; }
@@ -276,6 +284,7 @@ export class UI {
   // ——— commandes ———
   act(a) {
     const [v, x, y] = a.split(':'), sim = this.sim, s = this.sel;
+    if (this.armyAct(v, x)) { this.html.sheet = ''; this.html.card = ''; return; }   // (v11.1) groupes, fusions, séparations, orientation
     switch (v) {
       case 'sheet': this.openSheet(x, y); break;
       case 'x': this.extrasAct(x, y); break;   // systèmes v4.0 (ExtrasUI.js)
@@ -325,7 +334,7 @@ export class UI {
       case 'sqorders': { const id = this.selSq; this.openSheet('army'); this.nav.army = 'sq.' + id; this.pickSquad(id); break; }
       case 'sqsee': { const q = sim.squad(this.selSq); if (q) { this.closeSheet(); this.cam.focusOn(q.x, q.z); this.openSquad(q.id); } break; }
       case 'sq': this.pickSquad(+x); break;
-      case 'newsq': { const g = y || 'escouade', q = sim.formSquad(x, GRADES[g].size, 2, g); if (q) { this.pickSquad(q.id); this.nav.army = 'sq.' + q.id; this.toast(`${UNITS[x].ico} ${GRADES[g].name} formé${g === 'escouade' ? 'e' : ''} : choisis maintenant où l'envoyer`, 'ok'); } break; }
+      case 'newsq': { const n = GRADES[y] ? GRADES[y].size : +y || 1, q = sim.army.take(x, n); if (q) { this.pickSquad(q.id); this.nav.army = 'sq.' + q.id; this.toast(`${UNITS[x].ico} ${this.unitName(q)} formé${q.grade === 'escouade' ? 'e' : ''} (${q.n}) : choisis maintenant quoi attaquer`, 'ok'); } break; }
       case 'form': sim.squadForm(this.selSq, x); break;
       case 'stance': sim.squadStance(this.selSq, x); break;
       case 'gar': { sim.squadGarrison(this.selSq, +x); this.endOrder(); const q = sim.squad(this.selSq); if (q) this.toast(`🛡 ${UNITS[q.type].name} ×${q.n} : rentre garder ${SECTOR_AT[+x]}`, 'info'); break; }
@@ -532,7 +541,7 @@ export class UI {
   }
   tick(dt) {
     this.watchSquads();
-    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.watchRepairs(); this.refresh(false); this.drawMinimap(); this.renderEvent(false); this.tickTuto(); this.tickQuest(); this.renderAdvice(); this.renderRoster(); this.watchHurt(); if ((this.achT = (this.achT || 0) + 1) % 10 === 0) this.checkAch(); }
+    this.acc += dt; if (this.acc > 0.2) { this.acc = 0; this.updateRange(); this.watchRepairs(); this.refresh(false); this.drawMinimap(); this.renderEvent(false); this.tickTuto(); this.tickQuest(); this.renderAdvice(); this.renderRoster(); this.watchHurt(); if (this.msel) this.renderMulti(); if ((this.achT = (this.achT || 0) + 1) % 10 === 0) this.checkAch(); }
     const vw = innerWidth, vh = innerHeight;
     for (let s = 0; s < SECTORS; s++) {
       const p = this.rd.project(s * 40 + 20, 8, 143 + wallOff(s * 40 + 20)), b = this.badges[s];
@@ -564,10 +573,10 @@ export class UI {
   squadTags(vw, vh) {
     const sim = this.sim, pool = this.sqPool || (this.sqPool = []); let k = 0;
     if (!document.body.classList.contains('fpv')) for (const q of sim.army.squads) { if (!q.n || k >= 24) continue; const p = this.rd.project(q.x, 3.6, q.z); if (!p.vis || p.x < 10 || p.x > vw - 10 || p.y < 100 || p.y > vh - 100) continue;
-      let e = pool[k]; if (!e) { e = pool[k] = el('button', 'sqtag'); e.addEventListener('click', ev => { ev.stopPropagation(); const id = +e.dataset.id; if (sim.squad(id)) this.openCard({ kind: 'squad', id }); }); document.getElementById('app').appendChild(e); }
+      let e = pool[k]; if (!e) { e = pool[k] = el('button', 'sqtag'); e.addEventListener('click', ev => { ev.stopPropagation(); const id = +e.dataset.id; if (!sim.squad(id)) return; if (this.msel) { const M = this.msel; M.ids.has(id) ? M.ids.delete(id) : M.ids.add(id); this.renderMulti(); return; } if (this.dblTap(id)) return; this.openSquad(id); }); document.getElementById('app').appendChild(e); }
       const hp = Math.max(0, Math.min(1, q.hp / Math.max(1, q.n * sim.army.unitHp(q.type)))), txt = `${q.num}|${UNITS[q.type].ico} ${q.n}${this.followId === q.id ? ' 🎥' : ''}`;
       e.dataset.id = q.id; if (e.dataset.t !== txt) { e.dataset.t = txt; e.style.background = sqColor(q); e.innerHTML = `<b class="tn">${q.num}</b><span>${UNITS[q.type].ico} ${q.n}${this.followId === q.id ? ' 🎥' : ''}</span><i style="width:${Math.round(hp * 100)}%"></i>`; } else e.lastChild.style.width = Math.round(hp * 100) + '%';
-      e.classList.toggle('sel', this.card?.kind === 'squad' && this.card.id === q.id); e.style.display = ''; e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; k++; }
+      e.classList.toggle('sel', this.card?.kind === 'squad' && this.card.id === q.id); e.classList.toggle('msel', !!this.msel?.ids.has(q.id)); e.classList.toggle('grp', !!q.gid); e.style.display = ''; e.style.left = p.x + 'px'; e.style.top = p.y + 'px'; k++; }
     for (let j = k; j < pool.length; j++) pool[j].style.display = 'none';
   }
   // barres de vie au-dessus des colosses, golems et boss (+ grande barre du boss en haut de l'écran)
@@ -861,7 +870,10 @@ export class UI {
   squadsHtml() {
     const army = this.sim.army; let h = '';
     if (!army.squads.length) h += '<div class="hint">Aucune escouade. Recrute des soldats (Recruter), puis forme une escouade avec ta réserve.</div>';
-    h += '<div class="blist">' + army.squads.map(q => {
+    const shownG = new Set();
+    h += '<div class="blist">' + army.squads.filter(q => { const g = army.groupOf(q); if (!g) return true; if (shownG.has(g.id)) return false; shownG.add(g.id); return true; }).map(q => {
+      const G = army.groupOf(q); if (G) { const M = army.members(G), tot = M.reduce((a, o) => a + o.n, 0), hp = M.reduce((a, o) => a + o.hp, 0) / Math.max(1, M.reduce((a, o) => a + o.n * army.unitHp(o.type), 0));
+        return `<button class="brow sqrow grow${hp < 0.4 ? ' hurt' : ''}" data-a="nav:army:sq.${q.id}">${this.numChip(q)}<span class="ci">🎌</span><div class="bt"><b>Groupe · ${tot} hommes</b> <span class="lvl">${this.groupLabel(G)} · ${this.squadWhere(q).txt}</span><div class="bar"><i style="width:${Math.round(hp * 100)}%"></i></div></div><span class="go">›</span></button>`; }
       const U = UNITS[q.type], st = q.mode === 'field' ? (q.fight > 0 ? '⚔ au combat' : q.way.length ? '🚶 en route vers le front' : '⚔ sur le champ de bataille') : (q.way.length ? '🚶 en route' : q.custom ? '🛡 à son poste' : `🛡 garde ${SECTOR_AT[q.sector]}`), r = army.hpRatio(q);
       return `<button class="brow sqrow${r < 0.4 ? ' hurt' : ''}" data-a="nav:army:sq.${q.id}">${this.numChip(q)}<span class="ci">${U.ico}</span><div class="bt"><b>${this.unitName(q)}</b> <small class="cnt">${q.n}/${army.maxN(q.type, q)}</small> <span class="lvl">${this.squadWhere(q).txt}</span> <span class="tag ${q.auto ? 'ai' : 'man'}">${q.auto ? '⚜ autonome' : '📯 tes ordres'}</span><div class="bar"><i style="width:${Math.round(r * 100)}%"></i></div></div><span class="go">›</span></button>`;
     }).join('') + '</div>';
@@ -872,9 +884,9 @@ export class UI {
   }
   newSquadHtml() {
     const army = this.sim.army, room = army.squads.length < SQUAD.maxSquads;
-    return '<div class="hint small">Escouade <b>15</b> hommes · peloton <b>50</b> · escadron <b>150</b>. Avec moins de 15 hommes d\'une catégorie, ils restent en réserve.</div><div class="blist">' + ['soldier', 'heavy', 'knight', 'cavalry'].map(t => {
-      const U = UNITS[t], n = army.reserve[t] || 0;
-      return `<div class="brow${n >= 15 ? '' : ' off'}"><span class="ci">${U.ico}</span><div class="bt"><b>${U.name}s</b> <span class="lvl">${n} en réserve</span><small>${n >= 15 ? 'choisis la taille de la troupe' : `encore ${15 - n} pour une escouade`}</small></div>${['escouade', 'peloton', 'escadron'].map(g => this.btn(GRADES[g].name, String(GRADES[g].size), `newsq:${t}:${g}`, !room || n < GRADES[g].size, 'act slim' + (g === 'escouade' ? '' : ' sec'))).join('')}</div>`;
+    return '<div class="hint small">Prends <b>autant d\'hommes que tu veux</b> dans la réserve (jusqu\'à 150 par troupe). Sur la carte : <b>appui long + glisser</b> pour entourer des troupes, <b>double toucher</b> pour tout un type, puis « Fusionner ».</div><div class="blist">' + ['soldier', 'heavy', 'knight', 'cavalry', 'archer'].map(t => {
+      const U = UNITS[t], n = army.reserve[t] || 0, opts = [...new Set([5, 15, 50, n].filter(k => k >= 1 && k <= n).map(k => Math.min(k, 150)))].sort((a, b) => a - b);
+      return `<div class="brow${n ? '' : ' off'}"><span class="ci">${U.ico}</span><div class="bt"><b>${U.name}s</b> <span class="lvl">${n} en réserve</span><small>${n ? 'combien en prendre ?' : 'recrute-en d\'abord'}</small></div>${opts.map(k => this.btn(k === n ? `Tous (${k})` : `${k}`, k === n ? '' : GRADES[k === 50 ? 'peloton' : 'escouade'].name.toLowerCase(), `newsq:${t}:${k}`, !room, 'act slim' + (k === n ? '' : ' sec'))).join('')}</div>`;
     }).join('') + '</div>';
   }
   // ordres d'UNE escouade, groupés par intention : OÙ (combattre, garder un secteur, rentrer, déplacer) · COMMENT (formation, posture) · EFFECTIF
@@ -885,15 +897,14 @@ export class UI {
       <div class="hint small">${field ? '⚔ Sur le champ de bataille' : q.custom ? '🛡 À son poste' : `🛡 Garde ${SECTOR_AT[q.sector]}`}${q.way.length ? ' · en marche' : ''}</div>`;
     h += q.auto ? '<div class="aibox">⚜ <b>Autonome</b> : elle choisit seule son poste, ses sorties, sa formation. Donne un ordre ci-dessous pour reprendre la main.</div>'
       : `<div class="aibox man">📯 <b>Elle suit tes ordres.</b> ${this.btn('⚜ La rendre autonome', 'elle se débrouillera seule', 'sqauto', false, 'act slim')}</div>`;
-    h += `<div class="tgrp">1 · Où l'envoyer ?</div><div class="bigacts">${this.bigAct('⚔', 'Combattre dehors', 'puis touche le champ de bataille', 'sqgo:sortie', false)}${field ? this.bigAct('↩', 'Rentrer', 'retour derrière la muraille', 'gar:' + q.sector) : ''}${this.bigAct('📍', 'Placer à la main', 'puis touche la carte', 'sqgo:move')}</div>`;
-    h += `<div class="tgrp">2 · Formation et posture</div><div class="hint small">Toutes les formations sont possibles, quelle que soit la taille (escouade, peloton ou escadron) : un gros effectif prend simplement plus de rangs.</div><div class="fgrid">${Object.keys(FORMATIONS).map(f => `<button class="fbtn ${q.form === f ? 'on' : ''}" data-a="form:${f}"><b>${FORMATIONS[f].ico}</b>${FORMATIONS[f].name}</button>`).join('')}</div><div class="hint small">${F.info}</div>
+    h += `<div class="tgrp">1 · Où l'envoyer ?</div><div class="bigacts">${this.bigAct('⚔', 'Attaquer', 'puis touche ce qu\'il faut attaquer (formation : plus bas)', 'sqgo:sortie', false)}${field ? this.bigAct('↩', 'Rentrer', 'retour derrière la muraille', 'gar:' + q.sector) : ''}${this.bigAct('📍', 'Placer à la main', 'puis touche la carte', 'sqgo:move')}</div>`;
+    const inG = !!army.groupOf(q);
+    h += `<div class="tgrp">2 · ${inG ? 'Posture' : 'Formation et posture'}</div>${inG ? '' : `<div class="hint small">Toutes les formations sont possibles, quelle que soit la taille (escouade, peloton ou escadron) : un gros effectif prend simplement plus de rangs.</div><div class="fgrid">${Object.keys(FORMATIONS).map(f => `<button class="fbtn ${q.form === f ? 'on' : ''}" data-a="form:${f}"><b>${FORMATIONS[f].ico}</b>${FORMATIONS[f].name}</button>`).join('')}</div><div class="hint small">${F.info}</div>`}
       <div class="row">${this.btn('🛡 Tenir la position', 'défend sa place', 'stance:hold', false, 'act slim' + (q.stance === 'charge' ? ' sec' : ''))}${this.btn('🔥 Charger', 'fonce sur les zombies', 'stance:charge', false, 'act slim' + (q.stance === 'charge' ? '' : ' sec'))}</div>`;
-    const pool = army.poolFor(q), g = q.grade, cat = U.name.toLowerCase() + 's';
-    h += `<div class="tgrp">3 · Organisation</div><div class="hint small">${pool} ${cat} disponibles (troupes en garnison + réserve). Escouade 15 · peloton 50 · escadron 150.</div><div class="row wrapr">`
-      + (g === 'escouade' ? this.btn('⬆ Former un peloton', army.canRegroup(q, 'peloton') ? 'fusionne avec les voisins (50)' : `il faut 50 ${cat}`, 'regroup:peloton', !army.canRegroup(q, 'peloton'), 'act slim') : '')
-      + (g !== 'escadron' ? this.btn('⬆⬆ Former un escadron', army.canRegroup(q, 'escadron') ? 'fusionne (150)' : `il faut 150 ${cat}`, 'regroup:escadron', !army.canRegroup(q, 'escadron'), 'act slim' + (g === 'escouade' ? ' sec' : '')) : '')
-      + (g === 'escadron' ? this.btn('⬇ Séparer en pelotons', '3 × 50', 'split:peloton', q.n < 65, 'act slim sec') : '')
-      + (g !== 'escouade' ? this.btn('⬇ Séparer en escouades', 'groupes de 15 · le reste en réserve', 'split:escouade', q.n < 30, 'act slim sec') : '') + '</div>';
+    const grp = army.groupOf(q);
+    if (grp) h += this.groupHtml(grp, false);
+    h += `<div class="tgrp">3 · Séparer ${U.name.toLowerCase()}s (${q.n})</div><div class="row wrapr">${this.btn('½ En deux', `${Math.floor(q.n / 2)} + ${Math.ceil(q.n / 2)}`, 'splitf:half', q.n < 2, 'act slim sec')}${q.n > 15 ? this.btn('Escouades', 'paquets de 15', 'splitf:escouade', false, 'act slim sec') : ''}${q.n > 50 ? this.btn('Pelotons', 'paquets de 50', 'splitf:peloton', false, 'act slim sec') : ''}${q.n > 5 ? this.btn('Détacher 5', 'éclaireurs', 'splitf:5', false, 'act slim sec') : ''}</div>`;
+    if (!grp) { const others = this.mergeTargets(q); if (others.length) h += `<div class="tgrp">Fusionner avec…</div><div class="hint small">Même type : une seule troupe (jusqu'à 150). Types différents : un groupe disposé en tacticien.</div><div class="mlist">${others.map(o => `<button class="chipb" data-a="mergeto:${o.id}">${o.label}</button>`).join('')}</div>`; }
     h += `<div class="tgrp">4 · Effectif</div><div class="row">${this.btn('➕ Compléter', `jusqu'à ${mx} · réserve ${army.reserve[q.type]}`, 'reinf', q.n >= mx || army.reserve[q.type] <= 0, 'act slim')}${this.btn('↩ Dissoudre', 'retour en réserve', 'disb', false, 'act slim sec')}${this.btn('👁 Voir', 'sur la carte', 'sqsee', false, 'act slim sec')}</div>`;
     return h;
   }
@@ -906,8 +917,8 @@ export class UI {
       <div class="hint small where">📍 ${W.txt}</div>
       <div class="hpline"><div class="bar big"><i style="width:${Math.min(100, army.hpRatio(q) * 100)}%"></i></div><span>${q.n}/${mx}</span></div>
       <div class="sqnav">${many ? '<button class="chipb" data-a="sqcyc:-1" title="Troupe précédente (Maj+Tab)">‹</button>' : ''}<button class="chipb${fol ? ' on' : ''}" data-a="sqfollow" title="La caméra suit la troupe (F)">🎥 ${fol ? 'Suivie' : 'Suivre'}</button>${many ? '<button class="chipb" data-a="sqcyc:1" title="Troupe suivante (Tab)">›</button>' : ''}</div>
-      <div class="bigacts">${this.bigAct('⚔', 'Combattre', 'touche ensuite le champ', 'sqgo:sortie')}${field ? this.bigAct('↩', 'Rentrer', 'à son poste', 'gar:' + q.sector) : this.bigAct('📍', 'Déplacer', 'touche ensuite la carte', 'sqgo:move')}${this.bigAct('⚙', 'Ordres', 'organisation, effectif…', 'sqorders')}</div>
-      <div class="fgrid mini">${Object.keys(FORMATIONS).map(f => `<button class="fbtn ${q.form === f ? 'on' : ''}" data-a="form:${f}" title="${FORMATIONS[f].info}"><b>${FORMATIONS[f].ico}</b>${FORMATIONS[f].name}</button>`).join('')}</div>`;
+      <div class="bigacts">${this.bigAct('⚔', army.groupOf(q) ? 'Attaquer' : 'Combattre', 'touche ensuite la cible', 'sqgo:sortie')}${field ? this.bigAct('↩', 'Rentrer', 'à son poste', 'gar:' + q.sector) : this.bigAct('📍', 'Déplacer', 'touche ensuite la carte', 'sqgo:move')}${this.bigAct('⚙', 'Ordres', 'organisation, effectif…', 'sqorders')}</div>
+      ${army.groupOf(q) ? this.groupHtml(army.groupOf(q), true) : `<div class="fgrid mini">${Object.keys(FORMATIONS).map(f => `<button class="fbtn ${q.form === f ? 'on' : ''}" data-a="form:${f}" title="${FORMATIONS[f].info}"><b>${FORMATIONS[f].ico}</b>${FORMATIONS[f].name}</button>`).join('')}</div>`}`;
   }
   // ⭐ Rangs : où et comment faire monter chaque type d'unité ; ce que change le rang suivant
   ranksHtml() {

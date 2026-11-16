@@ -2,7 +2,7 @@
 // files d'entraînement. Les escouades agissent comme une seule entité : points de vie en réserve commune, membres dessinés par formation.
 import { INFECTION, GRADES, gradeFor } from '../content/medieval.js';
 import { STAIR_OFF, SECTORS, SECTOR_W, ARCHER_SLOTS, ARCHER_Z, GARRISON_Z, GATE_XS, WALL_Z0, WALL_Z1, WALK_H, PLAZA, sectorOfX, wallOff } from './constants.js';
-import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN, RANKS, UPGRADES, INFIRMARY } from '../content/medieval.js';
+import { UNITS, UNIT_ORDER, FORMATIONS, SQUAD, TRAIN, RANKS, UPGRADES, INFIRMARY, ZOMBIES } from '../content/medieval.js';
 
 const tmp = new Int32Array(1024), tmp2 = new Int32Array(1024);
 export const MOVE_Z0 = WALL_Z1 + 4, MOVE_Z1 = 208;          // zone où l'on peut poster une escouade à l'intérieur (cour + placette)
@@ -23,6 +23,32 @@ export function archerPose(s, k, prog) {
 // emplacement d'attente de la i-ème recrue autour du point de ralliement
 export function rallySlot(r, i, out) { const col = i % 10, row = (i / 10) | 0; out.x = Math.min(196, Math.max(4, r.x + (col - 4.5) * 2.4)); out.z = r.z + row * 2.4 - 2; return out; }
 export const TRAIN_BUILDINGS = ['barracks', 'stable', 'range'];
+export const SQUAD_CAP = 150;   // (v11.1) une troupe d'un seul type : jusqu'à 150 hommes ; au-delà, plusieurs troupes réunies en GROUPE
+// (v11.1) disposition « en tacticien » d'un groupe mêlé, dans le repère du groupe (x latéral, z profondeur ; z négatif = devant) :
+// infanterie lourde au centre du front, chevaliers puis fantassins de part et d'autre, cavaliers sur les ailes, archers derrière.
+const ROLE = { heavy: 'front', knight: 'front', soldier: 'front', cavalry: 'wing', archer: 'rear' }, FRONT_ORDER = { heavy: 0, knight: 1, soldier: 2 };
+export function tacticalLayout(members) {
+  const ext = q => { const L = formationLayout(q.form, Math.max(1, q.n), UNITS[q.type].size); let w = 0, d = 0; for (let k = 0; k < L.xs.length; k++) { w = Math.max(w, Math.abs(L.xs[k])); d = Math.max(d, Math.abs(L.zs[k])); } return { w: w + 1.2, d: d + 1.2 }; };
+  const out = [], gap = 2.5;
+  const row = (list, z) => { const es = list.map(ext); let w = -gap; for (const e of es) w += 2 * e.w + gap; let x = -w / 2;   // côte à côte, centrées
+    list.forEach((q, i) => { out.push({ q, x: x + es[i].w, z }); x += 2 * es[i].w + gap; }); return { w, d: Math.max(0, ...es.map(e => e.d)) }; };
+  const front = members.filter(q => ROLE[q.type] === 'front').sort((a, b) => FRONT_ORDER[a.type] - FRONT_ORDER[b.type]);
+  const mid = []; front.forEach((q, i) => i % 2 ? mid.unshift(q) : mid.push(q));   // le plus lourd au milieu, les autres alternent à gauche et à droite
+  const F = mid.length ? row(mid, 0) : { w: 0, d: 0 };
+  const rear = members.filter(q => ROLE[q.type] === 'rear'); if (rear.length) { const dr = Math.max(...rear.map(q => ext(q).d)); row(rear, F.d + gap + dr); }
+  const wings = members.filter(q => ROLE[q.type] === 'wing'); let lx = -F.w / 2 - gap, rx = F.w / 2 + gap;
+  wings.forEach((q, i) => { const e = ext(q); if (i % 2 === 0) { out.push({ q, x: lx - e.w, z: F.d * 0.3 }); lx -= 2 * e.w + gap; } else { out.push({ q, x: rx + e.w, z: F.d * 0.3 }); rx += 2 * e.w + gap; } });
+  return out;
+}
+// tourne un décalage local (x, z) du repère « face au nord » vers l'orientation face (atan2(dx, dz) ; nord = π)
+export function rotLocal(x, z, face) { const a = face - Math.PI, c = Math.cos(a), s = Math.sin(a); return [x * c + z * s, -x * s + z * c]; }
+// danger qu'un zombie fait peser sur le royaume : casseurs de pierre, géants, grimpeurs, kamikazes, ceux qui frappent déjà la muraille, et surtout ceux qui sont entrés
+export function threatOf(Z, i) {
+  const t = Z.type[i], T = ZOMBIES[t], wz = WALL_Z0 + wallOff(Z.x[i]), gapZ = wz - Z.z[i];
+  const base = 1 + (T.wall || 0) / 8 + (t >= 5 && t <= 7 ? 3 : 0) + (t === 8 ? 2 : t === 9 ? 2.5 : t === 10 ? 3.5 : 0);
+  const near = gapZ < -4 ? 4 : 1 + Math.max(0, 50 - gapZ) / 22;
+  return base * near * (Z.state[i] === 1 ? 1.5 : 1);
+}
 
 // ——— formations : décalages des membres autour du centre (z négatif = devant, vers le nord) ———
 const cache = new Map();
@@ -48,7 +74,7 @@ export class Army {
     this.reserve = { archer: 0, soldier: 0, heavy: 0, knight: 0, cavalry: 0 };
     this.archers = Array.from({ length: SECTORS }, () => ({ n: 0, cd: new Float32Array(ARCHER_SLOTS), prog: new Float32Array(ARCHER_SLOTS).fill(1e9) }));
     this.rally = { x: PLAZA.x, z: PLAZA.z }; this.walkers = []; this.gate = GATE_XS.map(() => 0); this.gateT = GATE_XS.map(() => 0); this.gateReq = GATE_XS.map(() => 0);
-    this.squads = []; this.nextId = 1; this.outside = []; this.autoArchers = true;   // IA : archers placés d'eux-mêmes sur les remparts
+    this.squads = []; this.nextId = 1; this.outside = []; this.autoArchers = true; this.groups = []; this.nextGid = 1;   // IA : archers placés d'eux-mêmes sur les remparts
     this.queues = { barracks: [], stable: [], range: [] };
   }
   // ——— population ———
@@ -140,11 +166,81 @@ export class Army {
   maxN(type, q) { return GRADES[q && q.grade || 'escouade'].size; }   // effectif maximal selon le grade (escouade 15, peloton 50, escadron 150)
   formSquad(type, size, sector = 2, grade = null) {
     const U = UNITS[type]; if (!U.squad || this.squads.length >= SQUAD.maxSquads) return null;
-    const g0 = grade || gradeFor(size), n = Math.min(size, GRADES[g0].size, this.reserve[type]); if (n < GRADES[g0].size) return null;   // une troupe ne se forme qu'au complet (escouade 15, peloton 50, escadron 150)
-    this.reserve[type] -= n;
+    const n = Math.min(size, grade ? GRADES[grade].size : SQUAD_CAP, this.reserve[type] | 0); if (n < 1) return null;   // (v11.1) plus d'effectif minimum : on prend ce qu'on veut
+    const g0 = gradeFor(n); this.reserve[type] -= n;
     const q = { id: this.nextId++, type, n, grade: g0, hp: n * U.hp, form: U.form, mode: 'garrison', sector, x: 0, z: 0, px: 0, pz: 0, postX: 0, postZ: 0, tx: 0, tz: 0, way: [], stance: 'hold', auto: true, atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: true, rad: 3 };
     this.squads.push(q); this.layoutPosts(); return q;
   }
+  // ——— (v11.1) fusions libres, groupes mêlés, séparations ———
+  // former une troupe de n hommes pris dans la réserve (au point de ralliement), quel que soit leur nombre
+  take(type, n) {
+    const q = this.formSquad(type, Math.min(n, SQUAD_CAP)); if (!q) return null;
+    q.auto = false; q.fresh = false; q.x = q.px = this.rally.x; q.z = q.pz = this.rally.z; this.layoutPosts(); this.route(q, q.postX, q.postZ); return q;
+  }
+  groupOf(q) { return q && q.gid ? this.groups.find(g => g.id === q.gid) || null : null; }
+  members(g) { return this.squads.filter(q => q.gid === g.id && q.n > 0); }
+  newGroup(list) {
+    const g = { id: this.nextGid++, face: Math.PI, form: null }; this.groups.push(g);
+    for (const q of list) { q.gid = g.id; q.auto = false; } return g;
+  }
+  // fusionner une sélection (troupes + hommes de la réserve) : un type = une troupe (jusqu'à 150, le surplus forme une autre troupe) ;
+  // plusieurs types (ou plusieurs troupes) = un GROUPE, disposé en tacticien
+  merge(qs, res = {}) {
+    qs = [...new Set(qs)].filter(q => q && q.n > 0 && this.squads.includes(q));
+    for (const t in res) { let k = Math.min(res[t] | 0, this.reserve[t] | 0); while (k > 0) { const q = this.take(t, k); if (!q) break; k -= q.n; qs.push(q); } }
+    if (!qs.length) return null;
+    const anchor = this.centerOf(qs), byT = {}, out = [];
+    for (const q of qs) (byT[q.type] ||= []).push(q);
+    for (const t in byT) {
+      const L = byT[t].sort((a, b) => b.n - a.n); let head = L[0]; out.push(head);
+      for (const o of L.slice(1)) {
+        while (o.n > 0) { const room = SQUAD_CAP - head.n; if (room <= 0) { head = o; out.push(o); break; } const k = Math.min(room, o.n), hp = o.hp / o.n; head.n += k; head.hp += k * hp; o.n -= k; o.hp -= k * hp; }
+      }
+    }
+    this.squads = this.squads.filter(q => q.n > 0 && q.hp > 0);
+    for (const q of out) { q.grade = gradeFor(q.n); q.gid = 0; q.auto = false; }
+    this.cleanGroups();
+    let g = null; if (out.length > 1) { g = this.newGroup(out); this.orderGroup(g, anchor.x, anchor.z); }
+    this.layoutPosts(); return { squads: out, group: g };
+  }
+  // fusionner deux troupes / groupes (bouton « Fusionner avec… »)
+  mergeWith(a, b) { const L = q => { const g = this.groupOf(q); return g ? this.members(g) : [q]; }; return this.merge([...L(a), ...L(b)]); }
+  centerOf(list) { let x = 0, z = 0; for (const q of list) { const p = this.destOf(q); x += p.x; z += p.z; } return { x: x / list.length, z: z / list.length }; }
+  destOf(q) { const w = q.way && q.way.length ? q.way[q.way.length - 1] : null; return w ? { x: w.x, z: w.z } : q.mode === 'field' ? { x: q.tx, z: q.tz } : { x: q.postX || q.x, z: q.postZ || q.z }; }
+  // ordre à un groupe : chaque troupe gagne sa place dans la disposition tactique autour du point visé, orientée vers g.face ;
+  // le groupe avance à l'allure du plus lent
+  orderGroup(g, x, z, attack = false) {
+    const M = this.members(g); if (!M.length) return;
+    const face = g.face ?? Math.PI, slow = Math.min(...M.map(q => (UNITS[q.type].speed || 3.4) * FORMATIONS[q.form].speed)), field = z < WALL_Z0 + wallOff(x) - 1;
+    g.ax = x; g.az = z;
+    for (const { q, x: lx, z: lz } of tacticalLayout(M)) {
+      const [ox, oz] = rotLocal(lx, lz, face); let tx = x + ox, tz = z + oz;
+      if (field) tz = Math.min(WALL_Z0 + wallOff(tx) - 2, tz); else tz = Math.max(MOVE_Z0, tz);
+      q.face = face; q.auto = false; q.capSpeed = slow; if (attack) q.stance = 'charge';
+      if (field) this.sortie(q, tx, tz); else this.moveTo(q, tx, tz);
+    }
+  }
+  // orienter une troupe ou son groupe (appui long + flèche) : la formation se replace dans le bon sens
+  rotate(q, face) {
+    const g = this.groupOf(q); if (!g) { q.face = face; return; }
+    g.face = face; const c = g.ax != null ? { x: g.ax, z: g.az } : this.centerOf(this.members(g)); this.orderGroup(g, c.x, c.z);
+  }
+  setGroupForm(g, f) { if (!FORMATIONS[f]) return; g.form = f; for (const q of this.members(g)) q.form = f; const c = g.ax != null ? { x: g.ax, z: g.az } : this.centerOf(this.members(g)); this.orderGroup(g, c.x, c.z); }
+  // séparer un groupe : chaque troupe redevient indépendante
+  dissolve(g) { for (const q of this.members(g)) q.gid = 0; this.groups = this.groups.filter(o => o !== g); }
+  detach(q) { q.gid = 0; this.cleanGroups(); }
+  // séparer une troupe : 'half' (deux moitiés), 'escouade' (paquets de 15), 'peloton' (50), ou un nombre d'hommes à détacher ; les morceaux restent dans le groupe
+  splitFree(q, how) {
+    const hp = q.hp / Math.max(1, q.n), parts = [];
+    if (how === 'half') { if (q.n < 2) return []; parts.push(Math.floor(q.n / 2)); }
+    else if (how === 'escouade' || how === 'peloton') { const sz = GRADES[how].size; let left = q.n; while (left > sz) { parts.push(sz); left -= sz; } }
+    else { const k = Math.min(q.n - 1, how | 0); if (k >= 1) parts.push(k); }
+    const made = [];
+    for (const k of parts) { if (this.squads.length >= SQUAD.maxSquads) break; const o = { ...q, id: this.nextId++, num: 0, n: k, hp: k * hp, way: [], fresh: false, custom: q.custom ? { x: q.custom.x + 6 * (made.length + 1), z: q.custom.z } : null }; o.x += 4 * (made.length + 1); o.grade = gradeFor(k); q.n -= k; q.hp -= k * hp; this.squads.push(o); made.push(o); }
+    q.grade = gradeFor(q.n); this.layoutPosts(); if (q.mode === 'field') made.forEach((o, i) => this.sortie(o, q.tx + 7 * (i + 1), q.tz)); else made.forEach(o => this.route(o, o.postX, o.postZ));
+    return made;
+  }
+  cleanGroups() { this.groups = this.groups.filter(g => { const M = this.members(g); if (M.length < 2) { for (const q of M) q.gid = 0; return false; } return true; }); }
   reinforce(q) { const k = Math.min(this.maxN(q.type, q) - q.n, this.reserve[q.type]); if (k <= 0) return 0; this.reserve[q.type] -= k; q.n += k; q.hp += k * this.unitHp(q.type); return k; }
   // placement avant la vague : l'escouade est posée directement à l'endroit touché (cour = poste ; devant la muraille = sur le champ)
   place(q, x, z) {
@@ -190,7 +286,7 @@ export class Army {
     }
     return { formed, filled, merged };
   }
-  disband(q) { this.reserve[q.type] += q.n; this.squads.splice(this.squads.indexOf(q), 1); this.layoutPosts(); }
+  disband(q) { this.reserve[q.type] += q.n; this.squads.splice(this.squads.indexOf(q), 1); this.cleanGroups(); this.layoutPosts(); }
   setForm(q, f) { if (FORMATIONS[f]) q.form = f; }
   setStance(q, st) { q.stance = st; }
   garrison(q, s) { q.mode = 'garrison'; q.sector = s; q.custom = null; this.layoutPosts(); this.route(q, q.postX, q.postZ); }
@@ -257,8 +353,9 @@ export class Army {
         if (a.prog[k] < 1e8) { const len = archerPose(s, k, a.prog[k]).len; a.prog[k] += ARCHER_SPEED * dt; if (a.prog[k] >= len) a.prog[k] = 1e9; continue; }   // encore en train de monter
         a.cd[k] -= dt; if (a.cd[k] > 0) continue;
         const p = archerPos(s, k), rg = range * nightR, m = hash.query(p.x, p.z, rg, Z.x, Z.z, tmp);
-        let best = -1, bd = Infinity;
-        for (let q = 0; q < m; q++) { const i = tmp[q]; if (Z.hp[i] <= 0 || (assault && Z.turned[i])) continue; const d = (Z.x[i] - p.x) ** 2 + (Z.z[i] - p.z) ** 2; if (d < bd) { bd = d; best = i; } }   // pendant l'assaut, ils restent concentrés sur la vague
+        let best = -1, bd = -Infinity, near = -1, nd = 64;   // (v11.1) le plus dangereux pour le royaume, sauf un zombie tout proche
+        for (let q = 0; q < m; q++) { const i = tmp[q]; if (Z.hp[i] <= 0 || (assault && Z.turned[i])) continue; const d2 = (Z.x[i] - p.x) ** 2 + (Z.z[i] - p.z) ** 2; if (d2 < nd) { nd = d2; near = i; } const sc = threatOf(Z, i) / (1 + Math.sqrt(d2) / 30); if (sc > bd) { bd = sc; best = i; } }   // pendant l'assaut, ils restent concentrés sur la vague
+        if (near >= 0) best = near;
         if (best < 0) { a.cd[k] = 0.25; continue; }
         const fire = eco.up.fireArrows && sim.rng() < UPGRADES.fireArrows.per * eco.up.fireArrows;      // flèche enflammée : le sol prend feu à l'impact
         Z.hit(best, adm * bless * (fire ? 1.25 : 1)); if (sim.arrows.length < 220) sim.arrows.push({ x0: p.x, z0: p.z, x1: Z.x[best], z1: Z.z[best], t: 0, fire });
@@ -280,7 +377,7 @@ export class Army {
     if (ih) for (const q of this.squads) { if (q.mode !== 'garrison' || q.fight > 0 || q.way.length) continue; const mx = q.n * this.unitHp(q.type); if (q.hp < mx) { q.hp = Math.min(mx, q.hp + ih * mx * dt); q.infirm = 0.5; } }
     const before = this.squads.length;
     this.squads = this.squads.filter(q => q.hp > 0);
-    if (this.squads.length !== before) this.layoutPosts();
+    if (this.squads.length !== before) { this.layoutPosts(); this.cleanGroups(); }
     // préparation du tick suivant pour les zombies : escouades à l'extérieur, compteurs de contact remis à zéro
     this.outside.length = 0;
     for (const q of this.squads) { q.attackers = 0; q.cap = Math.ceil(FORMATIONS[q.form].contact * q.n); if (q.z < WALL_Z0 + wallOff(q.x)) this.outside.push(q); }
@@ -289,7 +386,8 @@ export class Army {
     const Z = sim.zombies, hash = sim.hash, U = UNITS[q.type], F = FORMATIONS[q.form];
     q.px = q.x; q.pz = q.z; if (q.hit > 0) q.hit -= dt; if (q.fight > 0) q.fight -= dt; if (q.healed > 0) q.healed -= dt; if (q.infirm > 0) q.infirm -= dt; if (q.swing > 0) q.swing -= dt;
     const L = formationLayout(q.form, Math.max(1, q.n), U.size), rad = L.radius; q.rad = rad;
-    const rk = this.rank(sim, q.type), speed = U.speed * F.speed * rk.speed;
+    const rk = this.rank(sim, q.type), speed = Math.min((U.speed || 3.4) * F.speed * rk.speed, q.way.length && q.capSpeed ? q.capSpeed * rk.speed : Infinity);   // en groupe : à l'allure du plus lent
+    if (!q.way.length) q.capSpeed = 0;
     let moving = false;
     const step = (tx, tz) => { const dx = tx - q.x, dz = tz - q.z, d = Math.hypot(dx, dz); if (d < 0.05) return true; const st = Math.min(d, speed * dt); q.x += dx / d * st; q.z += dz / d * st; moving = true; return d <= st + 0.01; };
     // ordre explicite : suivre le trajet ; devant la porte, on attend qu'elle soit ouverte
@@ -309,15 +407,25 @@ export class Army {
           const m3 = hash.query(q.x, q.z, SQUAD.intercept, Z.x, Z.z, tmp2);
           for (let k = 0; k < m3; k++) { const i = tmp2[k]; if (Z.hp[i] <= 0 || Z.z[i] < WALL_Z1 + wallOff(Z.x[i]) + 0.8) continue; const d = (Z.x[i] - q.x) ** 2 + (Z.z[i] - q.z) ** 2; if (d < bd) { bd = d; best = i; } }
         }
-        if (best >= 0 && live === 0) step(Z.x[best], Z.z[best]); else if (best < 0) step(q.postX, q.postZ);
-      } else if (q.stance === 'charge' && live === 0) {
-        let best = -1, bd = Infinity; const mm = hash.query(q.x, q.z, SQUAD.chargeRange, Z.x, Z.z, tmp2);
-        for (let k = 0; k < mm; k++) { const i = tmp2[k]; if (Z.hp[i] <= 0 || Z.z[i] > WALL_Z0 + wallOff(Z.x[i]) - 2) continue; const d = (Z.x[i] - q.x) ** 2 + (Z.z[i] - q.z) ** 2; if (d < bd) { bd = d; best = i; } }
-        if (best >= 0) step(Z.x[best], Z.z[best]);
-      }
+        if (best >= 0 && live === 0 && !U.range) step(Z.x[best], Z.z[best]); else if (best < 0 || U.range) step(q.postX, q.postZ);
+      } else if (q.stance === 'charge' && live === 0 && !U.range) {
+        // (v11.1) d'abord ce qui barre le passage (tout proche), sinon le zombie le plus DANGEREUX pour le royaume à portée de charge
+        let best = -1, bd = -Infinity, near = -1, nd = SQUAD.aggro * SQUAD.aggro; const mm = hash.query(q.x, q.z, SQUAD.chargeRange * 1.6, Z.x, Z.z, tmp2);
+        for (let k = 0; k < mm; k++) { const i = tmp2[k]; if (Z.hp[i] <= 0 || Z.z[i] > WALL_Z0 + wallOff(Z.x[i]) - 2) continue; const d2 = (Z.x[i] - q.x) ** 2 + (Z.z[i] - q.z) ** 2; if (d2 < nd) { nd = d2; near = i; } const sc = threatOf(Z, i) / (1 + Math.sqrt(d2) / 20); if (sc > bd) { bd = sc; best = i; } }
+        if (near >= 0) best = near; if (best >= 0) step(Z.x[best], Z.z[best]);
+      } else if (live === 0 && !U.range) { const mm = hash.query(q.x, q.z, SQUAD.aggro, Z.x, Z.z, tmp2); let near = -1, nd = Infinity; for (let k = 0; k < mm; k++) { const i = tmp2[k]; if (Z.hp[i] <= 0) continue; const d2 = (Z.x[i] - q.x) ** 2 + (Z.z[i] - q.z) ** 2; if (d2 < nd) { nd = d2; near = i; } } if (near >= 0) step(Z.x[near], Z.z[near]); else step(q.tx, q.tz); }   // tenir : ne repousse que ce qui arrive sur elle, puis revient à sa place
     }
     // élan (charge) : actif tant que l'escouade vient de se déplacer
     q.mom = moving ? 1 : Math.max(0, q.mom - dt * 0.6);
+    if (U.range) {   // (v11.1) troupe d'ARCHERS : tir de loin sur le plus dangereux (ou sur ce qui s'approche trop), jamais au corps à corps
+      const rg = (U.range + 3 * sim.eco.up.archery) * (sim.extras ? sim.extras.rangeMult() : 1), mm = hash.query(q.x, q.z, rg, Z.x, Z.z, tmp2);
+      let best = -1, bd = -Infinity, near = -1, nd = 100;
+      for (let k = 0; k < mm; k++) { const i = tmp2[k]; if (Z.hp[i] <= 0) continue; const d2 = (Z.x[i] - q.x) ** 2 + (Z.z[i] - q.z) ** 2; if (d2 < nd) { nd = d2; near = i; } const sc = threatOf(Z, i) / (1 + Math.sqrt(d2) / 30); if (sc > bd) { bd = sc; best = i; } }
+      if (near >= 0) best = near;
+      if (best >= 0) { q.fight = 0.5; q.atkAcc += q.n * dt / U.rate * (moving ? 0.5 : 1); let hits = q.atkAcc | 0; q.atkAcc -= hits; const dm = U.dmg * sim.eco.atkMult('archer') * rk.force;
+        let shown = 0; while (hits-- > 0) { const i = best >= 0 && Z.hp[best] > 0 ? best : tmp2[(q.rot++) % Math.max(1, mm)]; if (i === undefined || Z.hp[i] <= 0) break; Z.hit(i, dm); if (shown++ < 2 && sim.arrows.length < 220) sim.arrows.push({ x0: q.x, z0: q.z, x1: Z.x[i], z1: Z.z[i], t: 0 }); } }
+      return;
+    }
     if (live > 0) {
       q.fight = 0.5;
       const mult = F.atk * (1 + (F.charge + (U.charge || 0)) * q.mom) * sim.eco.atkMult(q.type) * rk.force * (moving ? 0.5 : 1) * (sim.extras ? sim.extras.squadMult(q) : 1);
@@ -331,7 +439,8 @@ export class Army {
   serialize() {
     return {
       reserve: { ...this.reserve }, archers: this.archers.map(a => a.n), nextId: this.nextId, rally: { ...this.rally },
-      squads: this.squads.map(q => ({ id: q.id, num: q.num || 0, type: q.type, n: q.n, hp: Math.round(q.hp), form: q.form, grade: q.grade, mode: q.mode, sector: q.sector, x: +q.x.toFixed(2), z: +q.z.toFixed(2), tx: q.tx, tz: q.tz, stance: q.stance, custom: q.custom || null, auto: q.auto })), autoArchers: this.autoArchers,
+      groups: this.groups.map(g => ({ id: g.id, face: g.face, form: g.form, ax: g.ax, az: g.az })), nextGid: this.nextGid,
+      squads: this.squads.map(q => ({ id: q.id, num: q.num || 0, gid: q.gid || 0, face: q.face ?? null, type: q.type, n: q.n, hp: Math.round(q.hp), form: q.form, grade: q.grade, mode: q.mode, sector: q.sector, x: +q.x.toFixed(2), z: +q.z.toFixed(2), tx: q.tx, tz: q.tz, stance: q.stance, custom: q.custom || null, auto: q.auto })), autoArchers: this.autoArchers,
       queues: Object.fromEntries(TRAIN_BUILDINGS.map(b => [b, this.queues[b].map(i => ({ type: i.type, t: +i.t.toFixed(2), full: i.full }))])),
     };
   }
@@ -341,9 +450,10 @@ export class Army {
     if (st.rally) { this.rally.x = st.rally.x; this.rally.z = st.rally.z; } this.walkers = [];
     this.squads = [];
     for (const o of st.squads) { const q = this.formSquadRaw(o); this.squads.push(q); }
+    this.groups = (st.groups || []).map(g => ({ ...g })); this.nextGid = st.nextGid || 1; this.cleanGroups();
     this.layoutPosts(); this.numberSquads();
     for (const q of this.squads) { const o = st.squads.find(s => s.id === q.id); q.x = q.px = o.x; q.z = q.pz = o.z; q.fresh = false; if (o.mode === 'field') this.route(q, o.tx, o.tz); else this.route(q, q.postX, q.postZ); }
     for (const b of TRAIN_BUILDINGS) this.queues[b] = (st.queues?.[b] || []).map(i => ({ ...i }));
   }
-  formSquadRaw(o) { return { id: o.id, num: o.num || 0, type: o.type, n: o.n, grade: o.grade || gradeFor(o.n), hp: o.hp, form: o.form, mode: o.mode, sector: o.sector, x: o.x, z: o.z, px: o.x, pz: o.z, postX: 0, postZ: 0, tx: o.tx, tz: o.tz, custom: o.custom || null, auto: o.auto !== false, way: [], stance: o.stance || 'hold', atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: false, rad: 3 }; }
+  formSquadRaw(o) { return { id: o.id, num: o.num || 0, gid: o.gid || 0, face: o.face ?? undefined, type: o.type, n: o.n, grade: o.grade || gradeFor(o.n), hp: o.hp, form: o.form, mode: o.mode, sector: o.sector, x: o.x, z: o.z, px: o.x, pz: o.z, postX: 0, postZ: 0, tx: o.tx, tz: o.tz, custom: o.custom || null, auto: o.auto !== false, way: [], stance: o.stance || 'hold', atkAcc: 0, rot: 0, mom: 0, attackers: 0, cap: 0, hit: 0, fresh: false, rad: 3 }; }
 }

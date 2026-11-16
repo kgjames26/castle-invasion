@@ -11,7 +11,7 @@ ok(E.idleCount() === 2, 'deux villageois libres au départ : ' + E.idleCount());
 const h = sim.place('house', 100, 262, 0, 2); ok(!!h && h.state === 'site', 'maison posée en chantier');
 ok(!sim.place('house', 102, 262, 0), 'chevauchement refusé');
 ok(!sim.place('barracks', 100, 150, 0), 'trop près de la muraille refusé');
-run(10); ok(E.builderCount() === 2, 'deux ouvriers affectés');
+run(2); ok(E.builderCount() === 2, 'deux ouvriers affectés');
 run(40); ok(h.state === 'built' && E.houses === 1, `maison terminée (progression ${h.progress.toFixed(2)}, pop max ${E.popCap()})`);
 ok(E.builderCount() === 0, 'ouvriers libérés après chantier');
 const sm = sim.place('sawmill', 40, 262, 0, 1); run(70); ok(sm.state === 'built' && E.level.sawmill === 1, 'scierie construite, niveau actif');

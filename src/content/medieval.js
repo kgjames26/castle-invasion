@@ -52,7 +52,7 @@ export const GOLEM = { every: 3.5, quake: 40, reach: 2, fall: 2, fallReach: 12, 
 export const golemsFor = v => v < GOLEM.from ? 0 : 1 + ((v - GOLEM.from) / 3 | 0);
 // Unités : `pop` = places occupées dans la population PARTAGÉE (villageois + militaires), plafonnée par les maisons.
 export const UNITS = {
-  archer:  { name: 'Archer',   ico: '🏹', hp: 60,  dmg: 14, rate: 1.2, range: 34, pop: 1, cost: { gold: 14, wood: 15 },           train: 7,  from: 'range',    color: 0x2fae6a, size: 1 },
+  archer:  { name: 'Archer',   ico: '🏹', hp: 60,  dmg: 14, rate: 1.2, range: 34, speed: 3.4, reach: 1.2, squad: 10, form: 'line', pop: 1, cost: { gold: 14, wood: 15 },           train: 7,  from: 'range',    color: 0x2fae6a, size: 1 },
   soldier: { name: 'Fantassin', ico: '⚔', hp: 140, dmg: 11, rate: 0.8, reach: 1.7, speed: 3.6, pop: 1, cost: { gold: 16, iron: 15 },           train: 8,  from: 'barracks', color: 0x3d7bd6, size: 1,   squad: 10, form: 'line' },
   heavy:   { name: 'Lourd',    ico: '🛡', hp: 380, dmg: 22, rate: 1.1, reach: 2.0, speed: 2.6, pop: 2, cost: { gold: 33, iron: 50 },           train: 16, from: 'barracks', color: 0x7d8cab, size: 1.3, squad: 8,  form: 'phalanx', minLevel: 2 },
   knight:  { name: 'Chevalier', ico: '🗡', hp: 620, dmg: 34, rate: 1.0, reach: 2.4, speed: 3.0, pop: 3, cost: { gold: 70, iron: 60 },           train: 22, from: 'barracks', color: 0xd9b43a, size: 1.25, squad: 5,  form: 'wedge', minLevel: 3, cleave: 3, charge: 0.4 },
@@ -98,7 +98,7 @@ export const WALL = {
   repairHpPerStone: 8, upgradeBase: { stone: 120, wood: 60 },
 };
 export const START = {
-  res: { wood: 240, stone: 170, iron: 40, food: 200, gold: 80 },
+  res: { wood: 450, stone: 320, iron: 160, food: 400, gold: 220 },   // (v11.1) départ plus confortable : la guerre d'abord
   reserve: { archer: 0, soldier: 0, heavy: 0, knight: 0, cavalry: 0 },
   perSector: { archer: 0 },
   squads: [],
@@ -114,9 +114,9 @@ export const RES_INFO = {
   gold: { name: 'Or', ico: '<span class="ri ri-gold"></span>', color: 0xffd23f },
 };
 export const ECON = {
-  villagerSpeed: 3.6, carry: 10, slotsPerLevel: 5, maxLevel: 4,
-  baseStore: 300, storePerLevel: 400,
-  upkeep: { villager: 0.02, unit: 0.03 },    // nourriture / personne / seconde
+  villagerSpeed: 4.2, carry: 15, gatherMult: 1.6, slotsPerLevel: 5, maxLevel: 4,
+  baseStore: 700, storePerLevel: 600,
+  upkeep: { villager: 0.012, unit: 0.018 },    // nourriture / personne / seconde
   famineMult: 0.5, levelGather: 0.15, millBonus: 0.2,
   repairHpPerSec: 14, villagerCost: { food: 40 },
   popBase: 40, popPerHouse: 15, housesStart: 0, housesMax: 70,     // population max PARTAGÉE = château 40 + maisons × 15 (grosse population, v1.9)

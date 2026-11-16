@@ -46,7 +46,7 @@ export class Economy {
     return Math.max(0, this.slots(b) - used);
   }
   gatherRate(t) {
-    const T = TASKS[t]; let r = T.rate * (1 + UPGRADES.tools.per * this.up.tools) * (1 + ECON.levelGather * Math.max(0, (T.building ? this.level[T.building] : 1) - 1));
+    const T = TASKS[t]; let r = T.rate * (ECON.gatherMult || 1) * (1 + UPGRADES.tools.per * this.up.tools) * (1 + ECON.levelGather * Math.max(0, (T.building ? this.level[T.building] : 1) - 1));
     if (t === 'food') r *= (1 + UPGRADES.plow.per * this.up.plow) * (1 + ECON.millBonus * this.level.mill);
     return r * (this.famine ? ECON.famineMult : 1) * (this.sim.extras ? this.sim.extras.gatherMult(t) : 1);   // saisons, moral, spécialistes
   }
