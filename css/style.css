@@ -420,3 +420,6 @@ body:has(#selbar.on) #tuto, body:has(#selbar.on) #quest:not(.mini) { display:non
 #unlockban span { font-size:30px; } #unlockban b { display:block; font:700 17px var(--serif); } #unlockban small { font-size:12px; }
 /* v11.3 : population presque pleine */
 #r-pop.near b { color:#d9993a; animation:popnear 2.4s ease-in-out infinite; } @keyframes popnear { 50% { opacity:.55; } }
+/* v11.4 : bandeau de secours si l'affichage 3D s'interrompt */
+#rescue { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:99; padding:16px 22px; border-radius:16px; background:#f6dc8a; border:2px solid #8a6420; color:#3a2a10; box-shadow:0 8px 28px #000a; text-align:center; font:15px var(--serif); max-width:calc(100vw - 30px); }
+#rescue b { display:block; font-size:18px; margin-bottom:4px; } #rescue small { font:12px sans-serif; opacity:.85; }

@@ -47,6 +47,20 @@ function onResize() { const r = view.getBoundingClientRect(); rd.resize(Math.max
 new ResizeObserver(onResize).observe(view); onResize();
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(sim); }); addEventListener('pagehide', () => save(sim));
 
+// (v11.4) écran noir : si le contexte WebGL est perdu (carte graphique saturée) ou si le rendu plante en boucle, on sauvegarde, on passe en
+// qualité basse et on recharge la partie ; sans reprise possible, un bandeau affiche le message d'erreur (pour le signaler) et propose de recharger.
+const heal = { err: 0, msg: '', lost: false };
+function rescue(why) {
+  try { if (!sim.over) save(sim); } catch { /* rien */ }
+  let n = 0; try { n = +sessionStorage.getItem('castle-rescue') || 0; sessionStorage.setItem('castle-rescue', String(n + 1)); localStorage.setItem('castle-lowq', '1'); } catch { /* sans stockage */ }
+  if (n < 2) { location.reload(); return; }
+  let b = document.getElementById('rescue'); if (!b) { b = document.createElement('button'); b.id = 'rescue'; document.body.appendChild(b); b.addEventListener('click', () => location.reload()); }
+  b.innerHTML = `<b>⚠ L'affichage s'est interrompu</b><small>Partie sauvegardée · touche pour recharger<br>${String(why).slice(0, 160)}</small>`;
+}
+{ const cv = rd.renderer.domElement;
+  cv.addEventListener('webglcontextlost', e => { e.preventDefault(); heal.lost = true; setTimeout(() => { if (heal.lost) rescue('contexte graphique perdu'); }, 2500); });
+  cv.addEventListener('webglcontextrestored', () => { heal.lost = false; rescue('contexte graphique restauré'); }); }
+try { if (localStorage.getItem('castle-lowq') && !/[?&]q=/.test(location.search)) rd.setQuality('low'); } catch { /* sans stockage */ }
 let last = performance.now(), acc = 0, autosave = 0, wasOver = false, lastWave = sim.wave;
 // qualité adaptative : si l'appareil peine (moins de 24 images/s en moyenne sur 6 s), on baisse d'un cran (une fois par cran, jamais au-dessus du choix)
 const perf = { t: 0, n: 0, warm: 4, done: true };   // v1.9 : le format est choisi à la création de la partie et ne change plus ensuite
@@ -71,7 +85,7 @@ function frame(now) {
     if (sim.over !== wasOver) { wasOver = sim.over; ui.showOver(sim.over); }
     cam.update(dt); ui.tick(dt); adapt(dt);
     audio.frame(sim, dt);
-    rd.render(sim.speed ? acc / TICK : 1, dt);
+    try { rd.render(sim.speed ? acc / TICK : 1, dt); heal.err = 0; } catch (e) { if (++heal.err === 1) console.error('Rendu :', e); heal.msg = e && e.message || String(e); if (heal.err === 90) rescue('erreur de rendu : ' + heal.msg); }
   }
 }
 requestAnimationFrame(frame);

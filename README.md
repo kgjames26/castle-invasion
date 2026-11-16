@@ -451,3 +451,6 @@ Le décor vient du pack « Low poly winter medieval castle and town pack » (ass
 - **Scieries, fermes, moulins** en plusieurs exemplaires (coût +30 % chacun) : places additionnées, bosquet par scierie, fermiers répartis entre les fermes, bonus des moulins additionné (plafond 8).
 - **Coupe de bois** (`FRONTIER.timber`) : « 🪵 Abattre le bois » sur une parcelle de forêt vierge rapporte 1 500 bois (contre 160 en défrichant), la forêt reste et repousse (2,5/s). Mêmes ouvriers que les défricheurs.
 - **Alerte logements** : la puce population devient ambrée et un petit message apparaît quand il reste presque plus de place.
+
+## Phase 57 — v11.4 : secours si l'affichage 3D s'interrompt
+- Contexte WebGL perdu (carte graphique saturée) ou rendu qui plante en boucle : sauvegarde, qualité basse mémorisée (`castle-lowq`), rechargement automatique de la partie. Après deux tentatives, un bandeau affiche le message d'erreur et propose de recharger.
